@@ -1,0 +1,6 @@
+{
+  "name": "RutaEscolar PWA - Optimización & Tracking",
+  "description": "Sistema PWA de optimización de transporte escolar con InstantDB en tiempo real, control de acceso obligatorio, cabina de conductor y portal del representante.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

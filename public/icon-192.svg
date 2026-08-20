@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="100" fill="#0f172a"/>
+  <circle cx="256" cy="256" r="210" fill="#1e293b"/>
+  <!-- Bus icon stylized -->
+  <g transform="translate(106, 126)">
+    <!-- Main bus body -->
+    <rect x="20" y="40" width="260" height="190" rx="36" fill="#f59e0b" stroke="#d97706" stroke-width="8"/>
+    <!-- Windshield -->
+    <rect x="44" y="60" width="212" height="68" rx="14" fill="#0f172a"/>
+    <path d="M 60 70 L 120 70 L 95 118 L 45 118 Z" fill="#38bdf8" opacity="0.35"/>
+    <path d="M 140 70 L 200 70 L 175 118 L 125 118 Z" fill="#38bdf8" opacity="0.35"/>
+    <!-- Headlights -->
+    <circle cx="56" cy="190" r="16" fill="#fef08a" stroke="#ca8a04" stroke-width="4"/>
+    <circle cx="244" cy="190" r="16" fill="#fef08a" stroke="#ca8a04" stroke-width="4"/>
+    <!-- Grille -->
+    <line x1="100" y1="184" x2="200" y2="184" stroke="#78350f" stroke-width="6" stroke-linecap="round"/>
+    <line x1="100" y1="198" x2="200" y2="198" stroke="#78350f" stroke-width="6" stroke-linecap="round"/>
+    <!-- Wheels -->
+    <rect x="40" y="218" width="52" height="34" rx="8" fill="#1e293b"/>
+    <rect x="208" y="218" width="52" height="34" rx="8" fill="#1e293b"/>
+    <!-- Signal pulse beacon -->
+    <circle cx="150" cy="26" r="12" fill="#ef4444"/>
+    <circle cx="150" cy="26" r="22" fill="#ef4444" opacity="0.4"/>
+  </g>
+</svg>
