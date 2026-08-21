@@ -373,29 +373,92 @@ export default function App() {
     return map;
   }, [alumnos]);
 
+  // Students belonging to current selected school (or all if not specified)
+  const schoolAlumnos = useMemo(() => {
+    const list = alumnos.filter((a) => !a.colegio_id || a.colegio_id === selectedColegio.id);
+    return list.length > 0 ? list : alumnos;
+  }, [alumnos, selectedColegio.id]);
+
+  // Helper to re-sync active route with all real registered students
+  const handleSyncAllStudentsToRoute = async (targetStudentsList?: Alumno[]) => {
+    const listToUse = targetStudentsList || schoolAlumnos;
+    if (listToUse.length === 0) return;
+
+    try {
+      const res = await calculateOptimizedRoute(origen, selectedColegio, listToUse, {
+        modo: activeRuta.modo_optimizacion || 'fijo',
+        tiempoAbordajeMin: activeRuta.tiempo_abordaje_por_alumno_min || 2.5,
+        horaLlegadaLimite: activeRuta.hora_llegada_objetivo || selectedColegio.hora_llegada_limite,
+        tipoTrayecto: activeRuta.tipo_trayecto || 'ida'
+      });
+
+      const newParadas: ParadaRuta[] = res.paradas_ordenadas.map((p) => ({
+        id: ensureUUID(),
+        ruta_id: ensureUUID(activeRuta.id),
+        alumno_id: ensureUUID(p.alumno_id),
+        orden: p.orden,
+        hora_estimada: p.hora_estimada,
+        estado: 'pendiente' as const,
+        lat: p.lat,
+        lng: p.lng,
+        distancia_desde_anterior_km: p.distancia_desde_anterior_km,
+        tiempo_desde_anterior_min: p.tiempo_desde_anterior_min,
+        alumno: alumnosMap.get(p.alumno_id)
+      }));
+
+      const updatedRuta: RutaDiaria = {
+        ...activeRuta,
+        colegio_id: selectedColegio.id,
+        colegio: selectedColegio,
+        hora_salida_estimada: res.hora_salida_estimada,
+        tiempo_manejo_estimado_min: res.tiempo_manejo_min,
+        tiempo_abordaje_total_min: res.tiempo_abordaje_total_min,
+        tiempo_total_estimado_min: res.tiempo_total_min,
+        distancia_total_km: res.distancia_total_km,
+        estado: 'planificada',
+        hora_salida_real: undefined,
+        hora_llegada_real: undefined,
+        paradas: newParadas,
+        polyline_geometry: res.polyline_geometry
+      };
+
+      setActiveRuta(updatedRuta);
+      try {
+        localStorage.setItem('rutaescolar_active_ruta', JSON.stringify(updatedRuta));
+        await saveRutaInstant(updatedRuta);
+      } catch (err) {
+        console.warn('Sync save warning:', err);
+      }
+      return updatedRuta;
+    } catch (err) {
+      console.error('Error synchronizing students to route:', err);
+    }
+  };
+
   // Sync InstantDB Paradas / Rutas into activeRuta state in real time
   useEffect(() => {
     if (instantData?.paradas_ruta && Object.keys(instantData.paradas_ruta).length > 0) {
       const matchingParadas = Object.entries(instantData.paradas_ruta)
-        .filter(([_, p]: [string, any]) => !p.ruta_id || p.ruta_id === activeRuta.id)
+        .filter(([_, p]: [string, any]) => p && p.ruta_id === activeRuta.id)
         .map(([id, p]: [string, any]) => ({
-          id,
-          ruta_id: p.ruta_id,
-          alumno_id: p.alumno_id,
-          orden: Number(p.orden),
-          hora_estimada: p.hora_estimada,
+          id: ensureUUID(id),
+          ruta_id: ensureUUID(p.ruta_id),
+          alumno_id: ensureUUID(p.alumno_id),
+          orden: Number(p.orden) || 1,
+          hora_estimada: p.hora_estimada || '07:00:00',
           hora_real: p.hora_real,
-          estado: p.estado as any,
-          lat: Number(p.lat),
-          lng: Number(p.lng),
+          estado: (p.estado as any) || 'pendiente',
+          lat: Number(p.lat) || -0.18,
+          lng: Number(p.lng) || -78.48,
           distancia_desde_anterior_km: Number(p.distancia_desde_anterior_km || 0),
           tiempo_desde_anterior_min: Number(p.tiempo_desde_anterior_min || 0),
           alumno: alumnosMap.get(p.alumno_id)
         }))
+        .filter((p) => p.alumno_id && alumnosMap.has(p.alumno_id))
         .sort((a, b) => a.orden - b.orden);
 
-      // Only update if matching paradas exist and don't downgrade stop count
-      if (matchingParadas.length >= (activeRuta.paradas?.length || 0) && matchingParadas.length > 0) {
+      // Only update if valid matching paradas exist
+      if (matchingParadas.length > 0 && matchingParadas.length === activeRuta.paradas.length) {
         setActiveRuta((prev) => {
           const updated = { ...prev, paradas: matchingParadas };
           try {
@@ -407,7 +470,7 @@ export default function App() {
     }
   }, [instantData?.paradas_ruta, activeRuta.id, alumnosMap]);
 
-  // Initial Route Calculation & URL params parser
+  // Initial Route Calculation & Auto-Sync with Real Students
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const magic = urlParams.get('magic');
@@ -429,48 +492,11 @@ export default function App() {
       setCurrentView(viewParam as any);
     }
 
-    // Generate initial planned route with geometry ONLY if no saved route exists
-    const saved = localStorage.getItem('rutaescolar_active_ruta');
-    if (!saved && activeRuta.paradas.length === 0 && alumnos.length > 0) {
-      calculateOptimizedRoute(origen, selectedColegio, alumnos, {
-        modo: 'fijo',
-        tiempoAbordajeMin: 2.5,
-        horaLlegadaLimite: selectedColegio.hora_llegada_limite
-      }).then((res) => {
-        const initialParadas = res.paradas_ordenadas.map((p) => ({
-          id: ensureUUID(),
-          ruta_id: ensureUUID(activeRuta.id),
-          alumno_id: ensureUUID(p.alumno_id),
-          orden: p.orden,
-          hora_estimada: p.hora_estimada,
-          estado: 'pendiente' as const,
-          lat: p.lat,
-          lng: p.lng,
-          distancia_desde_anterior_km: p.distancia_desde_anterior_km,
-          tiempo_desde_anterior_min: p.tiempo_desde_anterior_min,
-          alumno: alumnosMap.get(p.alumno_id)
-        }));
-
-        const calculatedRuta: RutaDiaria = {
-          ...activeRuta,
-          colegio_id: selectedColegio.id,
-          colegio: selectedColegio,
-          hora_salida_estimada: res.hora_salida_estimada,
-          tiempo_manejo_estimado_min: res.tiempo_manejo_min,
-          tiempo_abordaje_total_min: res.tiempo_abordaje_total_min,
-          tiempo_total_estimado_min: res.tiempo_total_min,
-          distancia_total_km: res.distancia_total_km,
-          paradas: initialParadas,
-          polyline_geometry: res.polyline_geometry
-        };
-
-        setActiveRuta(calculatedRuta);
-        try {
-          localStorage.setItem('rutaescolar_active_ruta', JSON.stringify(calculatedRuta));
-        } catch {}
-      });
+    // Auto calculate route when students are loaded and paradas are missing or mismatch
+    if (schoolAlumnos.length > 0 && (activeRuta.paradas.length === 0 || activeRuta.paradas.length !== schoolAlumnos.length)) {
+      handleSyncAllStudentsToRoute(schoolAlumnos);
     }
-  }, [selectedColegio.id]);
+  }, [schoolAlumnos.length, selectedColegio.id]);
 
   // Handlers with InstantDB Real-Time Synchronization
   const handleSaveSingleAlumno = async (newAlumno: Alumno, newRep: Representante) => {
@@ -946,6 +972,8 @@ export default function App() {
             alumnosMap={alumnosMap}
             conductores={conductores}
             currentDriverId={currentDriverId}
+            allAlumnos={schoolAlumnos}
+            onSyncAllStudents={() => handleSyncAllStudentsToRoute(schoolAlumnos)}
             onSelectDriver={handleSelectDriverForCockpit}
             onUpdateRuta={handleSaveRoute}
           />
