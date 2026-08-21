@@ -331,8 +331,17 @@ export default function App() {
     }
   });
 
-  // Active Daily Route
+  // Active Daily Route with LocalStorage Persistence
   const [activeRuta, setActiveRuta] = useState<RutaDiaria>(() => {
+    try {
+      const saved = localStorage.getItem('rutaescolar_active_ruta');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && Array.isArray(parsed.paradas) && parsed.paradas.length > 0) {
+          return parsed;
+        }
+      }
+    } catch {}
     const defaultConductor = INITIAL_CONDUCTORES[0];
     return {
       id: 'e5000000-0000-4000-8000-000000000001',
@@ -367,7 +376,8 @@ export default function App() {
   // Sync InstantDB Paradas / Rutas into activeRuta state in real time
   useEffect(() => {
     if (instantData?.paradas_ruta && Object.keys(instantData.paradas_ruta).length > 0) {
-      const dbParadas = Object.entries(instantData.paradas_ruta)
+      const matchingParadas = Object.entries(instantData.paradas_ruta)
+        .filter(([_, p]: [string, any]) => !p.ruta_id || p.ruta_id === activeRuta.id)
         .map(([id, p]: [string, any]) => ({
           id,
           ruta_id: p.ruta_id,
@@ -384,14 +394,18 @@ export default function App() {
         }))
         .sort((a, b) => a.orden - b.orden);
 
-      if (dbParadas.length > 0) {
-        setActiveRuta((prev) => ({
-          ...prev,
-          paradas: dbParadas
-        }));
+      // Only update if matching paradas exist and don't downgrade stop count
+      if (matchingParadas.length >= (activeRuta.paradas?.length || 0) && matchingParadas.length > 0) {
+        setActiveRuta((prev) => {
+          const updated = { ...prev, paradas: matchingParadas };
+          try {
+            localStorage.setItem('rutaescolar_active_ruta', JSON.stringify(updated));
+          } catch {}
+          return updated;
+        });
       }
     }
-  }, [instantData?.paradas_ruta, alumnosMap]);
+  }, [instantData?.paradas_ruta, activeRuta.id, alumnosMap]);
 
   // Initial Route Calculation & URL params parser
   useEffect(() => {
@@ -415,8 +429,9 @@ export default function App() {
       setCurrentView(viewParam as any);
     }
 
-    // Generate initial planned route with geometry
-    if (alumnos.length > 0) {
+    // Generate initial planned route with geometry ONLY if no saved route exists
+    const saved = localStorage.getItem('rutaescolar_active_ruta');
+    if (!saved && activeRuta.paradas.length === 0 && alumnos.length > 0) {
       calculateOptimizedRoute(origen, selectedColegio, alumnos, {
         modo: 'fijo',
         tiempoAbordajeMin: 2.5,
@@ -450,6 +465,9 @@ export default function App() {
         };
 
         setActiveRuta(calculatedRuta);
+        try {
+          localStorage.setItem('rutaescolar_active_ruta', JSON.stringify(calculatedRuta));
+        } catch {}
       });
     }
   }, [selectedColegio.id]);

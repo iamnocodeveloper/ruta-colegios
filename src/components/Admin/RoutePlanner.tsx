@@ -9,7 +9,7 @@
  *   - Interactive Map preview
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Clock,
   Sparkles,
@@ -88,11 +88,16 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
     }
   }, [activeRuta.conductor_id, activeRuta.conductor, conductores]);
   
-  // Eligible students for the current direction
-  const eligibleStudents = filterStudentsForJourney(allAlumnos, tipoTrayecto);
+  // Eligible / Available students (default to all students of school or all registered)
+  const schoolStudents = useMemo(() => {
+    const list = allAlumnos.filter((s) => !s.colegio_id || s.colegio_id === selectedColegio.id);
+    return list.length > 0 ? list : allAlumnos;
+  }, [allAlumnos, selectedColegio.id]);
+
+  const eligibleStudents = schoolStudents;
   
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>(
-    eligibleStudents.map((s) => s.id)
+    () => schoolStudents.map((s) => s.id)
   );
 
   const [horaLlegada, setHoraLlegada] = useState<string>(() => {
@@ -123,11 +128,12 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
     }
   }, [selectedColegio, tipoTrayecto]);
 
-  // When direction changes, reset selected students to eligible ones
+  // When school changes, select all students of this school
   useEffect(() => {
-    const valid = filterStudentsForJourney(allAlumnos, tipoTrayecto);
-    setSelectedStudentIds(valid.map((s) => s.id));
-  }, [tipoTrayecto, allAlumnos]);
+    const list = allAlumnos.filter((s) => !s.colegio_id || s.colegio_id === selectedColegio.id);
+    const targetList = list.length > 0 ? list : allAlumnos;
+    setSelectedStudentIds(targetList.map((s) => s.id));
+  }, [selectedColegio.id, allAlumnos]);
 
   // Recalculate route whenever parameters change
   const runRouteCalculation = async (useManualOrder: boolean = false) => {
@@ -582,52 +588,54 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
           </div>
         </div>
 
-        {/* Students Checklist with Modality Filter */}
+        {/* Students Checklist with Modality Tag */}
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 space-y-2">
           <div className="flex items-center justify-between">
             <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
-              Alumnos en {tipoTrayecto === 'ida' ? 'Ida (Mañana)' : 'Vuelta (Tarde)'} ({selectedStudentIds.length}/{eligibleStudents.length})
+              Alumnos Seleccionados ({selectedStudentIds.length}/{allAlumnos.length})
             </label>
-            <button
-              onClick={() => {
-                if (selectedStudentIds.length === eligibleStudents.length) {
-                  setSelectedStudentIds([]);
-                } else {
-                  setSelectedStudentIds(eligibleStudents.map((s) => s.id));
-                }
-              }}
-              className="text-[10px] font-semibold text-amber-400 hover:underline cursor-pointer"
-            >
-              {selectedStudentIds.length === eligibleStudents.length ? 'Desmarcar todos' : 'Marcar todos'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedStudentIds(allAlumnos.map((s) => s.id))}
+                className="text-[10px] font-bold text-amber-400 hover:underline cursor-pointer"
+              >
+                Marcar todos ({allAlumnos.length})
+              </button>
+              <span className="text-slate-600">|</span>
+              <button
+                type="button"
+                onClick={() => setSelectedStudentIds([])}
+                className="text-[10px] font-medium text-slate-400 hover:underline cursor-pointer"
+              >
+                Desmarcar
+              </button>
+            </div>
           </div>
 
-          <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+          <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
             {allAlumnos.map((student) => {
               const mod = student.modalidad_servicio || 'ida_y_vuelta';
-              const isEligible = tipoTrayecto === 'ida'
-                ? (mod === 'ida_y_vuelta' || mod === 'solo_ida')
-                : (mod === 'ida_y_vuelta' || mod === 'solo_vuelta');
+              const isSelected = selectedStudentIds.includes(student.id);
 
               return (
                 <label
                   key={student.id}
-                  className={`flex items-center justify-between gap-2 rounded-lg p-2 text-xs border transition-all ${
-                    isEligible
-                      ? 'bg-slate-900/80 border-slate-800 hover:border-slate-700 cursor-pointer'
-                      : 'bg-slate-950/40 border-slate-900 opacity-50 cursor-not-allowed'
+                  className={`flex items-center justify-between gap-2 rounded-lg p-2 text-xs border transition-all cursor-pointer ${
+                    isSelected
+                      ? 'bg-amber-500/10 border-amber-500/40 text-slate-100 shadow-sm'
+                      : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700'
                   }`}
                 >
                   <div className="flex items-center gap-2 truncate">
                     <input
                       type="checkbox"
-                      disabled={!isEligible}
-                      checked={selectedStudentIds.includes(student.id)}
-                      onChange={() => isEligible && toggleStudent(student.id)}
-                      className="accent-amber-500 h-3.5 w-3.5 rounded"
+                      checked={isSelected}
+                      onChange={() => toggleStudent(student.id)}
+                      className="accent-amber-500 h-4 w-4 rounded cursor-pointer"
                     />
                     <div className="truncate">
-                      <span className={`font-semibold truncate block ${isEligible ? 'text-slate-200' : 'text-slate-500 line-through'}`}>
+                      <span className={`font-bold truncate block ${isSelected ? 'text-slate-100' : 'text-slate-400'}`}>
                         {student.nombre}
                       </span>
                       <span className="text-[10px] text-slate-400 truncate block">
@@ -643,21 +651,13 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
                       </span>
                     )}
                     {mod === 'solo_ida' && (
-                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
-                        tipoTrayecto === 'ida'
-                          ? 'text-sky-300 bg-sky-950/60 border-sky-800/40'
-                          : 'text-rose-400 bg-rose-950/40 border-rose-800/40'
-                      }`}>
-                        {tipoTrayecto === 'ida' ? '🌅 Solo Ida' : '❌ Solo Ida'}
+                      <span className="text-[9px] font-bold text-sky-300 bg-sky-950/60 px-1.5 py-0.5 rounded border border-sky-800/40">
+                        🌅 Solo Ida
                       </span>
                     )}
                     {mod === 'solo_vuelta' && (
-                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
-                        tipoTrayecto === 'vuelta'
-                          ? 'text-purple-300 bg-purple-950/60 border-purple-800/40'
-                          : 'text-rose-400 bg-rose-950/40 border-rose-800/40'
-                      }`}>
-                        {tipoTrayecto === 'vuelta' ? '🌇 Solo Vuelta' : '❌ Solo Vuelta'}
+                      <span className="text-[9px] font-bold text-purple-300 bg-purple-950/60 px-1.5 py-0.5 rounded border border-purple-800/40">
+                        🌇 Solo Vuelta
                       </span>
                     )}
                   </div>

@@ -549,48 +549,133 @@ export const DriverPanel: React.FC<DriverPanelProps> = ({
           <div className="mx-auto max-w-xl space-y-4">
             {/* If route is NOT started yet */}
             {ruta.estado === 'planificada' && (
-              <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-b from-slate-900 to-amber-950/20 p-6 text-center shadow-xl space-y-4">
-                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/20 text-3xl text-amber-400 border border-amber-500/40 shadow-inner">
-                  🚍
-                </div>
-                <div>
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400 block mb-1">
-                    Jornada Escolar: {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
-                  </span>
-                  <h3 className="text-xl font-black text-slate-100">¿Listo para iniciar el recorrido de hoy?</h3>
-                  <p className="mt-1 text-sm text-slate-400">
-                    Hora de salida sugerida: <b className="text-amber-400">{ruta.hora_salida_estimada}</b>. Meta de llegada a {colegio.nombre}: <b className="text-amber-400">{(ruta.hora_llegada_objetivo || colegio.hora_llegada_limite || '08:00').substring(0, 5)}</b>.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-xs bg-slate-950/60 p-3 rounded-xl border border-slate-800">
-                  <div>
-                    <span className="text-[10px] text-slate-400 block uppercase font-bold">Total Alumnos</span>
-                    <span className="font-extrabold text-slate-200 text-sm">{totalAlumnos}</span>
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-b from-slate-900 to-amber-950/20 p-6 text-center shadow-xl space-y-4">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/20 text-3xl text-amber-400 border border-amber-500/40 shadow-inner">
+                    🚍
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 block uppercase font-bold">Tiempo Estimado</span>
-                    <span className="font-extrabold text-amber-400 text-sm">{ruta.tiempo_total_estimado_min || ruta.tiempo_manejo_estimado_min} min</span>
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400 block mb-1">
+                      Jornada Escolar: {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
+                    </span>
+                    <h3 className="text-xl font-black text-slate-100">¿Listo para iniciar el recorrido de hoy?</h3>
+                    <p className="mt-1 text-sm text-slate-400">
+                      Hora de salida sugerida: <b className="text-amber-400">{ruta.hora_salida_estimada}</b>. Meta de llegada a {colegio.nombre}: <b className="text-amber-400">{(ruta.hora_llegada_objetivo || colegio.hora_llegada_limite || '08:00').substring(0, 5)}</b>.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 text-xs bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                    <div>
+                      <span className="text-[10px] text-slate-400 block uppercase font-bold">Total Alumnos</span>
+                      <span className="font-extrabold text-slate-100 text-sm">{totalAlumnos}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block uppercase font-bold">Tiempo Estimado</span>
+                      <span className="font-extrabold text-amber-400 text-sm">{ruta.tiempo_total_estimado_min || ruta.tiempo_manejo_estimado_min} min</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block uppercase font-bold">Distancia Total</span>
+                      <span className="font-extrabold text-sky-400 text-sm">{ruta.distancia_total_km || 0} km</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex flex-col gap-2.5">
+                    <button
+                      id="btn-start-route-main"
+                      onClick={handleStartRoute}
+                      className="flex w-full items-center justify-center gap-2.5 rounded-xl bg-amber-500 py-4 text-base font-black text-slate-950 shadow-lg shadow-amber-500/30 transition-all hover:bg-amber-400 active:scale-[0.98] cursor-pointer"
+                    >
+                      <Play className="h-5 w-5 fill-current" />
+                      <span>INICIAR RUTA Y ACTIVAR GPS EN VIVO</span>
+                    </button>
+
+                    <button
+                      onClick={() => setActiveTab('map')}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-800 py-2.5 text-xs font-bold text-slate-300 border border-slate-700 hover:bg-slate-700 transition-all cursor-pointer"
+                    >
+                      <MapPin className="h-4 w-4 text-amber-400" />
+                      <span>Ver Mapa y Trazado de Paradas</span>
+                    </button>
                   </div>
                 </div>
 
-                <div className="pt-2 flex flex-col gap-2.5">
-                  <button
-                    id="btn-start-route-main"
-                    onClick={handleStartRoute}
-                    className="flex w-full items-center justify-center gap-2.5 rounded-xl bg-amber-500 py-4 text-base font-black text-slate-950 shadow-lg shadow-amber-500/30 transition-all hover:bg-amber-400 active:scale-[0.98] cursor-pointer"
-                  >
-                    <Play className="h-5 w-5 fill-current" />
-                    <span>INICIAR RUTA Y ACTIVAR GPS EN VIVO</span>
-                  </button>
+                {/* Pre-Departure Stops Sequence Preview */}
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 space-y-3 shadow-lg">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-amber-400" />
+                      <h4 className="text-xs font-black uppercase tracking-wider text-slate-200">
+                        Secuencia Planificada de Paradas ({paradas.length} Estudiantes)
+                      </h4>
+                    </div>
+                    <span className="text-[10px] text-amber-400 font-mono font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
+                      Ruta Guardada
+                    </span>
+                  </div>
 
-                  <button
-                    onClick={() => setActiveTab('map')}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-800 py-2.5 text-xs font-bold text-slate-300 border border-slate-700 hover:bg-slate-700 transition-all cursor-pointer"
-                  >
-                    <MapPin className="h-4 w-4 text-amber-400" />
-                    <span>Ver Mapa y Trazado de Paradas</span>
-                  </button>
+                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                    {/* Origin item */}
+                    <div className="flex items-center gap-3 rounded-xl bg-slate-950/60 p-2.5 border border-slate-800/80 text-xs">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-sky-500/20 text-sky-400 font-bold text-xs border border-sky-500/30">
+                        🏁
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="font-bold text-sky-300 block truncate">
+                          Base de Salida / Garaje
+                        </span>
+                        <span className="text-[10px] text-slate-400 block truncate">
+                          {ruta.origen_direccion || 'Punto de partida del transporte'}
+                        </span>
+                      </div>
+                      <span className="text-[11px] font-mono text-slate-400 font-bold">
+                        {ruta.hora_salida_estimada?.substring(0, 5)}
+                      </span>
+                    </div>
+
+                    {/* Stops items */}
+                    {paradas.map((p, idx) => {
+                      const student = alumnosMap.get(p.alumno_id) || p.alumno;
+                      return (
+                        <div
+                          key={p.id}
+                          className="flex items-center gap-3 rounded-xl bg-slate-950/80 p-2.5 border border-slate-800 text-xs hover:border-slate-700 transition-all"
+                        >
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-500/20 text-amber-400 font-black text-xs border border-amber-500/30">
+                            #{p.orden || idx + 1}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <span className="font-bold text-slate-200 block truncate">
+                              {student?.nombre || `Estudiante #${p.orden}`}
+                            </span>
+                            <span className="text-[10px] text-slate-400 block truncate">
+                              {student?.direccion_recogida || 'Dirección guardada'}
+                            </span>
+                          </div>
+                          <span className="text-[11px] font-mono text-amber-400 font-bold shrink-0">
+                            {p.hora_estimada?.substring(0, 5)}
+                          </span>
+                        </div>
+                      );
+                    })}
+
+                    {/* Destination item */}
+                    <div className="flex items-center gap-3 rounded-xl bg-emerald-950/30 p-2.5 border border-emerald-800/40 text-xs">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400 font-bold text-xs border border-emerald-500/30">
+                        🏫
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="font-bold text-emerald-300 block truncate">
+                          {colegio.nombre}
+                        </span>
+                        <span className="text-[10px] text-slate-400 block truncate">
+                          Destino final de la jornada
+                        </span>
+                      </div>
+                      <span className="text-[11px] font-mono text-emerald-400 font-bold">
+                        {(ruta.hora_llegada_objetivo || colegio.hora_llegada_limite || '08:00').substring(0, 5)}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -598,7 +683,36 @@ export const DriverPanel: React.FC<DriverPanelProps> = ({
             {/* If route is IN PROGRESS */}
             {ruta.estado === 'en_curso' && (
               <>
-                {/* ACTIVE STOP CARD */}
+                {/* Transit Status Bar */}
+                <div className="flex items-center justify-between gap-2 rounded-xl bg-slate-900 border border-amber-500/40 p-3 text-xs shadow-md">
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                    </span>
+                    <div>
+                      <span className="font-black text-slate-100 uppercase tracking-wider text-[11px]">
+                        Ruta en Progreso
+                      </span>
+                      <p className="text-[10px] text-slate-400">
+                        Salida registrada: <b className="text-amber-400">{ruta.hora_salida_real || '--:--'}</b>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold bg-emerald-950/80 text-emerald-400 px-2 py-1 rounded-lg border border-emerald-800/60">
+                      {recogidosCount}/{totalAlumnos} a bordo
+                    </span>
+                    {ausentesCount > 0 && (
+                      <span className="text-[10px] font-bold bg-rose-950/80 text-rose-400 px-2 py-1 rounded-lg border border-rose-800/60">
+                        {ausentesCount} ausentes
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* ACTIVE STOP SPOTLIGHT CARD */}
                 {currentStop && currentStudent ? (
                   <div className="relative overflow-hidden rounded-2xl border-2 border-amber-500 bg-slate-900 shadow-2xl p-5">
                     {/* Glowing highlight indicator */}
@@ -610,8 +724,9 @@ export const DriverPanel: React.FC<DriverPanelProps> = ({
                           #{currentStop.orden}
                         </div>
                         <div>
-                          <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400">
-                            Siguiente Parada
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1">
+                            <span className="inline-block h-2 w-2 rounded-full bg-amber-400 animate-ping"></span>
+                            <span>Siguiente Parada Activa</span>
                           </span>
                           <h3 className="text-lg sm:text-xl font-black text-slate-100">
                             {currentStudent.nombre}
@@ -655,7 +770,7 @@ export const DriverPanel: React.FC<DriverPanelProps> = ({
                           href={getWazeNavUrl(currentStop.lat, currentStop.lng)}
                           target="_blank"
                           rel="noreferrer"
-                          className="flex items-center gap-1 rounded-lg bg-sky-950 px-2.5 py-1.5 text-[11px] font-bold text-sky-400 border border-sky-700/50 hover:bg-sky-900 transition-all"
+                          className="flex items-center gap-1 rounded-lg bg-sky-950 px-2.5 py-1.5 text-[11px] font-bold text-sky-400 border border-sky-700/50 hover:bg-sky-900 transition-all cursor-pointer"
                         >
                           <Navigation className="h-3 w-3" />
                           <span>Waze</span>
@@ -666,7 +781,7 @@ export const DriverPanel: React.FC<DriverPanelProps> = ({
                           href={getGoogleMapsNavUrl(currentStop.lat, currentStop.lng)}
                           target="_blank"
                           rel="noreferrer"
-                          className="flex items-center gap-1 rounded-lg bg-slate-800 px-2.5 py-1.5 text-[11px] font-bold text-slate-200 border border-slate-700 hover:bg-slate-700 transition-all"
+                          className="flex items-center gap-1 rounded-lg bg-slate-800 px-2.5 py-1.5 text-[11px] font-bold text-slate-200 border border-slate-700 hover:bg-slate-700 transition-all cursor-pointer"
                         >
                           <Navigation className="h-3 w-3" />
                           <span>Maps</span>
@@ -676,7 +791,7 @@ export const DriverPanel: React.FC<DriverPanelProps> = ({
                         {currentStudent.representante?.telefono_whatsapp && (
                           <a
                             href={`tel:${currentStudent.representante.telefono_whatsapp}`}
-                            className="flex items-center gap-1 rounded-lg bg-emerald-950 px-2.5 py-1.5 text-[11px] font-bold text-emerald-400 border border-emerald-700/50 hover:bg-emerald-900 transition-all"
+                            className="flex items-center gap-1 rounded-lg bg-emerald-950 px-2.5 py-1.5 text-[11px] font-bold text-emerald-400 border border-emerald-700/50 hover:bg-emerald-900 transition-all cursor-pointer"
                           >
                             <Phone className="h-3 w-3" />
                             <span>Llamar</span>
@@ -737,71 +852,233 @@ export const DriverPanel: React.FC<DriverPanelProps> = ({
                     </div>
                   </div>
                 )}
+
+                {/* JOURNEY PROGRESS TIMELINE & UPCOMING STOPS */}
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-4 space-y-3 shadow-lg">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-200 flex items-center gap-2">
+                      <Compass className="h-4 w-4 text-amber-400" />
+                      <span>Secuencia del Recorrido ({paradas.length} Paradas)</span>
+                    </h4>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      {paradas.filter((p) => p.estado === 'pendiente').length} restantes
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                    {/* Origin step */}
+                    <div className="flex items-center gap-3 rounded-xl bg-slate-950/60 p-2.5 border border-sky-800/40 text-xs">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-sky-500/20 text-sky-400 font-bold text-xs border border-sky-500/40">
+                        🏁
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sky-300">Base de Salida</span>
+                          <span className="text-[9px] font-bold bg-sky-950 text-sky-400 px-1.5 py-0.2 rounded border border-sky-800/50">
+                            Salida Registrada
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-slate-400 block truncate">
+                          {ruta.origen_direccion || 'Garaje'}
+                        </span>
+                      </div>
+                      <span className="text-[11px] font-mono text-sky-300 font-bold">
+                        {ruta.hora_salida_real || ruta.hora_salida_estimada}
+                      </span>
+                    </div>
+
+                    {/* Each stop in order */}
+                    {paradas.map((p, idx) => {
+                      const student = alumnosMap.get(p.alumno_id) || p.alumno;
+                      const isCurrent = currentStop?.id === p.id;
+                      const isPickedUp = p.estado === 'recogido' || p.estado === 'completado';
+                      const isAbsent = p.estado === 'ausente';
+                      const isPending = p.estado === 'pendiente';
+
+                      return (
+                        <div
+                          key={p.id}
+                          className={`flex items-center gap-3 rounded-xl p-2.5 border transition-all text-xs ${
+                            isCurrent
+                              ? 'bg-amber-500/10 border-amber-500 shadow-md ring-1 ring-amber-500/40'
+                              : isPickedUp
+                              ? 'bg-emerald-950/20 border-emerald-800/40 opacity-80'
+                              : isAbsent
+                              ? 'bg-rose-950/20 border-rose-800/40 opacity-70'
+                              : 'bg-slate-950/60 border-slate-800'
+                          }`}
+                        >
+                          <div
+                            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg font-black text-xs ${
+                              isCurrent
+                                ? 'bg-amber-500 text-slate-950 shadow'
+                                : isPickedUp
+                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                                : isAbsent
+                                ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
+                                : 'bg-slate-800 text-slate-400'
+                            }`}
+                          >
+                            #{p.orden || idx + 1}
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className={`font-bold truncate ${isCurrent ? 'text-amber-300' : 'text-slate-200'}`}>
+                                {student?.nombre || `Estudiante #${p.orden}`}
+                              </span>
+                              {isCurrent && (
+                                <span className="text-[9px] font-black uppercase bg-amber-500 text-slate-950 px-1.5 py-0.2 rounded animate-pulse">
+                                  En Camino
+                                </span>
+                              )}
+                              {isPickedUp && (
+                                <span className="text-[9px] font-bold text-emerald-400 bg-emerald-950 px-1.5 py-0.2 rounded border border-emerald-800/40">
+                                  ✓ A Bordo
+                                </span>
+                              )}
+                              {isAbsent && (
+                                <span className="text-[9px] font-bold text-rose-400 bg-rose-950 px-1.5 py-0.2 rounded border border-rose-800/40">
+                                  ✗ Ausente
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-slate-400 block truncate">
+                              {student?.direccion_recogida}
+                            </span>
+                          </div>
+
+                          <div className="text-right shrink-0">
+                            <span className={`text-[11px] font-mono font-bold block ${isCurrent ? 'text-amber-400' : 'text-slate-400'}`}>
+                              {p.hora_real ? p.hora_real.substring(0, 5) : p.hora_estimada.substring(0, 5)}
+                            </span>
+                            {p.hora_real && (
+                              <span className="text-[9px] text-slate-500 block">Real</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* School destination step */}
+                    <div className="flex items-center gap-3 rounded-xl bg-emerald-950/20 p-2.5 border border-emerald-800/40 text-xs">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400 font-bold text-xs border border-emerald-500/40">
+                        🏫
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="font-bold text-emerald-300 block truncate">
+                          {colegio.nombre}
+                        </span>
+                        <span className="text-[10px] text-slate-400 block truncate">
+                          Destino final de entrega
+                        </span>
+                      </div>
+                      <span className="text-[11px] font-mono text-emerald-400 font-bold">
+                        {(ruta.hora_llegada_objetivo || colegio.hora_llegada_limite || '08:00').substring(0, 5)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </>
             )}
 
             {/* If route is COMPLETED */}
             {ruta.estado === 'completada' && (
-              <div className="rounded-2xl border border-sky-500/40 bg-gradient-to-b from-slate-900 to-sky-950/20 p-6 text-center shadow-xl space-y-5">
-                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-sky-500/20 text-3xl text-sky-400 border border-sky-500/40 shadow-inner">
-                  🎉
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-sky-400 bg-sky-500/10 px-2.5 py-0.5 rounded-full border border-sky-500/30">
-                    Jornada Completada con Éxito
-                  </span>
-                  <h3 className="text-xl font-black text-slate-100 mt-2">Ruta Escolar Finalizada</h3>
-                  <p className="mt-1 text-sm text-slate-400">
-                    Llegada registrada a las <b className="text-sky-300">{ruta.hora_llegada_real || '--:--'}</b> a {colegio.nombre}.
-                  </p>
-                </div>
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-sky-500/40 bg-gradient-to-b from-slate-900 to-sky-950/20 p-6 text-center shadow-xl space-y-5">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-sky-500/20 text-3xl text-sky-400 border border-sky-500/40 shadow-inner">
+                    🎉
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-sky-400 bg-sky-500/10 px-2.5 py-0.5 rounded-full border border-sky-500/30">
+                      Jornada Completada con Éxito
+                    </span>
+                    <h3 className="text-xl font-black text-slate-100 mt-2">Ruta Escolar Finalizada</h3>
+                    <p className="mt-1 text-sm text-slate-400">
+                      Llegada registrada a las <b className="text-sky-300">{ruta.hora_llegada_real || '--:--'}</b> a {colegio.nombre}.
+                    </p>
+                  </div>
 
-                {/* Metrics pill */}
-                <div className="grid grid-cols-3 gap-2 bg-slate-950/80 p-3 rounded-xl border border-slate-800 text-xs">
-                  <div>
-                    <span className="text-[10px] text-slate-400 uppercase font-bold block">Salida</span>
-                    <span className="font-extrabold text-slate-200">{ruta.hora_salida_real || '--:--'}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 uppercase font-bold block">Llegada</span>
-                    <span className="font-extrabold text-sky-400">{ruta.hora_llegada_real || '--:--'}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 uppercase font-bold block">Alumnos</span>
-                    <span className="font-extrabold text-emerald-400">{recogidosCount + completadosCount}/{totalAlumnos}</span>
-                  </div>
-                </div>
-
-                <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 p-3 text-left">
-                  <div className="flex items-start gap-2 text-xs text-amber-200">
-                    <RotateCcw className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                  {/* Metrics pill */}
+                  <div className="grid grid-cols-3 gap-2 bg-slate-950/80 p-3 rounded-xl border border-slate-800 text-xs">
                     <div>
-                      <b className="font-bold text-amber-300">Ruta Permanente Diaria:</b> Esta ruta permanece configurada para tu uso diario. Puedes volver a ejecutarla cada día escolar (mañana o tarde) con un solo clic.
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Salida</span>
+                      <span className="font-extrabold text-slate-200">{ruta.hora_salida_real || '--:--'}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Llegada</span>
+                      <span className="font-extrabold text-sky-400">{ruta.hora_llegada_real || '--:--'}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Alumnos</span>
+                      <span className="font-extrabold text-emerald-400">{recogidosCount + completadosCount}/{totalAlumnos}</span>
                     </div>
                   </div>
+
+                  <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 p-3 text-left">
+                    <div className="flex items-start gap-2 text-xs text-amber-200">
+                      <RotateCcw className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                      <div>
+                        <b className="font-bold text-amber-300">Ruta Permanente Diaria:</b> Esta ruta con sus {totalAlumnos} paradas permanece guardada para tu uso diario. Puedes reiniciar el recorrido y ejecutarla nuevamente de inmediato.
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Daily Reopening Actions */}
+                  <div className="space-y-2.5 pt-1">
+                    <button
+                      id="btn-restart-and-start-route"
+                      disabled={isProcessingAction}
+                      onClick={() => handleResetDailyRoute(true)}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 py-3.5 text-sm font-black text-slate-950 hover:bg-amber-400 active:scale-[0.98] transition-all shadow-lg shadow-amber-500/20 cursor-pointer"
+                    >
+                      <Play className="h-4 w-4 fill-current" />
+                      <span>INICIAR NUEVO RECORRIDO PARA HOY (RODANDO)</span>
+                    </button>
+
+                    <button
+                      id="btn-restart-route"
+                      disabled={isProcessingAction}
+                      onClick={() => handleResetDailyRoute(false)}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-800 py-3 text-xs font-bold text-slate-200 border border-slate-700 hover:bg-slate-700 active:scale-[0.98] transition-all cursor-pointer"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5 text-amber-400" />
+                      <span>Reabrir Ruta como Programada (Esperando salida)</span>
+                    </button>
+                  </div>
                 </div>
 
-                {/* Daily Reopening Actions */}
-                <div className="space-y-2.5 pt-1">
-                  <button
-                    id="btn-restart-and-start-route"
-                    disabled={isProcessingAction}
-                    onClick={() => handleResetDailyRoute(true)}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 py-3.5 text-sm font-black text-slate-950 hover:bg-amber-400 active:scale-[0.98] transition-all shadow-lg shadow-amber-500/20 cursor-pointer"
-                  >
-                    <Play className="h-4 w-4 fill-current" />
-                    <span>INICIAR NUEVO RECORRIDO PARA HOY (RODANDO)</span>
-                  </button>
-
-                  <button
-                    id="btn-restart-route"
-                    disabled={isProcessingAction}
-                    onClick={() => handleResetDailyRoute(false)}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-800 py-3 text-xs font-bold text-slate-200 border border-slate-700 hover:bg-slate-700 active:scale-[0.98] transition-all cursor-pointer"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5 text-amber-400" />
-                    <span>Reabrir Ruta como Programada (Esperando salida)</span>
-                  </button>
+                {/* Final stops history preview */}
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 space-y-2.5 text-xs">
+                  <h4 className="font-bold text-slate-300 uppercase tracking-wider text-[11px]">
+                    Resumen de Paradas de la Jornada
+                  </h4>
+                  <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
+                    {paradas.map((p, idx) => {
+                      const student = alumnosMap.get(p.alumno_id) || p.alumno;
+                      const isPickedUp = p.estado === 'recogido' || p.estado === 'completado';
+                      return (
+                        <div
+                          key={p.id}
+                          className="flex items-center justify-between p-2 rounded-lg bg-slate-950/60 border border-slate-800/80 text-[11px]"
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <span className="font-bold text-slate-400">#{p.orden || idx + 1}</span>
+                            <span className="font-bold text-slate-200 truncate">{student?.nombre}</span>
+                          </div>
+                          <span
+                            className={`font-bold px-1.5 py-0.5 rounded ${
+                              isPickedUp
+                                ? 'text-emerald-400 bg-emerald-950/60'
+                                : 'text-rose-400 bg-rose-950/60'
+                            }`}
+                          >
+                            {isPickedUp ? '✓ Recogido' : '✗ Ausente'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             )}
