@@ -383,6 +383,8 @@ export const ParentPortal: React.FC<ParentPortalProps> = ({
         <div className="h-[360px] sm:h-[420px] w-full">
           <SchoolRouteMap
             colegio={colegio}
+            targetArrivalTime={ruta.hora_llegada_objetivo || colegio.hora_llegada_limite}
+            tipoTrayecto={ruta.tipo_trayecto}
             origen={{ lat: ruta.origen_lat, lng: ruta.origen_lng, direccion: ruta.origen_direccion }}
             paradas={ruta.paradas || []}
             alumnosMap={alumnosMap}
@@ -414,25 +416,43 @@ export const ParentPortal: React.FC<ParentPortalProps> = ({
             </span>
             <p className="text-xs font-semibold text-slate-200">{colegio.nombre}</p>
             <p className="text-[11px] text-amber-400 font-medium">
-              Hora límite de entrada: {colegio.hora_llegada_limite}
+              Hora límite de entrada: {(ruta.hora_llegada_objetivo || colegio.hora_llegada_limite || '08:00').substring(0, 5)}
             </p>
           </div>
         </div>
 
         {/* Driver Phone Contact Bar */}
-        <div className="rounded-xl bg-slate-900 border border-slate-800 p-3.5 flex items-center justify-between gap-3">
+        <div className="rounded-xl bg-slate-900 border border-slate-800 p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <span className="text-xs font-bold text-slate-200 block">¿Tienes alguna novedad con el estudiante?</span>
-            <span className="text-[11px] text-slate-400">Comunícate directamente con la unidad de transporte</span>
+            <span className="text-xs font-bold text-slate-200 block">
+              {ruta.conductor ? `Conductor asignado: ${ruta.conductor.nombre}` : '¿Tienes alguna novedad con el estudiante?'}
+            </span>
+            <span className="text-[11px] text-slate-400">
+              {ruta.conductor?.vehiculo_placa
+                ? `${ruta.conductor.vehiculo_modelo || 'Buseta'} • Placa: ${ruta.conductor.vehiculo_placa}`
+                : 'Comunícate directamente con la unidad de transporte escolar'}
+            </span>
           </div>
 
-          <a
-            href="tel:+584121234599"
-            className="flex items-center gap-1.5 rounded-xl bg-amber-500 px-3.5 py-2 text-xs font-black text-slate-950 shadow-md hover:bg-amber-400 transition-all shrink-0"
-          >
-            <Phone className="h-4 w-4" />
-            <span>Llamar Conductor</span>
-          </a>
+          <div className="flex items-center gap-2">
+            {ruta.conductor?.telefono && (
+              <a
+                href={`https://wa.me/${ruta.conductor.telefono.replace(/[^0-9]/g, '')}`}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 px-3 py-2 text-xs font-bold text-emerald-400 hover:bg-emerald-500/30 transition-all shrink-0"
+              >
+                <span>WhatsApp</span>
+              </a>
+            )}
+            <a
+              href={`tel:${ruta.conductor?.telefono || '+593991234567'}`}
+              className="flex items-center gap-1.5 rounded-xl bg-amber-500 px-3.5 py-2 text-xs font-black text-slate-950 shadow-md hover:bg-amber-400 transition-all shrink-0"
+            >
+              <Phone className="h-4 w-4" />
+              <span>Llamar Conductor</span>
+            </a>
+          </div>
         </div>
       </div>
     </div>

@@ -23,6 +23,23 @@ export interface Representante {
   created_at?: string;
 }
 
+export type ModalidadTransporte = 'ida_y_vuelta' | 'solo_ida' | 'solo_vuelta';
+export type TipoTrayecto = 'ida' | 'vuelta';
+
+export interface Conductor {
+  id: string;
+  nombre: string;
+  telefono: string;
+  email?: string;
+  licencia?: string;
+  vehiculo_modelo?: string;
+  vehiculo_placa?: string;
+  capacidad_pasajeros?: number;
+  foto_url?: string;
+  activo: boolean;
+  created_at?: string;
+}
+
 export interface Alumno {
   id: string;
   nombre: string;
@@ -34,6 +51,7 @@ export interface Alumno {
   grado?: string;
   notas_medicas?: string;
   tiempo_abordaje_estimado_min?: number; // default 2.5 min
+  modalidad_servicio?: ModalidadTransporte; // 'ida_y_vuelta' | 'solo_ida' | 'solo_vuelta'
   created_at?: string;
   // Joined fields for UI convenience
   colegio?: Colegio;
@@ -67,6 +85,7 @@ export interface RutaDiaria {
   origen_lng: number;
   origen_direccion?: string;
   modo_optimizacion: ModoOptimizacion;
+  tipo_trayecto?: TipoTrayecto; // 'ida' (mañana: casa -> colegio) | 'vuelta' (tarde: colegio -> casa)
   hora_llegada_objetivo: string; // e.g. "08:00:00"
   hora_salida_estimada: string; // calculated by algorithm e.g. "06:58:00"
   hora_salida_real?: string;
@@ -79,6 +98,8 @@ export interface RutaDiaria {
   tiempo_abordaje_por_alumno_min: number; // e.g. 2.5 min
   created_at?: string;
   colegio?: Colegio;
+  conductor_id?: string;
+  conductor?: Conductor;
   paradas: ParadaRuta[];
   polyline_geometry?: [number, number][]; // lat/lng pairs for map route line
 }
@@ -99,6 +120,7 @@ export interface RouteOptimizationRequest {
   alumno_ids: string[];
   hora_llegada_limite: string; // "08:00:00"
   modo: ModoOptimizacion;
+  tipo_trayecto?: TipoTrayecto;
   tiempo_abordaje_min: number; // default 2.5
   orden_manual?: string[]; // student ids in fixed order if manual
 }
@@ -109,6 +131,7 @@ export interface RouteOptimizationResult {
   tiempo_abordaje_total_min: number;
   tiempo_total_min: number;
   distancia_total_km: number;
+  tipo_trayecto: TipoTrayecto;
   paradas_ordenadas: Array<{
     alumno_id: string;
     orden: number;

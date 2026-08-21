@@ -13,9 +13,12 @@ import {
   Clock,
   Phone,
   AlertTriangle,
-  Users
+  Users,
+  Compass
 } from 'lucide-react';
 import { Alumno, Colegio } from '../../types';
+import { ensureUUID } from '../../services/instantDb';
+import { LocationPicker } from '../Map/LocationPicker';
 
 interface SchoolManagerProps {
   colegios: Colegio[];
@@ -36,19 +39,19 @@ export const SchoolManager: React.FC<SchoolManagerProps> = ({
 
   const [nombre, setNombre] = useState('');
   const [direccion, setDireccion] = useState('');
-  const [lat, setLat] = useState(10.4995);
-  const [lng, setLng] = useState(-66.8525);
-  const [horaLlegada, setHoraLlegada] = useState('08:00:00');
-  const [telefono, setTelefono] = useState('+58 212 000 0000');
+  const [lat, setLat] = useState(-0.1872);
+  const [lng, setLng] = useState(-78.4975);
+  const [horaLlegada, setHoraLlegada] = useState('07:45:00');
+  const [telefono, setTelefono] = useState('+593 2 224 1500');
 
   const handleOpenAdd = () => {
     setEditingId(null);
     setNombre('');
-    setDireccion('Av. Principal de Los Palos Grandes, Caracas');
-    setLat(10.4980);
-    setLng(-66.8490);
-    setHoraLlegada('08:00:00');
-    setTelefono('+58 212 555 1234');
+    setDireccion('Av. Manuel Córdova Galarza y Carcelén, Quito, Ecuador');
+    setLat(-0.0985);
+    setLng(-78.4835);
+    setHoraLlegada('07:30:00');
+    setTelefono('+593 2 397 6300');
     setIsModalOpen(true);
   };
 
@@ -68,7 +71,7 @@ export const SchoolManager: React.FC<SchoolManagerProps> = ({
     if (!nombre.trim()) return;
 
     const newCol: Colegio = {
-      id: editingId || 'col_' + Date.now(),
+      id: ensureUUID(editingId || undefined),
       nombre: nombre.trim(),
       direccion: direccion.trim(),
       lat: Number(lat),
@@ -211,20 +214,21 @@ export const SchoolManager: React.FC<SchoolManagerProps> = ({
       {/* Add / Edit Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl space-y-4">
+          <div className="w-full max-w-xl rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <h3 className="font-black text-slate-100 text-base">
-                {editingId ? 'Editar Colegio' : 'Registrar Nuevo Colegio'}
+              <h3 className="font-black text-slate-100 text-base flex items-center gap-2">
+                <School className="h-5 w-5 text-amber-400" />
+                <span>{editingId ? 'Editar Colegio' : 'Registrar Nuevo Colegio'}</span>
               </h3>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="rounded-lg p-1 text-slate-400 hover:text-slate-100"
+                className="rounded-lg p-1 text-slate-400 hover:text-slate-100 cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-3 text-xs">
+            <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
               <div>
                 <label className="font-bold text-slate-300 block mb-1">Nombre de la Institución *</label>
                 <input
@@ -238,7 +242,7 @@ export const SchoolManager: React.FC<SchoolManagerProps> = ({
               </div>
 
               <div>
-                <label className="font-bold text-slate-300 block mb-1">Dirección Exacta *</label>
+                <label className="font-bold text-slate-300 block mb-1">Dirección Escrita *</label>
                 <input
                   type="text"
                   required
@@ -249,27 +253,49 @@ export const SchoolManager: React.FC<SchoolManagerProps> = ({
                 />
               </div>
 
+              {/* Interactive Location Picker Map */}
+              <div className="space-y-1">
+                <label className="font-bold text-amber-400 flex items-center gap-1">
+                  <MapPin className="h-3.5 w-3.5" />
+                  <span>Ubicación en el Mapa (Haz clic o arrastra el pin)</span>
+                </label>
+                <LocationPicker
+                  lat={lat}
+                  lng={lng}
+                  pinType="school"
+                  currentAddress={direccion}
+                  height="200px"
+                  onChange={(newLat, newLng, suggestedAddress) => {
+                    setLat(newLat);
+                    setLng(newLng);
+                    if (suggestedAddress) {
+                      setDireccion(suggestedAddress);
+                    }
+                  }}
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-slate-400 block mb-1">Latitud</label>
+                  <label className="font-bold text-slate-400 block mb-1">Latitud GPS</label>
                   <input
                     type="number"
-                    step="0.0001"
+                    step="0.000001"
                     required
                     value={lat}
                     onChange={(e) => setLat(parseFloat(e.target.value) || lat)}
-                    className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-slate-100"
+                    className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-slate-100 font-mono"
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-slate-400 block mb-1">Longitud</label>
+                  <label className="font-bold text-slate-400 block mb-1">Longitud GPS</label>
                   <input
                     type="number"
-                    step="0.0001"
+                    step="0.000001"
                     required
                     value={lng}
                     onChange={(e) => setLng(parseFloat(e.target.value) || lng)}
-                    className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-slate-100"
+                    className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-slate-100 font-mono"
                   />
                 </div>
               </div>
@@ -302,13 +328,13 @@ export const SchoolManager: React.FC<SchoolManagerProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="rounded-xl bg-slate-800 px-4 py-2 font-bold text-slate-300 hover:bg-slate-700"
+                  className="rounded-xl bg-slate-800 px-4 py-2 font-bold text-slate-300 hover:bg-slate-700 cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="rounded-xl bg-amber-500 px-5 py-2 font-black text-slate-950 hover:bg-amber-400 transition-all cursor-pointer"
+                  className="rounded-xl bg-amber-500 px-5 py-2 font-black text-slate-950 hover:bg-amber-400 transition-all cursor-pointer shadow-md"
                 >
                   Guardar Colegio
                 </button>

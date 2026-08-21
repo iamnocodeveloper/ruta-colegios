@@ -8,19 +8,22 @@
  *   - Route polyline geometry (active vs completed legs)
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import { Alumno, Colegio, ParadaRuta, TrackingLog } from '../../types';
 
 interface SchoolRouteMapProps {
   colegio: Colegio;
   origen: { lat: number; lng: number; direccion?: string };
+  onOriginChange?: (newOrigin: { lat: number; lng: number; direccion?: string }) => void;
   paradas: ParadaRuta[];
   alumnosMap: Map<string, Alumno>;
   vanLocation?: TrackingLog | null;
   polylineGeometry?: [number, number][];
   activeStopIndex?: number;
   highlightStudentId?: string; // For parent portal view
+  targetArrivalTime?: string; // Explicit target arrival / meta time
+  tipoTrayecto?: 'ida' | 'vuelta';
   onMarkerClick?: (parada: ParadaRuta) => void;
   className?: string;
 }
@@ -28,12 +31,15 @@ interface SchoolRouteMapProps {
 export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
   colegio,
   origen,
+  onOriginChange,
   paradas,
   alumnosMap,
   vanLocation,
   polylineGeometry,
   activeStopIndex,
   highlightStudentId,
+  targetArrivalTime,
+  tipoTrayecto = 'ida',
   onMarkerClick,
   className = 'h-full w-full'
 }) => {
@@ -42,13 +48,38 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
   const polylineLayerRef = useRef<L.LayerGroup | null>(null);
   const vanMarkerRef = useRef<L.Marker | null>(null);
+  const originMarkerRef = useRef<L.Marker | null>(null);
+  const [clickToPickOrigin, setClickToPickOrigin] = useState<boolean>(false);
+
+  // Reverse geocode helper for origin moves
+  const reverseGeocodeOrigin = async (latitude: number, longitude: number) => {
+    try {
+      const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`;
+      const res = await fetch(url, { headers: { 'Accept-Language': 'es,en' } });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.display_name) {
+          const road = data.address?.road || data.address?.neighbourhood || data.address?.suburb || '';
+          const city = data.address?.city || data.address?.town || data.address?.state || '';
+          const cleanAddr = road ? `${road}, ${city}` : data.display_name.split(',').slice(0, 3).join(',');
+          return cleanAddr;
+        }
+      }
+    } catch (e) {
+      console.warn('Geocoding origin unavailable', e);
+    }
+    return undefined;
+  };
 
   // Initialize Map
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
 
+    const centerLat = Number(colegio?.lat) || -0.1872;
+    const centerLng = Number(colegio?.lng) || -78.4975;
+
     const map = L.map(mapContainerRef.current, {
-      center: [colegio.lat, colegio.lng],
+      center: [centerLat, centerLng],
       zoom: 13,
       zoomControl: false
     });
@@ -74,6 +105,30 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
       mapInstanceRef.current = null;
     };
   }, []);
+
+  // Handle map click when clickToPickOrigin is enabled
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !onOriginChange) return;
+
+    const handleMapClick = async (e: L.LeafletMouseEvent) => {
+      if (!clickToPickOrigin) return;
+      const newLat = Number(e.latlng.lat.toFixed(6));
+      const newLng = Number(e.latlng.lng.toFixed(6));
+      const addr = await reverseGeocodeOrigin(newLat, newLng);
+      onOriginChange({
+        lat: newLat,
+        lng: newLng,
+        direccion: addr || origen.direccion
+      });
+      setClickToPickOrigin(false);
+    };
+
+    map.on('click', handleMapClick);
+    return () => {
+      map.off('click', handleMapClick);
+    };
+  }, [clickToPickOrigin, onOriginChange, origen.direccion]);
 
   // Update Route Polylines and Markers
   useEffect(() => {
@@ -106,28 +161,64 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
       }).addTo(polylineLayer);
     }
 
-    // 2. Add Origin Depot Marker
+    // 2. Add Origin Depot Marker (Draggable if onOriginChange provided)
+    const isOriginDraggable = !!onOriginChange;
     const originIcon = L.divIcon({
       className: 'custom-map-marker',
       html: `
-        <div class="relative flex items-center justify-center">
-          <div class="w-9 h-9 bg-slate-900 border-2 border-sky-400 rounded-full shadow-lg flex items-center justify-center text-sky-400 font-bold text-xs">
+        <div class="relative flex flex-col items-center group ${isOriginDraggable ? 'cursor-grab active:cursor-grabbing' : ''}">
+          <div class="w-10 h-10 bg-slate-950 border-2 border-sky-400 rounded-full shadow-2xl flex items-center justify-center text-sky-300 font-bold text-sm ${isOriginDraggable ? 'ring-4 ring-sky-500/30 animate-pulse' : ''}">
             🏁
           </div>
-          <span class="absolute -bottom-5 bg-slate-900/90 text-sky-300 text-[10px] font-medium px-1.5 py-0.5 rounded shadow border border-sky-500/30 whitespace-nowrap">
-            Origen
+          <div class="w-3 h-1 bg-slate-950/60 rounded-full blur-[1px] -mt-0.5"></div>
+          <span class="absolute -bottom-5 bg-slate-900/95 text-sky-300 text-[10px] font-bold px-1.5 py-0.5 rounded shadow border border-sky-500/40 whitespace-nowrap">
+            ${isOriginDraggable ? 'Arrastra Salida 🏁' : 'Punto Salida'}
           </span>
         </div>
       `,
-      iconSize: [36, 36],
-      iconAnchor: [18, 18]
+      iconSize: [40, 44],
+      iconAnchor: [20, 36]
     });
 
-    L.marker([origen.lat, origen.lng], { icon: originIcon })
-      .bindPopup(`<div class="p-1 font-sans text-slate-800"><b class="text-xs">Punto de Salida / Origen</b><p class="text-[11px] text-slate-600">${origen.direccion || 'Base del Conductor'}</p></div>`)
+    const originMarker = L.marker([origen.lat, origen.lng], {
+      icon: originIcon,
+      draggable: isOriginDraggable,
+      autoPan: true
+    })
+      .bindPopup(`
+        <div class="p-1.5 font-sans text-slate-800">
+          <div class="flex items-center gap-1 text-sky-700 font-bold text-xs">
+            <span>🏁 Punto de Salida / Origen</span>
+          </div>
+          <p class="text-[11px] text-slate-700 font-semibold mt-0.5">${origen.direccion || 'Base del Conductor'}</p>
+          <div class="mt-1 font-mono text-[10px] text-slate-500">
+            ${Number(origen.lat).toFixed(5)}, ${Number(origen.lng).toFixed(5)}
+          </div>
+          ${isOriginDraggable ? '<div class="mt-1 text-[10px] text-amber-700 font-bold bg-amber-50 p-1 rounded">💡 Puedes arrastrar este marcador a cualquier calle o lugar en el mapa</div>' : ''}
+        </div>
+      `)
       .addTo(markersLayer);
 
+    if (isOriginDraggable) {
+      originMarker.on('dragend', async () => {
+        const pos = originMarker.getLatLng();
+        const newLat = Number(pos.lat.toFixed(6));
+        const newLng = Number(pos.lng.toFixed(6));
+        const addr = await reverseGeocodeOrigin(newLat, newLng);
+        onOriginChange({
+          lat: newLat,
+          lng: newLng,
+          direccion: addr || origen.direccion
+        });
+      });
+    }
+
+    originMarkerRef.current = originMarker;
+
     // 3. Add School Destination Marker
+    const rawTargetTime = targetArrivalTime || colegio.hora_llegada_limite || '08:00:00';
+    const cleanTargetTime = rawTargetTime.length > 5 ? rawTargetTime.substring(0, 5) : rawTargetTime;
+
     const schoolIcon = L.divIcon({
       className: 'custom-map-marker',
       html: `
@@ -136,7 +227,7 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
             🏫
           </div>
           <span class="absolute -bottom-6 bg-amber-500 text-slate-950 font-bold text-[10px] px-2 py-0.5 rounded-full shadow border border-amber-600 whitespace-nowrap">
-            Meta: ${colegio.hora_llegada_limite.substring(0, 5)}
+            ${tipoTrayecto === 'vuelta' ? 'Salida: ' : 'Meta: '} ${cleanTargetTime}
           </span>
         </div>
       `,
@@ -147,11 +238,11 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
     L.marker([colegio.lat, colegio.lng], { icon: schoolIcon })
       .bindPopup(`
         <div class="p-1.5 font-sans text-slate-800">
-          <div class="flex items-center gap-1.5 text-amber-600 font-bold text-xs">🏫 Escuela Destino</div>
+          <div class="flex items-center gap-1.5 text-amber-600 font-bold text-xs">🏫 ${tipoTrayecto === 'vuelta' ? 'Punto de Salida Escolar' : 'Escuela Destino'}</div>
           <p class="font-bold text-sm text-slate-900 mt-0.5">${colegio.nombre}</p>
           <p class="text-[11px] text-slate-600 mt-0.5">${colegio.direccion}</p>
           <div class="mt-1 bg-amber-50 border border-amber-200 text-amber-900 text-[10px] px-1.5 py-0.5 rounded font-medium">
-            Llegada límite: ${colegio.hora_llegada_limite}
+            ${tipoTrayecto === 'vuelta' ? 'Hora de salida escolar' : 'Llegada límite / Meta'}: ${cleanTargetTime}
           </div>
         </div>
       `)
@@ -237,7 +328,7 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
       const bounds = L.latLngBounds(allCoords);
       map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
     }
-  }, [colegio, origen, paradas, polylineGeometry, activeStopIndex, highlightStudentId]);
+  }, [colegio, origen, paradas, polylineGeometry, activeStopIndex, highlightStudentId, onOriginChange, targetArrivalTime, tipoTrayecto]);
 
   // Handle Real-Time School Van Marker
   useEffect(() => {
@@ -279,10 +370,26 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
 
   return (
     <div className="relative h-full w-full overflow-hidden rounded-xl border border-slate-800 bg-slate-900 shadow-inner">
-      <div ref={mapContainerRef} className={className} />
+      <div ref={mapContainerRef} className={`${className} ${clickToPickOrigin ? 'cursor-crosshair' : ''}`} />
 
-      {/* Floating control buttons */}
-      <div className="absolute top-3 right-3 z-[400] flex flex-col gap-2">
+      {/* Floating control buttons & Origin Click mode */}
+      <div className="absolute top-3 right-3 z-[400] flex flex-col gap-2 items-end">
+        {onOriginChange && (
+          <button
+            type="button"
+            onClick={() => setClickToPickOrigin(!clickToPickOrigin)}
+            className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold shadow-lg backdrop-blur transition-all border cursor-pointer ${
+              clickToPickOrigin
+                ? 'bg-sky-500 text-slate-950 border-sky-300 ring-2 ring-sky-400/50 animate-pulse'
+                : 'bg-slate-900/90 text-sky-300 border-sky-600/40 hover:bg-slate-800 hover:text-white'
+            }`}
+            title="Haz clic en cualquier punto del mapa para mover la salida"
+          >
+            <span>🏁</span>
+            <span>{clickToPickOrigin ? 'Haz clic en el mapa...' : 'Fijar Salida en Mapa'}</span>
+          </button>
+        )}
+
         <button
           id="btn-recenter-map"
           onClick={() => {
@@ -300,14 +407,26 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
             }
           }}
           title="Centrar vista"
-          className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-900/90 text-slate-200 shadow-md backdrop-blur border border-slate-700 hover:bg-slate-800 hover:text-amber-400 active:scale-95 transition-all text-sm font-semibold"
+          className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-900/90 text-slate-200 shadow-md backdrop-blur border border-slate-700 hover:bg-slate-800 hover:text-amber-400 active:scale-95 transition-all text-sm font-semibold cursor-pointer"
         >
           🎯
         </button>
       </div>
 
+      {/* Origin Mode Active Notification */}
+      {clickToPickOrigin && (
+        <div className="absolute top-3 left-3 z-[400] rounded-lg bg-sky-950/90 border border-sky-500/60 px-3 py-1.5 text-xs font-bold text-sky-200 shadow-xl flex items-center gap-2 animate-bounce">
+          <span>👆</span>
+          <span>Haz clic en el mapa donde quieras ubicar el Punto de Salida</span>
+        </div>
+      )}
+
       {/* Mini Legend Overlay */}
       <div className="absolute bottom-3 left-3 z-[400] hidden sm:flex items-center gap-2.5 rounded-lg bg-slate-950/85 px-3 py-1.5 text-[11px] font-medium text-slate-300 backdrop-blur border border-slate-800 shadow-lg">
+        <div className="flex items-center gap-1">
+          <span className="h-2.5 w-2.5 rounded-full bg-sky-500"></span>
+          <span>Salida (🏁)</span>
+        </div>
         <div className="flex items-center gap-1">
           <span className="h-2.5 w-2.5 rounded-full bg-slate-800 border border-amber-400"></span>
           <span>Pendiente</span>
@@ -315,10 +434,6 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
         <div className="flex items-center gap-1">
           <span className="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
           <span>Recogido</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <span className="h-2.5 w-2.5 rounded-full bg-rose-600"></span>
-          <span>Ausente</span>
         </div>
         <div className="flex items-center gap-1">
           <span className="h-2.5 w-2.5 rounded-full bg-amber-500"></span>

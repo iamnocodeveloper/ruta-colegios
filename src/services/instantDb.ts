@@ -10,6 +10,7 @@ import { init, i, id, tx } from '@instantdb/react';
 import {
   Alumno,
   Colegio,
+  Conductor,
   ParadaRuta,
   Representante,
   RutaDiaria,
@@ -17,6 +18,7 @@ import {
 } from '../types';
 import {
   INITIAL_ALUMNOS,
+  INITIAL_CONDUCTORES,
   INITIAL_DRIVER_ORIGIN,
   INITIAL_REPRESENTANTES,
   INITIAL_SCHOOL
@@ -54,15 +56,30 @@ const _schema = i.schema({
       grado: i.string().optional(),
       notas_medicas: i.string().optional(),
       tiempo_abordaje_estimado_min: i.number().optional(),
+      modalidad_servicio: i.string().optional(),
+      created_at: i.string().optional(),
+    }),
+    conductores: i.entity({
+      nombre: i.string(),
+      telefono: i.string(),
+      email: i.string().optional(),
+      licencia: i.string().optional(),
+      vehiculo_modelo: i.string().optional(),
+      vehiculo_placa: i.string().optional(),
+      capacidad_pasajeros: i.number().optional(),
+      foto_url: i.string().optional(),
+      activo: i.boolean(),
       created_at: i.string().optional(),
     }),
     rutas_diarias: i.entity({
       fecha: i.string(),
       colegio_id: i.string(),
+      conductor_id: i.string().optional(),
       origen_lat: i.number(),
       origen_lng: i.number(),
       origen_direccion: i.string().optional(),
       modo_optimizacion: i.string(),
+      tipo_trayecto: i.string().optional(),
       hora_llegada_objetivo: i.string(),
       hora_salida_estimada: i.string(),
       hora_salida_real: i.string().optional(),
@@ -113,14 +130,32 @@ export const db = init<Schema>({ appId: INSTANT_APP_ID });
 export { tx, id };
 
 /**
+ * Check if a string is a valid UUID format
+ */
+export function isValidUUID(str?: string): boolean {
+  if (!str) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+}
+
+/**
+ * Ensures an ID is a valid UUID, otherwise generates a valid one via id()
+ */
+export function ensureUUID(existingId?: string): string {
+  if (existingId && isValidUUID(existingId)) {
+    return existingId;
+  }
+  return id();
+}
+
+/**
  * Seed initial real school, representatives, students, and default route into InstantDB.
- * Creates records across all 6 entities in InstantDB.
+ * Creates records across all 6 entities in InstantDB using valid UUIDs.
  */
 export async function seedInstantDatabase(force: boolean = false) {
   try {
     const transactions: any[] = [];
 
-    // 1. Seed School
+    // 1. Seed School 1 & School 2 (using valid UUIDs)
     transactions.push(
       tx.colegios[INITIAL_SCHOOL.id].update({
         nombre: INITIAL_SCHOOL.nombre,
@@ -133,21 +168,20 @@ export async function seedInstantDatabase(force: boolean = false) {
       })
     );
 
-    // Also seed a second default school for variety
-    const secondSchoolId = 'col_02';
+    // Also seed a second default school for variety (Colegio Americano de Quito)
     transactions.push(
-      tx.colegios[secondSchoolId].update({
-        nombre: 'Colegio Emil Friedman',
-        direccion: 'Calle Los Cedros, Los Campitos, Caracas',
-        lat: 10.4560,
-        lng: -66.8620,
-        hora_llegada_limite: '07:45:00',
-        contacto_telefono: '+58 212 978 2211',
+      tx.colegios['e1000000-0000-4000-8000-000000000002'].update({
+        nombre: 'Colegio Americano de Quito',
+        direccion: 'Av. Manuel Córdova Galarza y Carcelén, Quito, Ecuador',
+        lat: -0.0985,
+        lng: -78.4835,
+        hora_llegada_limite: '07:30:00',
+        contacto_telefono: '+593 2 397 6300',
         created_at: new Date().toISOString(),
       })
     );
 
-    // 2. Seed Representantes
+    // 2. Seed Representantes (UUIDs)
     for (const rep of INITIAL_REPRESENTANTES) {
       transactions.push(
         tx.representantes[rep.id].update({
@@ -160,7 +194,7 @@ export async function seedInstantDatabase(force: boolean = false) {
       );
     }
 
-    // 3. Seed Alumnos
+    // 3. Seed Alumnos (UUIDs)
     for (const alu of INITIAL_ALUMNOS) {
       transactions.push(
         tx.alumnos[alu.id].update({
@@ -173,14 +207,34 @@ export async function seedInstantDatabase(force: boolean = false) {
           grado: alu.grado || '',
           notas_medicas: alu.notas_medicas || '',
           tiempo_abordaje_estimado_min: alu.tiempo_abordaje_estimado_min || 2.5,
+          modalidad_servicio: alu.modalidad_servicio || 'ida_y_vuelta',
           created_at: new Date().toISOString(),
         })
       );
     }
 
-    // 4. Seed Admin Demo User
+    // 4. Seed Conductores (UUIDs)
+    for (const cond of INITIAL_CONDUCTORES) {
+      transactions.push(
+        tx.conductores[cond.id].update({
+          nombre: cond.nombre,
+          telefono: cond.telefono,
+          email: cond.email || '',
+          licencia: cond.licencia || '',
+          vehiculo_modelo: cond.vehiculo_modelo || '',
+          vehiculo_placa: cond.vehiculo_placa || '',
+          capacidad_pasajeros: cond.capacidad_pasajeros || 16,
+          foto_url: cond.foto_url || '',
+          activo: cond.activo,
+          created_at: new Date().toISOString(),
+        })
+      );
+    }
+
+    // 5. Seed Admin Demo User (UUID)
+    const adminUserId = 'e4000000-0000-4000-8000-000000000001';
     transactions.push(
-      tx.usuarios['user_admin_01'].update({
+      tx.usuarios[adminUserId].update({
         email: 'admin@demo.com',
         nombre: 'Administrador Demo',
         rol: 'admin',
@@ -188,13 +242,14 @@ export async function seedInstantDatabase(force: boolean = false) {
       })
     );
 
-    // 5. Seed Initial Route & Stops
+    // 6. Seed Initial Route & Stops (UUIDs)
     const today = new Date().toISOString().substring(0, 10);
-    const initialRouteId = 'ruta_hoy_' + today;
+    const initialRouteId = 'e5000000-0000-4000-8000-000000000001';
     transactions.push(
       tx.rutas_diarias[initialRouteId].update({
         fecha: today,
         colegio_id: INITIAL_SCHOOL.id,
+        conductor_id: INITIAL_CONDUCTORES[0].id,
         origen_lat: INITIAL_DRIVER_ORIGIN.lat,
         origen_lng: INITIAL_DRIVER_ORIGIN.lng,
         origen_direccion: INITIAL_DRIVER_ORIGIN.direccion,
@@ -213,8 +268,9 @@ export async function seedInstantDatabase(force: boolean = false) {
 
     for (let idx = 0; idx < INITIAL_ALUMNOS.length; idx++) {
       const alu = INITIAL_ALUMNOS[idx];
+      const paradaId = `e6000000-0000-4000-8000-00000000000${idx + 1}`;
       transactions.push(
-        tx.paradas_ruta[`parada_${alu.id}`].update({
+        tx.paradas_ruta[paradaId].update({
           ruta_id: initialRouteId,
           alumno_id: alu.id,
           orden: idx + 1,
@@ -242,7 +298,7 @@ export async function seedInstantDatabase(force: boolean = false) {
  * Upsert a school in InstantDB
  */
 export async function upsertColegioInstant(colegio: Colegio) {
-  const colId = colegio.id || `col_${id()}`;
+  const colId = ensureUUID(colegio.id);
   await db.transact([
     tx.colegios[colId].update({
       nombre: colegio.nombre,
@@ -261,14 +317,15 @@ export async function upsertColegioInstant(colegio: Colegio) {
  * Delete a school from InstantDB
  */
 export async function deleteColegioInstant(colegioId: string) {
-  await db.transact([tx.colegios[colegioId].delete()]);
+  const safeId = ensureUUID(colegioId);
+  await db.transact([tx.colegios[safeId].delete()]);
 }
 
 /**
  * Upsert a representative in InstantDB
  */
 export async function upsertRepresentanteInstant(rep: Representante) {
-  const repId = rep.id || `rep_${id()}`;
+  const repId = ensureUUID(rep.id);
   await db.transact([
     tx.representantes[repId].update({
       nombre: rep.nombre,
@@ -286,10 +343,10 @@ export async function upsertRepresentanteInstant(rep: Representante) {
  */
 export async function upsertAlumnoInstant(alumno: Alumno, rep?: Representante) {
   const transactions: any[] = [];
-  let repId = alumno.representante_id;
+  let repId = alumno.representante_id ? ensureUUID(alumno.representante_id) : id();
 
   if (rep) {
-    repId = rep.id || `rep_${id()}`;
+    repId = ensureUUID(rep.id);
     transactions.push(
       tx.representantes[repId].update({
         nombre: rep.nombre,
@@ -301,11 +358,13 @@ export async function upsertAlumnoInstant(alumno: Alumno, rep?: Representante) {
     );
   }
 
-  const aluId = alumno.id || `alu_${id()}`;
+  const aluId = ensureUUID(alumno.id);
+  const targetColegioId = ensureUUID(alumno.colegio_id);
+
   transactions.push(
     tx.alumnos[aluId].update({
       nombre: alumno.nombre,
-      colegio_id: alumno.colegio_id,
+      colegio_id: targetColegioId,
       representante_id: repId,
       direccion_recogida: alumno.direccion_recogida,
       lat: Number(alumno.lat),
@@ -313,6 +372,7 @@ export async function upsertAlumnoInstant(alumno: Alumno, rep?: Representante) {
       grado: alumno.grado || '',
       notas_medicas: alumno.notas_medicas || '',
       tiempo_abordaje_estimado_min: Number(alumno.tiempo_abordaje_estimado_min || 2.5),
+      modalidad_servicio: alumno.modalidad_servicio || 'ida_y_vuelta',
       created_at: alumno.created_at || new Date().toISOString(),
     })
   );
@@ -325,24 +385,58 @@ export async function upsertAlumnoInstant(alumno: Alumno, rep?: Representante) {
  * Delete student from InstantDB
  */
 export async function deleteAlumnoInstant(alumnoId: string) {
-  await db.transact([tx.alumnos[alumnoId].delete()]);
+  const safeId = ensureUUID(alumnoId);
+  await db.transact([tx.alumnos[safeId].delete()]);
+}
+
+/**
+ * Upsert a Driver / Conductor in InstantDB
+ */
+export async function upsertConductorInstant(conductor: Conductor) {
+  const condId = ensureUUID(conductor.id);
+  await db.transact([
+    tx.conductores[condId].update({
+      nombre: conductor.nombre,
+      telefono: conductor.telefono,
+      email: conductor.email || '',
+      licencia: conductor.licencia || '',
+      vehiculo_modelo: conductor.vehiculo_modelo || '',
+      vehiculo_placa: conductor.vehiculo_placa || '',
+      capacidad_pasajeros: Number(conductor.capacidad_pasajeros || 16),
+      foto_url: conductor.foto_url || '',
+      activo: conductor.activo ?? true,
+      created_at: conductor.created_at || new Date().toISOString(),
+    }),
+  ]);
+  return condId;
+}
+
+/**
+ * Delete a Driver / Conductor from InstantDB
+ */
+export async function deleteConductorInstant(conductorId: string) {
+  const safeId = ensureUUID(conductorId);
+  await db.transact([tx.conductores[safeId].delete()]);
 }
 
 /**
  * Save / Update Full Daily Route with Stops in InstantDB
  */
 export async function saveRutaInstant(ruta: RutaDiaria) {
-  const rutaId = ruta.id || `ruta_${id()}`;
+  const rutaId = ensureUUID(ruta.id);
+  const targetColId = ensureUUID(ruta.colegio_id);
   const transactions: any[] = [];
 
   transactions.push(
     tx.rutas_diarias[rutaId].update({
       fecha: ruta.fecha,
-      colegio_id: ruta.colegio_id,
+      colegio_id: targetColId,
+      conductor_id: ruta.conductor_id || '',
       origen_lat: Number(ruta.origen_lat),
       origen_lng: Number(ruta.origen_lng),
       origen_direccion: ruta.origen_direccion || '',
       modo_optimizacion: ruta.modo_optimizacion,
+      tipo_trayecto: ruta.tipo_trayecto || 'ida',
       hora_llegada_objetivo: ruta.hora_llegada_objetivo,
       hora_salida_estimada: ruta.hora_salida_estimada,
       hora_salida_real: ruta.hora_salida_real || '',
@@ -360,11 +454,12 @@ export async function saveRutaInstant(ruta: RutaDiaria) {
 
   if (ruta.paradas && ruta.paradas.length > 0) {
     for (const p of ruta.paradas) {
-      const pId = p.id || `parada_${p.alumno_id}`;
+      const pId = ensureUUID(p.id);
+      const aluId = ensureUUID(p.alumno_id);
       transactions.push(
         tx.paradas_ruta[pId].update({
           ruta_id: rutaId,
-          alumno_id: p.alumno_id,
+          alumno_id: aluId,
           orden: Number(p.orden),
           hora_estimada: p.hora_estimada,
           hora_real: p.hora_real || '',
@@ -391,8 +486,9 @@ export async function updateParadaEstadoInstant(
   estado: 'pendiente' | 'recogido' | 'completado' | 'ausente',
   horaReal?: string
 ) {
+  const safeId = ensureUUID(paradaId);
   await db.transact([
-    tx.paradas_ruta[paradaId].update({
+    tx.paradas_ruta[safeId].update({
       estado,
       hora_real: horaReal || new Date().toLocaleTimeString(),
     }),
@@ -407,10 +503,11 @@ export async function updateRutaEstadoInstant(
   estado: 'planificada' | 'en_curso' | 'completada' | 'cancelada',
   extra?: { hora_salida_real?: string; hora_llegada_real?: string }
 ) {
+  const safeId = ensureUUID(rutaId);
   const updateData: any = { estado };
   if (extra?.hora_salida_real) updateData.hora_salida_real = extra.hora_salida_real;
   if (extra?.hora_llegada_real) updateData.hora_llegada_real = extra.hora_llegada_real;
-  await db.transact([tx.rutas_diarias[rutaId].update(updateData)]);
+  await db.transact([tx.rutas_diarias[safeId].update(updateData)]);
 }
 
 /**
@@ -424,9 +521,10 @@ export async function recordTrackingInstant(
   rumbo?: number
 ) {
   const logId = id();
+  const safeRutaId = ensureUUID(rutaId);
   await db.transact([
     tx.tracking_logs[logId].update({
-      ruta_id: rutaId,
+      ruta_id: safeRutaId,
       lat: Number(lat),
       lng: Number(lng),
       velocidad_kmh: velocidad !== undefined ? Number(velocidad) : 0,

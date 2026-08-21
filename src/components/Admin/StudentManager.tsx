@@ -17,9 +17,14 @@ import {
   AlertTriangle,
   HeartPulse,
   Phone,
-  Compass
+  Compass,
+  ArrowUpDown,
+  Sun,
+  Sunset
 } from 'lucide-react';
-import { Alumno, Colegio, Representante } from '../../types';
+import { Alumno, Colegio, ModalidadTransporte, Representante } from '../../types';
+import { ensureUUID } from '../../services/instantDb';
+import { LocationPicker } from '../Map/LocationPicker';
 
 interface StudentManagerProps {
   alumnos: Alumno[];
@@ -42,32 +47,35 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
   const [editingAlumnoId, setEditingAlumnoId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
+  const [filterModalidad, setFilterModalidad] = useState<string>('todos');
 
   // Form State
   const [nombreAlumno, setNombreAlumno] = useState<string>('');
   const [grado, setGrado] = useState<string>('');
   const [direccion, setDireccion] = useState<string>('');
-  const [lat, setLat] = useState<number>(10.4920);
-  const [lng, setLng] = useState<number>(-66.8600);
+  const [lat, setLat] = useState<number>(-0.1810);
+  const [lng, setLng] = useState<number>(-78.4795);
   const [notas, setNotas] = useState<string>('');
   const [colegioId, setColegioId] = useState<string>(colegios[0]?.id || '');
   const [tiempoAbordaje, setTiempoAbordaje] = useState<number>(2.5);
+  const [modalidadServicio, setModalidadServicio] = useState<ModalidadTransporte>('ida_y_vuelta');
   const [nombreRep, setNombreRep] = useState<string>('');
-  const [telefonoWhatsApp, setTelefonoWhatsApp] = useState<string>('+584120000000');
+  const [telefonoWhatsApp, setTelefonoWhatsApp] = useState<string>('+593990000000');
   const [emailRep, setEmailRep] = useState<string>('');
 
   const handleOpenAdd = () => {
     setEditingAlumnoId(null);
     setNombreAlumno('');
     setGrado('4to Grado A');
-    setDireccion('Av. Francisco de Miranda, Edif. Parque Cristal, Apt 5A, Caracas');
-    setLat(10.4950);
-    setLng(-66.8530);
+    setDireccion('Av. República del Salvador y Portugal, Edif. Almagro, Apt 5A, Quito');
+    setLat(-0.1810);
+    setLng(-78.4795);
     setNotas('');
     setColegioId(colegios[0]?.id || '');
     setTiempoAbordaje(2.5);
+    setModalidadServicio('ida_y_vuelta');
     setNombreRep('');
-    setTelefonoWhatsApp('+584121234567');
+    setTelefonoWhatsApp('+593991234567');
     setEmailRep('');
     setIsModalOpen(true);
   };
@@ -82,10 +90,11 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     setNotas(alumno.notas_medicas || '');
     setColegioId(alumno.colegio_id);
     setTiempoAbordaje(alumno.tiempo_abordaje_estimado_min || 2.5);
+    setModalidadServicio(alumno.modalidad_servicio || 'ida_y_vuelta');
 
     const rep = alumno.representante;
     setNombreRep(rep?.nombre || '');
-    setTelefonoWhatsApp(rep?.telefono_whatsapp || '+58412');
+    setTelefonoWhatsApp(rep?.telefono_whatsapp || '+59399');
     setEmailRep(rep?.email || '');
     setIsModalOpen(true);
   };
@@ -94,9 +103,10 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     e.preventDefault();
     if (!nombreAlumno.trim() || !nombreRep.trim()) return;
 
-    const repId = editingAlumnoId
-      ? alumnos.find((a) => a.id === editingAlumnoId)?.representante_id || 'rep_' + Date.now()
-      : 'rep_' + Date.now();
+    const rawRepId = editingAlumnoId
+      ? alumnos.find((a) => a.id === editingAlumnoId)?.representante_id
+      : undefined;
+    const repId = ensureUUID(rawRepId);
 
     const existingRep = representantes.find((r) => r.id === repId);
     const magicToken = existingRep?.magic_token || 'tok-' + Math.random().toString(36).substring(2, 10);
@@ -110,11 +120,12 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     };
 
     const targetColegio = colegios.find((c) => c.id === colegioId) || colegios[0];
+    const aluId = ensureUUID(editingAlumnoId || undefined);
 
     const newAlumno: Alumno = {
-      id: editingAlumnoId || 'alu_' + Date.now(),
+      id: aluId,
       nombre: nombreAlumno.trim(),
-      colegio_id: targetColegio ? targetColegio.id : colegioId,
+      colegio_id: targetColegio ? targetColegio.id : (colegioId ? ensureUUID(colegioId) : colegios[0]?.id || ensureUUID()),
       representante_id: repId,
       direccion_recogida: direccion.trim(),
       lat: Number(lat),
@@ -122,6 +133,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
       grado: grado.trim(),
       notas_medicas: notas.trim(),
       tiempo_abordaje_estimado_min: Number(tiempoAbordaje) || 2.5,
+      modalidad_servicio: modalidadServicio,
       representante: newRep,
       colegio: targetColegio
     };
@@ -166,13 +178,65 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
         </button>
       </div>
 
+      {/* Filter Tabs by Modality */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+        <span className="text-slate-400 text-xs font-bold shrink-0">Filtrar por servicio:</span>
+        <button
+          onClick={() => setFilterModalidad('todos')}
+          className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer shrink-0 ${
+            filterModalidad === 'todos'
+              ? 'bg-amber-400 text-slate-950 shadow'
+              : 'bg-slate-900 text-slate-300 hover:bg-slate-800'
+          }`}
+        >
+          Todos ({alumnos.length})
+        </button>
+        <button
+          onClick={() => setFilterModalidad('ida_y_vuelta')}
+          className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer shrink-0 ${
+            filterModalidad === 'ida_y_vuelta'
+              ? 'bg-emerald-500 text-slate-950 shadow'
+              : 'bg-slate-900 text-slate-300 hover:bg-slate-800'
+          }`}
+        >
+          🔄 Ida y Vuelta ({alumnos.filter((a) => (a.modalidad_servicio || 'ida_y_vuelta') === 'ida_y_vuelta').length})
+        </button>
+        <button
+          onClick={() => setFilterModalidad('solo_ida')}
+          className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer shrink-0 ${
+            filterModalidad === 'solo_ida'
+              ? 'bg-sky-500 text-slate-950 shadow'
+              : 'bg-slate-900 text-slate-300 hover:bg-slate-800'
+          }`}
+        >
+          🌅 Solo Ida ({alumnos.filter((a) => a.modalidad_servicio === 'solo_ida').length})
+        </button>
+        <button
+          onClick={() => setFilterModalidad('solo_vuelta')}
+          className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer shrink-0 ${
+            filterModalidad === 'solo_vuelta'
+              ? 'bg-purple-500 text-slate-950 shadow'
+              : 'bg-slate-900 text-slate-300 hover:bg-slate-800'
+          }`}
+        >
+          🌇 Solo Vuelta ({alumnos.filter((a) => a.modalidad_servicio === 'solo_vuelta').length})
+        </button>
+      </div>
+
       {/* Grid of Student Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-        {alumnos.map((alumno) => {
+        {alumnos
+          .filter((a) => {
+            if (filterModalidad === 'todos') return true;
+            const mod = a.modalidad_servicio || 'ida_y_vuelta';
+            return mod === filterModalidad;
+          })
+          .map((alumno) => {
           const rep = alumno.representante;
           const targetSchool = colegios.find((c) => c.id === alumno.colegio_id) || alumno.colegio;
           const magicToken = rep?.magic_token || `tok-${alumno.id}`;
           const isCopied = copiedToken === alumno.id;
+          const mod = alumno.modalidad_servicio || 'ida_y_vuelta';
 
           return (
             <div
@@ -186,7 +250,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <span className="text-[11px] text-amber-400 font-semibold">{alumno.grado || 'Estudiante'}</span>
                       <span className="text-[10px] text-slate-500">•</span>
-                      <span className="text-[10px] font-mono text-slate-400">ID: {alumno.id}</span>
+                      <span className="text-[10px] font-mono text-slate-400">ID: {alumno.id.substring(0, 8)}...</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
@@ -207,10 +271,31 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                   </div>
                 </div>
 
-                {/* Destination School Badge */}
-                <div className="mt-2 flex items-center gap-1 text-[11px] text-sky-300 bg-sky-950/40 border border-sky-800/40 px-2 py-0.5 rounded-md w-fit">
-                  <School className="h-3 w-3 shrink-0" />
-                  <span className="truncate max-w-[220px]">{targetSchool?.nombre || 'Colegio no asignado'}</span>
+                {/* Modality & Destination School Badges */}
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  {mod === 'ida_y_vuelta' && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-300 bg-emerald-950/60 border border-emerald-800/50 px-2 py-0.5 rounded-full">
+                      <ArrowUpDown className="h-3 w-3" />
+                      <span>Ida y Vuelta</span>
+                    </span>
+                  )}
+                  {mod === 'solo_ida' && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-sky-300 bg-sky-950/60 border border-sky-800/50 px-2 py-0.5 rounded-full">
+                      <Sun className="h-3 w-3" />
+                      <span>Solo Ida (Mañana)</span>
+                    </span>
+                  )}
+                  {mod === 'solo_vuelta' && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-purple-300 bg-purple-950/60 border border-purple-800/50 px-2 py-0.5 rounded-full">
+                      <Sunset className="h-3 w-3" />
+                      <span>Solo Vuelta (Tarde)</span>
+                    </span>
+                  )}
+
+                  <div className="flex items-center gap-1 text-[10px] text-amber-300 bg-amber-950/40 border border-amber-800/40 px-2 py-0.5 rounded-full">
+                    <School className="h-3 w-3 shrink-0" />
+                    <span className="truncate max-w-[150px]">{targetSchool?.nombre || 'Colegio'}</span>
+                  </div>
                 </div>
 
                 {/* Pickup Address */}
@@ -297,10 +382,11 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
       {/* Modal Form: Add / Edit Student */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="w-full max-w-xl rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <h3 className="font-black text-slate-100 text-base">
-                {editingAlumnoId ? 'Editar Alumno & Representante' : 'Registrar Nuevo Alumno'}
+              <h3 className="font-black text-slate-100 text-base flex items-center gap-2">
+                <Users className="h-5 w-5 text-amber-400" />
+                <span>{editingAlumnoId ? 'Editar Alumno & Representante' : 'Registrar Nuevo Alumno'}</span>
               </h3>
               <button
                 onClick={() => setIsModalOpen(false)}
@@ -310,7 +396,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-3 text-xs">
+            <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="font-bold text-slate-300 block mb-1">Nombre del Alumno *</label>
@@ -335,6 +421,61 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                 </div>
               </div>
 
+              {/* Service Modality Selector (Ida y Vuelta / Solo Ida / Solo Vuelta) */}
+              <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3 space-y-2">
+                <label className="font-bold text-amber-400 block">
+                  Modalidad del Servicio de Transporte *
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setModalidadServicio('ida_y_vuelta')}
+                    className={`flex flex-col items-center justify-center p-2 rounded-lg border text-center transition-all cursor-pointer ${
+                      modalidadServicio === 'ida_y_vuelta'
+                        ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300 ring-1 ring-emerald-500'
+                        : 'bg-slate-900 border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                    }`}
+                  >
+                    <span className="text-base mb-0.5">🔄</span>
+                    <span className="font-bold text-[11px] leading-tight">Ida y Vuelta</span>
+                    <span className="text-[9px] text-slate-400 mt-0.5">Mañana y Tarde</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setModalidadServicio('solo_ida')}
+                    className={`flex flex-col items-center justify-center p-2 rounded-lg border text-center transition-all cursor-pointer ${
+                      modalidadServicio === 'solo_ida'
+                        ? 'bg-sky-950/80 border-sky-500 text-sky-300 ring-1 ring-sky-500'
+                        : 'bg-slate-900 border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                    }`}
+                  >
+                    <span className="text-base mb-0.5">🌅</span>
+                    <span className="font-bold text-[11px] leading-tight">Solo Ida</span>
+                    <span className="text-[9px] text-slate-400 mt-0.5">Solo Mañana</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setModalidadServicio('solo_vuelta')}
+                    className={`flex flex-col items-center justify-center p-2 rounded-lg border text-center transition-all cursor-pointer ${
+                      modalidadServicio === 'solo_vuelta'
+                        ? 'bg-purple-950/80 border-purple-500 text-purple-300 ring-1 ring-purple-500'
+                        : 'bg-slate-900 border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                    }`}
+                  >
+                    <span className="text-base mb-0.5">🌇</span>
+                    <span className="font-bold text-[11px] leading-tight">Solo Vuelta</span>
+                    <span className="text-[9px] text-slate-400 mt-0.5">Solo Tarde</span>
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  {modalidadServicio === 'ida_y_vuelta' && '• El alumno será incluido en el cálculo tanto de la ruta de ida (mañana) como en la de vuelta (tarde).'}
+                  {modalidadServicio === 'solo_ida' && '• El alumno SOLO se incluirá al planificar la ruta de la mañana (recogida en casa hacia el colegio).'}
+                  {modalidadServicio === 'solo_vuelta' && '• El alumno SOLO se incluirá al planificar la ruta de la tarde (salida del colegio hacia casa).'}
+                </p>
+              </div>
+
               <div>
                 <label className="font-bold text-slate-300 block mb-1">Colegio de Destino *</label>
                 <select
@@ -344,7 +485,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                 >
                   {colegios.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.nombre} ({c.hora_llegada_limite})
+                      {c.nombre} (Entrada: {c.hora_llegada_limite})
                     </option>
                   ))}
                 </select>
@@ -362,27 +503,49 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                 />
               </div>
 
+              {/* Interactive Location Picker Map for Student Pickup Spot */}
+              <div className="space-y-1">
+                <label className="font-bold text-amber-400 flex items-center gap-1">
+                  <MapPin className="h-3.5 w-3.5" />
+                  <span>Punto de Recogida en el Mapa (Haz clic o arrastra el pin)</span>
+                </label>
+                <LocationPicker
+                  lat={lat}
+                  lng={lng}
+                  pinType="student"
+                  currentAddress={direccion}
+                  height="200px"
+                  onChange={(newLat, newLng, suggestedAddress) => {
+                    setLat(newLat);
+                    setLng(newLng);
+                    if (suggestedAddress) {
+                      setDireccion(suggestedAddress);
+                    }
+                  }}
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="font-bold text-slate-400 block mb-1">Latitud GPS</label>
                   <input
                     type="number"
-                    step="0.0001"
+                    step="0.000001"
                     required
                     value={lat}
                     onChange={(e) => setLat(parseFloat(e.target.value) || lat)}
-                    className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-slate-100"
+                    className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-slate-100 font-mono"
                   />
                 </div>
                 <div>
                   <label className="font-bold text-slate-400 block mb-1">Longitud GPS</label>
                   <input
                     type="number"
-                    step="0.0001"
+                    step="0.000001"
                     required
                     value={lng}
                     onChange={(e) => setLng(parseFloat(e.target.value) || lng)}
-                    className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-slate-100"
+                    className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-slate-100 font-mono"
                   />
                 </div>
               </div>
@@ -462,7 +625,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="rounded-xl bg-amber-500 px-5 py-2 font-black text-slate-950 hover:bg-amber-400 transition-all cursor-pointer"
+                  className="rounded-xl bg-amber-500 px-5 py-2 font-black text-slate-950 hover:bg-amber-400 transition-all cursor-pointer shadow-md"
                 >
                   Guardar Alumno
                 </button>

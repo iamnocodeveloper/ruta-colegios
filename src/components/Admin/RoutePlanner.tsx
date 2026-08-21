@@ -9,7 +9,7 @@
  *   - Interactive Map preview
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Clock,
   Sparkles,
@@ -22,11 +22,23 @@ import {
   Check,
   RotateCcw,
   Sliders,
-  Play
+  Play,
+  MapPin,
+  Compass,
+  ChevronDown,
+  ChevronUp,
+  Sun,
+  Sunset,
+  ShieldAlert,
+  Truck,
+  Phone,
+  ShieldCheck
 } from 'lucide-react';
-import { Alumno, Colegio, ModoOptimizacion, RouteOptimizationResult, RutaDiaria } from '../../types';
-import { calculateOptimizedRoute, formatFriendlyTime } from '../../services/routeCalculator';
+import { Alumno, Colegio, Conductor, ModoOptimizacion, RouteOptimizationResult, RutaDiaria, TipoTrayecto } from '../../types';
+import { calculateOptimizedRoute, formatFriendlyTime, filterStudentsForJourney } from '../../services/routeCalculator';
 import { SchoolRouteMap } from '../Map/SchoolRouteMap';
+import { LocationPicker } from '../Map/LocationPicker';
+import { ensureUUID } from '../../services/instantDb';
 
 interface RoutePlannerProps {
   colegios: Colegio[];
@@ -37,6 +49,7 @@ interface RoutePlannerProps {
   allAlumnos: Alumno[];
   alumnosMap: Map<string, Alumno>;
   activeRuta: RutaDiaria;
+  conductores?: Conductor[];
   onSaveRoute: (newRuta: RutaDiaria) => void;
   onSwitchToDriver: () => void;
 }
@@ -50,27 +63,71 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
   allAlumnos,
   alumnosMap,
   activeRuta,
+  conductores = [],
   onSaveRoute,
   onSwitchToDriver
 }) => {
   // Planner State
+  const [tipoTrayecto, setTipoTrayecto] = useState<TipoTrayecto>(activeRuta.tipo_trayecto || 'ida');
+  
+  // Selected Conductor for this route
+  const [selectedConductorId, setSelectedConductorId] = useState<string>(
+    activeRuta.conductor_id ||
+    activeRuta.conductor?.id ||
+    (conductores.length > 0 ? conductores[0].id : '')
+  );
+
+  // Sync selected conductor if activeRuta changes or list populates
+  useEffect(() => {
+    if (activeRuta.conductor_id) {
+      setSelectedConductorId(activeRuta.conductor_id);
+    } else if (activeRuta.conductor?.id) {
+      setSelectedConductorId(activeRuta.conductor.id);
+    } else if (!selectedConductorId && conductores.length > 0) {
+      setSelectedConductorId(conductores[0].id);
+    }
+  }, [activeRuta.conductor_id, activeRuta.conductor, conductores]);
+  
+  // Eligible students for the current direction
+  const eligibleStudents = filterStudentsForJourney(allAlumnos, tipoTrayecto);
+  
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>(
-    allAlumnos.map((s) => s.id)
+    eligibleStudents.map((s) => s.id)
   );
-  const [horaLlegada, setHoraLlegada] = useState<string>(
-    selectedColegio.hora_llegada_limite || '08:00:00'
-  );
+
+  const [horaLlegada, setHoraLlegada] = useState<string>(() => {
+    if (activeRuta.hora_llegada_objetivo) return activeRuta.hora_llegada_objetivo;
+    return tipoTrayecto === 'ida' ? (selectedColegio.hora_llegada_limite || '08:00:00') : '14:00:00';
+  });
   const [modo, setModo] = useState<ModoOptimizacion>('fijo');
   const [tiempoAbordajeMin, setTiempoAbordajeMin] = useState<number>(2.5);
   const [orderedStudentIds, setOrderedStudentIds] = useState<string[]>([]);
   const [isManualOrder, setIsManualOrder] = useState<boolean>(false);
   const [isCalculating, setIsCalculating] = useState<boolean>(false);
   const [optimizationResult, setOptimizationResult] = useState<RouteOptimizationResult | null>(null);
+  const [isOriginPickerOpen, setIsOriginPickerOpen] = useState<boolean>(false);
 
-  // Sync selected school
+  const prevColegioIdRef = useRef<string>(selectedColegio.id);
+  const prevTipoTrayectoRef = useRef<TipoTrayecto>(tipoTrayecto);
+
+  // Sync selected school and direction when user changes school or journey type
   useEffect(() => {
-    setHoraLlegada(selectedColegio.hora_llegada_limite || '08:00:00');
-  }, [selectedColegio]);
+    if (prevColegioIdRef.current !== selectedColegio.id || prevTipoTrayectoRef.current !== tipoTrayecto) {
+      prevColegioIdRef.current = selectedColegio.id;
+      prevTipoTrayectoRef.current = tipoTrayecto;
+      if (tipoTrayecto === 'ida') {
+        setHoraLlegada(selectedColegio.hora_llegada_limite || '08:00:00');
+      } else {
+        setHoraLlegada('14:00:00');
+      }
+    }
+  }, [selectedColegio, tipoTrayecto]);
+
+  // When direction changes, reset selected students to eligible ones
+  useEffect(() => {
+    const valid = filterStudentsForJourney(allAlumnos, tipoTrayecto);
+    setSelectedStudentIds(valid.map((s) => s.id));
+  }, [tipoTrayecto, allAlumnos]);
 
   // Recalculate route whenever parameters change
   const runRouteCalculation = async (useManualOrder: boolean = false) => {
@@ -86,6 +143,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
         studentsToRoute,
         {
           modo,
+          tipoTrayecto,
           tiempoAbordajeMin,
           horaLlegadaLimite: horaLlegada,
           ordenManual: useManualOrder ? orderedStudentIds : undefined
@@ -104,7 +162,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
 
   useEffect(() => {
     runRouteCalculation(false);
-  }, [selectedColegio, origen, selectedStudentIds, modo, tiempoAbordajeMin, horaLlegada]);
+  }, [selectedColegio, origen, selectedStudentIds, modo, tiempoAbordajeMin, horaLlegada, tipoTrayecto]);
 
   // Manual reordering handlers
   const moveStudent = (index: number, direction: 'up' | 'down') => {
@@ -122,6 +180,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
     const studentsToRoute = newOrder.map((id) => alumnosMap.get(id)!).filter(Boolean);
     calculateOptimizedRoute(origen, selectedColegio, studentsToRoute, {
       modo,
+      tipoTrayecto,
       tiempoAbordajeMin,
       horaLlegadaLimite: horaLlegada,
       ordenManual: newOrder
@@ -140,8 +199,8 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
     if (!optimizationResult) return;
 
     const newParadas = optimizationResult.paradas_ordenadas.map((p) => ({
-      id: 'parada_' + p.alumno_id + '_' + Date.now(),
-      ruta_id: activeRuta.id,
+      id: ensureUUID(),
+      ruta_id: ensureUUID(activeRuta.id),
       alumno_id: p.alumno_id,
       orden: p.orden,
       hora_estimada: p.hora_estimada,
@@ -153,14 +212,23 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
       alumno: alumnosMap.get(p.alumno_id)
     }));
 
+    const assignedConductor =
+      conductores.find((c) => c.id === selectedConductorId) || activeRuta.conductor;
+
     const updatedRuta: RutaDiaria = {
       ...activeRuta,
       colegio_id: selectedColegio.id,
-      colegio: selectedColegio,
+      colegio: {
+        ...selectedColegio,
+        hora_llegada_limite: horaLlegada || selectedColegio.hora_llegada_limite
+      },
+      conductor_id: selectedConductorId || undefined,
+      conductor: assignedConductor,
       origen_lat: origen.lat,
       origen_lng: origen.lng,
       origen_direccion: origen.direccion,
       modo_optimizacion: modo,
+      tipo_trayecto: tipoTrayecto,
       hora_llegada_objetivo: horaLlegada,
       hora_salida_estimada: optimizationResult.hora_salida_estimada,
       tiempo_manejo_estimado_min: optimizationResult.tiempo_manejo_min,
@@ -184,18 +252,58 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
         <div>
           <h2 className="text-base font-black text-slate-100 flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-amber-400" />
-            <span>Planificador & Salida Inversa</span>
+            <span>Planificador & Optimización de Ruta</span>
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Cálculo matemático de hora de salida y orden óptimo de recogida
+            Cálculo matemático con soporte de rutas de Ida (Mañana) y Vuelta (Tarde)
           </p>
         </div>
 
-        {/* School & Target Arrival Time */}
+        {/* Journey Type Selector: IDA vs VUELTA */}
+        <div className="rounded-xl border-2 border-amber-500/40 bg-slate-950 p-3 space-y-2">
+          <label className="text-[11px] font-black text-amber-400 uppercase tracking-wider block">
+            Tipo de Trayecto a Planificar
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setTipoTrayecto('ida')}
+              className={`flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
+                tipoTrayecto === 'ida'
+                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-lg shadow-amber-500/20'
+                  : 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 text-xs font-black">
+                <Sun className="h-4 w-4" />
+                <span>Ruta de IDA</span>
+              </div>
+              <span className="text-[10px] mt-0.5 opacity-80">Mañana: Casas ➔ Escuela</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTipoTrayecto('vuelta')}
+              className={`flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
+                tipoTrayecto === 'vuelta'
+                  ? 'bg-purple-600 text-white border-purple-400 font-black shadow-lg shadow-purple-600/20'
+                  : 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 text-xs font-black">
+                <Sunset className="h-4 w-4" />
+                <span>Ruta de VUELTA</span>
+              </div>
+              <span className="text-[10px] mt-0.5 opacity-80">Tarde: Escuela ➔ Casas</span>
+            </button>
+          </div>
+        </div>
+
+        {/* School & Target Time */}
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 space-y-3">
           <div>
             <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block mb-1">
-              Escuela de Destino
+              Colegio {tipoTrayecto === 'ida' ? 'de Destino' : 'de Origen'}
             </label>
             <select
               value={selectedColegio.id}
@@ -207,7 +315,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
             >
               {colegios.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.nombre} (Meta: {c.hora_llegada_limite.substring(0, 5)})
+                  {c.nombre} (Entrada: {c.hora_llegada_limite.substring(0, 5)})
                 </option>
               ))}
             </select>
@@ -215,7 +323,9 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
 
           <div>
             <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block mb-1">
-              Hora Límite de Llegada a la Escuela (H_llegada)
+              {tipoTrayecto === 'ida'
+                ? 'Hora Límite de Llegada a la Escuela (H_llegada)'
+                : 'Hora de Salida de la Escuela (H_salida)'}
             </label>
             <input
               type="time"
@@ -227,37 +337,191 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
           </div>
         </div>
 
+        {/* Assigned Conductor & Vehicle Unit */}
+        <div className="rounded-xl border border-amber-500/30 bg-slate-950/80 p-3 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <label className="text-[11px] font-black text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Truck className="h-3.5 w-3.5 text-amber-400" />
+              <span>Conductor y Unidad Asignada</span>
+            </label>
+            {conductores.length > 0 && (
+              <span className="text-[10px] text-slate-400 font-mono">
+                {conductores.filter((c) => c.activo).length} activos
+              </span>
+            )}
+          </div>
+
+          <div>
+            <select
+              value={selectedConductorId}
+              onChange={(e) => setSelectedConductorId(e.target.value)}
+              className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-xs font-bold text-slate-100 focus:border-amber-400 focus:outline-none"
+            >
+              <option value="">-- Sin Conductor Asignado --</option>
+              {conductores.map((cond) => (
+                <option key={cond.id} value={cond.id}>
+                  {cond.nombre} • {cond.vehiculo_placa || 'Sin Placa'} ({cond.capacidad_pasajeros || 16} puestos)
+                  {!cond.activo ? ' [Inactivo]' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Selected Driver Detailed Card */}
+          {(() => {
+            const activeCond =
+              conductores.find((c) => c.id === selectedConductorId) ||
+              activeRuta.conductor;
+
+            if (!activeCond) {
+              return (
+                <p className="text-[11px] text-slate-500 italic">
+                  Selecciona un conductor registrado para vincular la ruta directamente a su cabina y perfil.
+                </p>
+              );
+            }
+
+            const driverCap = activeCond.capacidad_pasajeros || 16;
+            const isOverCapacity = selectedStudentIds.length > driverCap;
+
+            return (
+              <div className="rounded-xl bg-slate-900 border border-slate-800 p-2.5 space-y-2 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="h-9 w-9 rounded-lg overflow-hidden bg-slate-800 border border-slate-700 shrink-0">
+                      {activeCond.foto_url ? (
+                        <img
+                          src={activeCond.foto_url}
+                          alt={activeCond.nombre}
+                          className="h-full w-full object-cover"
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center font-bold text-amber-400 text-xs">
+                          {activeCond.nombre.charAt(0)}
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="font-bold text-slate-100 text-xs flex items-center gap-1">
+                        <span>{activeCond.nombre}</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 font-mono flex items-center gap-1">
+                        <Phone className="h-2.5 w-2.5 text-emerald-400" />
+                        <a
+                          href={`https://wa.me/${activeCond.telefono.replace(/[^0-9]/g, '')}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="hover:underline hover:text-emerald-400"
+                        >
+                          {activeCond.telefono}
+                        </a>
+                      </p>
+                    </div>
+                  </div>
+
+                  {activeCond.vehiculo_placa && (
+                    <span className="font-mono font-bold bg-slate-950 px-2 py-0.5 rounded border border-slate-700 text-amber-300 text-[10px]">
+                      {activeCond.vehiculo_placa}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between pt-1 border-t border-slate-800/80 text-[11px]">
+                  <span className="text-slate-400 truncate max-w-[140px]">
+                    {activeCond.vehiculo_modelo || 'Unidad de Transporte'}
+                  </span>
+
+                  <div className="flex items-center gap-1">
+                    {isOverCapacity ? (
+                      <span className="flex items-center gap-1 rounded bg-rose-500/20 px-1.5 py-0.5 text-[10px] font-bold text-rose-400 border border-rose-500/30">
+                        <ShieldAlert className="h-3 w-3" />
+                        <span>{selectedStudentIds.length}/{driverCap} (Excede)</span>
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-bold text-emerald-400 border border-emerald-500/30">
+                        <ShieldCheck className="h-3 w-3" />
+                        <span>{selectedStudentIds.length}/{driverCap} puestos</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+
         {/* Origin Coordinates */}
-        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 space-y-2">
-          <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
-            Punto de Origen / Base Conductor (O)
-          </label>
-          <input
-            type="text"
-            value={origen.direccion || ''}
-            onChange={(e) => onUpdateOrigen({ ...origen, direccion: e.target.value })}
-            placeholder="Dirección o base de salida"
-            className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-1.5 text-xs text-slate-200 focus:border-amber-400 focus:outline-none"
-          />
+        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <label className="text-[11px] font-bold text-sky-300 uppercase tracking-wider flex items-center gap-1.5">
+              <span>{tipoTrayecto === 'ida' ? '🏁 Base de Salida del Conductor' : '🏁 Base / Retorno Final'}</span>
+            </label>
+            <button
+              type="button"
+              onClick={() => setIsOriginPickerOpen(!isOriginPickerOpen)}
+              className="flex items-center gap-1 text-[11px] font-bold text-sky-400 hover:text-sky-300 bg-sky-950/60 hover:bg-sky-900/80 px-2 py-0.5 rounded border border-sky-800/60 transition-all cursor-pointer"
+            >
+              <MapPin className="h-3 w-3" />
+              <span>{isOriginPickerOpen ? 'Cerrar Mapa' : 'Elegir en Mapa'}</span>
+              {isOriginPickerOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            </button>
+          </div>
+
+          {/* Collapsible/Expandable Location Picker Map */}
+          {isOriginPickerOpen && (
+            <div className="pt-1">
+              <LocationPicker
+                lat={origen.lat}
+                lng={origen.lng}
+                pinType="origin"
+                currentAddress={origen.direccion}
+                height="190px"
+                onChange={(newLat, newLng, suggestedAddr) => {
+                  onUpdateOrigen({
+                    lat: newLat,
+                    lng: newLng,
+                    direccion: suggestedAddr || origen.direccion
+                  });
+                }}
+              />
+            </div>
+          )}
+
+          <div>
+            <span className="text-[10px] text-slate-400 font-bold block mb-1">Dirección de Base</span>
+            <input
+              type="text"
+              value={origen.direccion || ''}
+              onChange={(e) => onUpdateOrigen({ ...origen, direccion: e.target.value })}
+              placeholder="Dirección o base de salida"
+              className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-1.5 text-xs text-slate-200 focus:border-sky-400 focus:outline-none"
+            />
+          </div>
+
           <div className="grid grid-cols-2 gap-2 text-[11px]">
             <div>
-              <span className="text-slate-400">Lat:</span>
+              <span className="text-slate-400 text-[10px] font-bold">Latitud GPS:</span>
               <input
                 type="number"
-                step="0.0001"
+                step="0.000001"
                 value={origen.lat}
                 onChange={(e) => onUpdateOrigen({ ...origen, lat: parseFloat(e.target.value) || origen.lat })}
-                className="w-full rounded bg-slate-900 border border-slate-700 px-2 py-1 text-slate-200 text-xs mt-0.5"
+                className="w-full rounded bg-slate-900 border border-slate-700 px-2 py-1 text-slate-200 text-xs font-mono mt-0.5"
               />
             </div>
             <div>
-              <span className="text-slate-400">Lng:</span>
+              <span className="text-slate-400 text-[10px] font-bold">Longitud GPS:</span>
               <input
                 type="number"
-                step="0.0001"
+                step="0.000001"
                 value={origen.lng}
                 onChange={(e) => onUpdateOrigen({ ...origen, lng: parseFloat(e.target.value) || origen.lng })}
-                className="w-full rounded bg-slate-900 border border-slate-700 px-2 py-1 text-slate-200 text-xs mt-0.5"
+                className="w-full rounded bg-slate-900 border border-slate-700 px-2 py-1 text-slate-200 text-xs font-mono mt-0.5"
               />
             </div>
           </div>
@@ -275,7 +539,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
                 onClick={() => setModo('fijo')}
                 className={`flex items-center justify-center gap-1.5 rounded-lg py-2 px-2 text-xs font-bold transition-all ${
                   modo === 'fijo'
-                    ? 'bg-amber-500 text-slate-950 shadow-md'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-black'
                     : 'bg-slate-900 text-slate-400 border border-slate-700 hover:text-slate-200'
                 }`}
               >
@@ -288,7 +552,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
                 onClick={() => setModo('trafico_real')}
                 className={`flex items-center justify-center gap-1.5 rounded-lg py-2 px-2 text-xs font-bold transition-all ${
                   modo === 'trafico_real'
-                    ? 'bg-amber-500 text-slate-950 shadow-md'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-black'
                     : 'bg-slate-900 text-slate-400 border border-slate-700 hover:text-slate-200'
                 }`}
               >
@@ -300,7 +564,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
 
           <div>
             <div className="flex items-center justify-between text-[11px] font-bold text-slate-300 mb-1">
-              <span>TIEMPO ABORDAJE POR ALUMNO:</span>
+              <span>{tipoTrayecto === 'ida' ? 'ABORDAJE EN CASA:' : 'DESEMBARQUE EN CASA:'}</span>
               <span className="text-amber-400">{tiempoAbordajeMin} min</span>
             </div>
             <input
@@ -313,49 +577,93 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
               className="w-full accent-amber-500 cursor-pointer"
             />
             <p className="text-[10px] text-slate-400 mt-0.5">
-              Multiplicado por {selectedStudentIds.length} alumnos = {Math.round(selectedStudentIds.length * tiempoAbordajeMin * 10) / 10} min totales
+              {selectedStudentIds.length} alumnos × {tiempoAbordajeMin} min = {Math.round(selectedStudentIds.length * tiempoAbordajeMin * 10) / 10} min totales
             </p>
           </div>
         </div>
 
-        {/* Students Checklist */}
+        {/* Students Checklist with Modality Filter */}
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 space-y-2">
           <div className="flex items-center justify-between">
             <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
-              Alumnos a Incluir ({selectedStudentIds.length})
+              Alumnos en {tipoTrayecto === 'ida' ? 'Ida (Mañana)' : 'Vuelta (Tarde)'} ({selectedStudentIds.length}/{eligibleStudents.length})
             </label>
             <button
               onClick={() => {
-                if (selectedStudentIds.length === allAlumnos.length) {
+                if (selectedStudentIds.length === eligibleStudents.length) {
                   setSelectedStudentIds([]);
                 } else {
-                  setSelectedStudentIds(allAlumnos.map((s) => s.id));
+                  setSelectedStudentIds(eligibleStudents.map((s) => s.id));
                 }
               }}
-              className="text-[10px] font-semibold text-amber-400 hover:underline"
+              className="text-[10px] font-semibold text-amber-400 hover:underline cursor-pointer"
             >
-              {selectedStudentIds.length === allAlumnos.length ? 'Desmarcar todos' : 'Marcar todos'}
+              {selectedStudentIds.length === eligibleStudents.length ? 'Desmarcar todos' : 'Marcar todos'}
             </button>
           </div>
 
-          <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-            {allAlumnos.map((student) => (
-              <label
-                key={student.id}
-                className="flex items-center justify-between gap-2 rounded-lg bg-slate-900/80 p-2 text-xs border border-slate-800 cursor-pointer hover:border-slate-700"
-              >
-                <div className="flex items-center gap-2 truncate">
-                  <input
-                    type="checkbox"
-                    checked={selectedStudentIds.includes(student.id)}
-                    onChange={() => toggleStudent(student.id)}
-                    className="accent-amber-500 h-3.5 w-3.5 rounded"
-                  />
-                  <span className="font-semibold text-slate-200 truncate">{student.nombre}</span>
-                </div>
-                <span className="text-[10px] text-slate-400 shrink-0">{student.grado || 'Estudiante'}</span>
-              </label>
-            ))}
+          <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+            {allAlumnos.map((student) => {
+              const mod = student.modalidad_servicio || 'ida_y_vuelta';
+              const isEligible = tipoTrayecto === 'ida'
+                ? (mod === 'ida_y_vuelta' || mod === 'solo_ida')
+                : (mod === 'ida_y_vuelta' || mod === 'solo_vuelta');
+
+              return (
+                <label
+                  key={student.id}
+                  className={`flex items-center justify-between gap-2 rounded-lg p-2 text-xs border transition-all ${
+                    isEligible
+                      ? 'bg-slate-900/80 border-slate-800 hover:border-slate-700 cursor-pointer'
+                      : 'bg-slate-950/40 border-slate-900 opacity-50 cursor-not-allowed'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    <input
+                      type="checkbox"
+                      disabled={!isEligible}
+                      checked={selectedStudentIds.includes(student.id)}
+                      onChange={() => isEligible && toggleStudent(student.id)}
+                      className="accent-amber-500 h-3.5 w-3.5 rounded"
+                    />
+                    <div className="truncate">
+                      <span className={`font-semibold truncate block ${isEligible ? 'text-slate-200' : 'text-slate-500 line-through'}`}>
+                        {student.nombre}
+                      </span>
+                      <span className="text-[10px] text-slate-400 truncate block">
+                        {student.direccion_recogida}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="shrink-0 text-right">
+                    {mod === 'ida_y_vuelta' && (
+                      <span className="text-[9px] font-bold text-emerald-400 bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-800/40">
+                        🔄 Ida/Vuelta
+                      </span>
+                    )}
+                    {mod === 'solo_ida' && (
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
+                        tipoTrayecto === 'ida'
+                          ? 'text-sky-300 bg-sky-950/60 border-sky-800/40'
+                          : 'text-rose-400 bg-rose-950/40 border-rose-800/40'
+                      }`}>
+                        {tipoTrayecto === 'ida' ? '🌅 Solo Ida' : '❌ Solo Ida'}
+                      </span>
+                    )}
+                    {mod === 'solo_vuelta' && (
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
+                        tipoTrayecto === 'vuelta'
+                          ? 'text-purple-300 bg-purple-950/60 border-purple-800/40'
+                          : 'text-rose-400 bg-rose-950/40 border-rose-800/40'
+                      }`}>
+                        {tipoTrayecto === 'vuelta' ? '🌇 Solo Vuelta' : '❌ Solo Vuelta'}
+                      </span>
+                    )}
+                  </div>
+                </label>
+              );
+            })}
           </div>
         </div>
 
@@ -373,21 +681,30 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
 
       {/* Right Content Area: Results Formula & Map Preview & Stop Reorder Table */}
       <div className="flex-1 flex flex-col p-4 space-y-4 overflow-y-auto">
-        {/* INVERSE DEPARTURE TIME HERO CARD */}
+        {/* INVERSE DEPARTURE / FORWARD COMPLETION TIME HERO CARD */}
         {optimizationResult && (
           <div className="rounded-2xl border-2 border-amber-500/50 bg-gradient-to-r from-slate-900 via-slate-900 to-amber-950/30 p-4 sm:p-5 shadow-2xl">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-500/30">
-                  Algoritmo de Salida Inversa
+                  {tipoTrayecto === 'ida' ? 'Algoritmo de Salida Inversa (Mañana)' : 'Ruta de Vuelta Optimizada (Tarde)'}
                 </span>
                 <div className="mt-1 flex items-baseline gap-2">
                   <h3 className="text-2xl sm:text-3xl font-black text-slate-100">
-                    Hora de Salida: <span className="text-amber-400">{optimizationResult.hora_salida_estimada}</span>
+                    {tipoTrayecto === 'ida' ? 'Hora de Salida de Base:' : 'Hora de Salida del Colegio:'}{' '}
+                    <span className="text-amber-400">{optimizationResult.hora_salida_estimada}</span>
                   </h3>
                 </div>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  El conductor debe partir a esta hora para arribar a <span className="text-slate-200 font-semibold">{selectedColegio.nombre}</span> exactamente a las <span className="text-amber-400 font-semibold">{horaLlegada.substring(0, 5)}</span>.
+                  {tipoTrayecto === 'ida' ? (
+                    <>
+                      El conductor debe partir a las <b className="text-amber-400">{optimizationResult.hora_salida_estimada}</b> para arribar a <span className="text-slate-200 font-semibold">{selectedColegio.nombre}</span> exactamente a las <span className="text-amber-400 font-semibold">{horaLlegada.substring(0, 5)}</span>.
+                    </>
+                  ) : (
+                    <>
+                      Partiendo del colegio a las <b className="text-amber-400">{optimizationResult.hora_salida_estimada}</b>, la entrega del último alumno se completará en aprox. <b className="text-slate-200">{optimizationResult.tiempo_total_min} min</b>.
+                    </>
+                  )}
                 </p>
               </div>
 
@@ -398,7 +715,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
                   <b className="text-slate-200">{optimizationResult.tiempo_manejo_min} min</b>
                 </div>
                 <div className="flex justify-between gap-4 text-slate-400">
-                  <span>T_abordaje ({selectedStudentIds.length} × {tiempoAbordajeMin}):</span>
+                  <span>{tipoTrayecto === 'ida' ? 'T_abordaje' : 'T_desembarque'} ({selectedStudentIds.length} × {tiempoAbordajeMin}):</span>
                   <b className="text-slate-200">{optimizationResult.tiempo_abordaje_total_min} min</b>
                 </div>
                 <div className="border-t border-slate-800 pt-1 flex justify-between gap-4 font-bold text-amber-400">
@@ -413,8 +730,14 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
         {/* Map Preview Stage */}
         <div className="h-[340px] sm:h-[380px] w-full rounded-xl overflow-hidden border border-slate-800">
           <SchoolRouteMap
-            colegio={selectedColegio}
+            colegio={{
+              ...selectedColegio,
+              hora_llegada_limite: horaLlegada || selectedColegio.hora_llegada_limite
+            }}
+            targetArrivalTime={horaLlegada}
+            tipoTrayecto={tipoTrayecto}
             origen={origen}
+            onOriginChange={onUpdateOrigen}
             paradas={
               optimizationResult
                 ? optimizationResult.paradas_ordenadas.map((p) => ({
@@ -439,18 +762,20 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
         <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <h4 className="text-sm font-bold text-slate-200">Itinerario y Secuencia de Paradas</h4>
+              <h4 className="text-sm font-bold text-slate-200">
+                Itinerario de {tipoTrayecto === 'ida' ? 'Recogida (Hogares ➔ Colegio)' : 'Entrega (Colegio ➔ Hogares)'}
+              </h4>
               <p className="text-[11px] text-slate-400">
                 {isManualOrder
                   ? 'Orden personalizado manualmente. Puedes restaurar la sugerencia algorítmica.'
-                  : 'Orden óptimo calculado mediante Algoritmo 2-Opt (mínima distancia).'}
+                  : 'Orden óptimo calculado mediante Algoritmo TSP 2-Opt (mínima distancia y tiempo).'}
               </p>
             </div>
 
             {isManualOrder && (
               <button
                 onClick={() => runRouteCalculation(false)}
-                className="flex items-center gap-1 text-xs text-amber-400 font-bold hover:underline"
+                className="flex items-center gap-1 text-xs text-amber-400 font-bold hover:underline cursor-pointer"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
                 <span>Restaurar Orden 2-Opt</span>
@@ -473,7 +798,15 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
                       #{idx + 1}
                     </span>
                     <div>
-                      <span className="font-bold text-slate-100 text-sm">{student?.nombre}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-slate-100 text-sm">{student?.nombre}</span>
+                        {student?.modalidad_servicio === 'solo_ida' && (
+                          <span className="text-[9px] text-sky-400 font-bold bg-sky-950/80 px-1.5 rounded">Solo Ida</span>
+                        )}
+                        {student?.modalidad_servicio === 'solo_vuelta' && (
+                          <span className="text-[9px] text-purple-400 font-bold bg-purple-950/80 px-1.5 rounded">Solo Vuelta</span>
+                        )}
+                      </div>
                       <p className="text-[11px] text-slate-400 truncate max-w-[280px]">
                         {student?.direccion_recogida}
                       </p>
@@ -486,7 +819,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
                         {stopMeta?.hora_estimada.substring(0, 5) || '--:--'}
                       </span>
                       <span className="text-[10px] text-slate-400">
-                        {stopMeta?.distancia_desde_anterior_km || 0} km
+                        {stopMeta?.distancia_desde_anterior_km || 0} km ({stopMeta?.tiempo_desde_anterior_min || 0} min)
                       </span>
                     </div>
 
@@ -496,7 +829,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
                         disabled={idx === 0}
                         onClick={() => moveStudent(idx, 'up')}
                         title="Subir parada"
-                        className="p-1 text-slate-400 hover:text-amber-400 disabled:opacity-20"
+                        className="p-1 text-slate-400 hover:text-amber-400 disabled:opacity-20 cursor-pointer"
                       >
                         <MoveUp className="h-3.5 w-3.5" />
                       </button>
@@ -504,7 +837,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
                         disabled={idx === orderedStudentIds.length - 1}
                         onClick={() => moveStudent(idx, 'down')}
                         title="Bajar parada"
-                        className="p-1 text-slate-400 hover:text-amber-400 disabled:opacity-20"
+                        className="p-1 text-slate-400 hover:text-amber-400 disabled:opacity-20 cursor-pointer"
                       >
                         <MoveDown className="h-3.5 w-3.5" />
                       </button>

@@ -16,16 +16,19 @@ import {
   ExternalLink,
   Zap,
   Lock,
-  LogOut
+  LogOut,
+  Truck
 } from 'lucide-react';
 import {
   Alumno,
   Colegio,
+  Conductor,
   Representante,
   RutaDiaria
 } from './types';
 import {
   INITIAL_ALUMNOS,
+  INITIAL_CONDUCTORES,
   INITIAL_DRIVER_ORIGIN,
   INITIAL_REPRESENTANTES,
   INITIAL_SCHOOL
@@ -36,6 +39,7 @@ import { ParentPortal } from './components/Parent/ParentPortal';
 import { RoutePlanner } from './components/Admin/RoutePlanner';
 import { StudentManager } from './components/Admin/StudentManager';
 import { SchoolManager } from './components/Admin/SchoolManager';
+import { DriverManager } from './components/Admin/DriverManager';
 import { SqlSchemaViewer } from './components/Admin/SqlSchemaViewer';
 import { PWAInstallBanner } from './components/PWA/PWAInstallBanner';
 import {
@@ -46,8 +50,11 @@ import {
   deleteAlumnoInstant,
   upsertColegioInstant,
   deleteColegioInstant,
+  upsertConductorInstant,
+  deleteConductorInstant,
   saveRutaInstant,
-  updateParadaEstadoInstant
+  updateParadaEstadoInstant,
+  ensureUUID
 } from './services/instantDb';
 import { InstantAuthModal } from './components/Auth/InstantAuthModal';
 import { InstantSyncBadge } from './components/Auth/InstantSyncBadge';
@@ -61,10 +68,11 @@ export type AuthSession =
 export default function App() {
   // Navigation State
   const [currentView, setCurrentView] = useState<
-    'driver' | 'parent' | 'planner' | 'students' | 'schools' | 'sql'
+    'driver' | 'parent' | 'planner' | 'students' | 'schools' | 'drivers' | 'sql'
   >('driver');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [currentDriverId, setCurrentDriverId] = useState<string>('d1000000-0000-4000-8000-000000000001');
 
   // Authentication Session (Mandatory Login Gate)
   const [authSession, setAuthSession] = useState<AuthSession>(() => {
@@ -102,26 +110,52 @@ export default function App() {
     colegios: {},
     representantes: {},
     alumnos: {},
+    conductores: {},
     rutas_diarias: {},
     paradas_ruta: {},
     tracking_logs: {},
     usuarios: {}
   });
 
-  // Automatically seed InstantDB with real initial data if empty
+  // Automatically seed or migrate InstantDB & LocalStorage to Quito, Ecuador
   useEffect(() => {
+    // Check if local storage has outdated Caracas data
+    try {
+      const savedOrigen = localStorage.getItem('rutaescolar_origen');
+      if (savedOrigen) {
+        const parsed = JSON.parse(savedOrigen);
+        if (parsed.lat > 5 || parsed.direccion?.includes('Caracas') || parsed.direccion?.includes('Chaguaramos')) {
+          localStorage.removeItem('rutaescolar_origen');
+          localStorage.removeItem('rutaescolar_colegios');
+          localStorage.removeItem('rutaescolar_alumnos');
+          localStorage.removeItem('rutaescolar_representantes');
+          localStorage.removeItem('rutaescolar_rutas');
+          setOrigen(INITIAL_DRIVER_ORIGIN);
+        }
+      }
+    } catch (e) {
+      console.warn('Error checking local storage migration', e);
+    }
+
     if (!instantLoading && instantData) {
-      const rawCols = Array.isArray(instantData.colegios)
+      const rawCols: any[] = Array.isArray(instantData.colegios)
         ? instantData.colegios
-        : Object.keys(instantData.colegios || {});
-      const rawAlus = Array.isArray(instantData.alumnos)
+        : Object.values(instantData.colegios || {});
+      const rawAlus: any[] = Array.isArray(instantData.alumnos)
         ? instantData.alumnos
-        : Object.keys(instantData.alumnos || {});
+        : Object.values(instantData.alumnos || {});
       const hasColegios = rawCols.length > 0;
       const hasAlumnos = rawAlus.length > 0;
-      if (!hasColegios || !hasAlumnos) {
-        console.log('[InstantDB] Empty database detected. Seeding real school dataset...');
-        seedInstantDatabase(false);
+
+      const isOldCaracasData =
+        hasColegios &&
+        (Number(rawCols[0]?.lat) > 5 ||
+          rawCols[0]?.direccion?.includes('Caracas') ||
+          rawCols[0]?.direccion?.includes('Venezuela'));
+
+      if (!hasColegios || !hasAlumnos || isOldCaracasData) {
+        console.log('[InstantDB] Seeding / Migrating dataset to Quito, Ecuador...');
+        seedInstantDatabase(true);
       }
     }
   }, [instantLoading, instantData]);
@@ -138,12 +172,12 @@ export default function App() {
 
     if (list.length > 0) {
       return list.map((col: any) => ({
-        id: String(col.id || 'col_' + Math.random().toString(36).substring(2, 7)),
+        id: ensureUUID(col.id),
         nombre: col.nombre || 'Colegio',
         direccion: col.direccion || '',
-        lat: Number(col.lat) || 10.4995,
-        lng: Number(col.lng) || -66.8525,
-        hora_llegada_limite: col.hora_llegada_limite || '08:00:00',
+        lat: Number(col.lat) || -0.1872,
+        lng: Number(col.lng) || -78.4975,
+        hora_llegada_limite: col.hora_llegada_limite || '07:45:00',
         contacto_telefono: col.contacto_telefono || '',
         created_at: col.created_at
       }));
@@ -220,8 +254,8 @@ export default function App() {
           colegio_id: colId,
           representante_id: repId,
           direccion_recogida: alu.direccion_recogida || '',
-          lat: Number(alu.lat) || 10.4905,
-          lng: Number(alu.lng) || -66.8650,
+          lat: Number(alu.lat) || -0.1810,
+          lng: Number(alu.lng) || -78.4795,
           grado: alu.grado || '',
           notas_medicas: alu.notas_medicas || '',
           tiempo_abordaje_estimado_min: Number(alu.tiempo_abordaje_estimado_min || 2.5),
@@ -243,6 +277,38 @@ export default function App() {
       return INITIAL_ALUMNOS;
     }
   }, [instantData?.alumnos, colegiosMap, repsMap, selectedColegio]);
+
+  const conductores: Conductor[] = useMemo(() => {
+    const raw = instantData?.conductores;
+    let list: any[] = [];
+    if (Array.isArray(raw)) {
+      list = raw;
+    } else if (raw && typeof raw === 'object') {
+      list = Object.entries(raw).map(([k, v]: [string, any]) => ({ id: v?.id || k, ...v }));
+    }
+
+    if (list.length > 0) {
+      return list.map((cond: any) => ({
+        id: ensureUUID(cond.id),
+        nombre: cond.nombre || 'Conductor',
+        telefono: cond.telefono || '',
+        email: cond.email || '',
+        licencia: cond.licencia || 'Tipo E Profesional',
+        vehiculo_modelo: cond.vehiculo_modelo || 'Buseta Escolar',
+        vehiculo_placa: cond.vehiculo_placa || '',
+        capacidad_pasajeros: Number(cond.capacidad_pasajeros || 16),
+        activo: cond.activo !== false,
+        foto_url: cond.foto_url || '',
+        created_at: cond.created_at
+      }));
+    }
+    try {
+      const saved = localStorage.getItem('rutaescolar_conductores');
+      return saved ? JSON.parse(saved) : INITIAL_CONDUCTORES;
+    } catch {
+      return INITIAL_CONDUCTORES;
+    }
+  }, [instantData?.conductores]);
 
   const [origen, setOrigen] = useState(() => {
     try {
@@ -267,11 +333,14 @@ export default function App() {
 
   // Active Daily Route
   const [activeRuta, setActiveRuta] = useState<RutaDiaria>(() => {
+    const defaultConductor = INITIAL_CONDUCTORES[0];
     return {
-      id: 'ruta_hoy_' + new Date().toISOString().substring(0, 10),
+      id: 'e5000000-0000-4000-8000-000000000001',
       fecha: new Date().toISOString().substring(0, 10),
       colegio_id: selectedColegio.id,
       colegio: selectedColegio,
+      conductor_id: defaultConductor.id,
+      conductor: defaultConductor,
       origen_lat: origen.lat,
       origen_lng: origen.lng,
       origen_direccion: origen.direccion,
@@ -354,9 +423,9 @@ export default function App() {
         horaLlegadaLimite: selectedColegio.hora_llegada_limite
       }).then((res) => {
         const initialParadas = res.paradas_ordenadas.map((p) => ({
-          id: 'parada_' + p.alumno_id,
-          ruta_id: activeRuta.id,
-          alumno_id: p.alumno_id,
+          id: ensureUUID(),
+          ruta_id: ensureUUID(activeRuta.id),
+          alumno_id: ensureUUID(p.alumno_id),
           orden: p.orden,
           hora_estimada: p.hora_estimada,
           estado: 'pendiente' as const,
@@ -436,6 +505,52 @@ export default function App() {
     if (selectedColegioId === colId && updated.length > 0) {
       setSelectedColegioId(updated[0].id);
     }
+  };
+
+  const handleSaveConductor = async (newCond: Conductor) => {
+    try {
+      await upsertConductorInstant(newCond);
+    } catch (e) {
+      console.warn('InstantDB conductor sync fallback:', e);
+    }
+    const updated = conductores.some((c) => c.id === newCond.id)
+      ? conductores.map((c) => (c.id === newCond.id ? newCond : c))
+      : [...conductores, newCond];
+    localStorage.setItem('rutaescolar_conductores', JSON.stringify(updated));
+
+    // If active route was with this driver, update it
+    if (activeRuta.conductor_id === newCond.id) {
+      setActiveRuta((prev) => ({
+        ...prev,
+        conductor: newCond
+      }));
+    }
+  };
+
+  const handleDeleteConductor = async (condId: string) => {
+    try {
+      await deleteConductorInstant(condId);
+    } catch (e) {
+      console.warn('InstantDB delete conductor fallback:', e);
+    }
+    const updated = conductores.filter((c) => c.id !== condId);
+    localStorage.setItem('rutaescolar_conductores', JSON.stringify(updated));
+    if (currentDriverId === condId && updated.length > 0) {
+      setCurrentDriverId(updated[0].id);
+    }
+  };
+
+  const handleSelectDriverForCockpit = (driverId: string) => {
+    setCurrentDriverId(driverId);
+    const cond = conductores.find((c) => c.id === driverId);
+    if (cond) {
+      setActiveRuta((prev) => ({
+        ...prev,
+        conductor_id: driverId,
+        conductor: cond
+      }));
+    }
+    setCurrentView('driver');
   };
 
   const handleUpdateOrigen = (newOrig: { lat: number; lng: number; direccion?: string }) => {
@@ -655,6 +770,19 @@ export default function App() {
             </button>
 
             <button
+              id="nav-drivers"
+              onClick={() => setCurrentView('drivers')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                currentView === 'drivers'
+                  ? 'bg-amber-500 text-slate-950 shadow-md'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Truck className="h-3.5 w-3.5" />
+              <span>Conductores ({conductores.length})</span>
+            </button>
+
+            <button
               id="nav-sql"
               onClick={() => setCurrentView('sql')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
@@ -765,6 +893,19 @@ export default function App() {
 
           <button
             onClick={() => {
+              setCurrentView('drivers');
+              setMobileMenuOpen(false);
+            }}
+            className={`p-2.5 rounded-lg flex items-center gap-2 ${
+              currentView === 'drivers' ? 'bg-amber-500 text-slate-950 font-black' : 'bg-slate-800 text-slate-200'
+            }`}
+          >
+            <Truck className="h-4 w-4" />
+            <span>Conductores ({conductores.length})</span>
+          </button>
+
+          <button
+            onClick={() => {
               setCurrentView('sql');
               setMobileMenuOpen(false);
             }}
@@ -785,6 +926,9 @@ export default function App() {
             ruta={activeRuta}
             colegio={selectedColegio}
             alumnosMap={alumnosMap}
+            conductores={conductores}
+            currentDriverId={currentDriverId}
+            onSelectDriver={handleSelectDriverForCockpit}
             onUpdateRuta={handleSaveRoute}
           />
         )}
@@ -810,6 +954,7 @@ export default function App() {
             onUpdateOrigen={handleUpdateOrigen}
             allAlumnos={alumnos}
             alumnosMap={alumnosMap}
+            conductores={conductores}
             activeRuta={activeRuta}
             onSaveRoute={handleSaveRoute}
             onSwitchToDriver={() => setCurrentView('driver')}
@@ -836,6 +981,16 @@ export default function App() {
             alumnos={alumnos}
             onSaveColegio={handleSaveColegio}
             onDeleteColegio={handleDeleteColegio}
+          />
+        )}
+
+        {currentView === 'drivers' && (
+          <DriverManager
+            conductores={conductores}
+            activeRuta={activeRuta}
+            onSaveConductor={handleSaveConductor}
+            onDeleteConductor={handleDeleteConductor}
+            onSelectDriverForCockpit={handleSelectDriverForCockpit}
           />
         )}
 

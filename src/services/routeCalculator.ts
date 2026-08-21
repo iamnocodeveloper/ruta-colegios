@@ -9,7 +9,7 @@
  *   6. Step-by-step intermediate ETAs for each student stop
  */
 
-import { Alumno, Colegio, ModoOptimizacion, RouteOptimizationResult } from '../types';
+import { Alumno, Colegio, ModoOptimizacion, RouteOptimizationResult, TipoTrayecto } from '../types';
 
 /**
  * Calculates Haversine distance in kilometers between two geo coordinates
@@ -34,11 +34,23 @@ export function calculateHaversineDistance(
 }
 
 /**
+ * Filter students eligible for the given journey type (ida vs vuelta)
+ */
+export function filterStudentsForJourney(students: Alumno[], tipoTrayecto: TipoTrayecto = 'ida'): Alumno[] {
+  return students.filter((s) => {
+    const mod = s.modalidad_servicio || 'ida_y_vuelta';
+    if (tipoTrayecto === 'ida') {
+      return mod === 'ida_y_vuelta' || mod === 'solo_ida';
+    } else {
+      return mod === 'ida_y_vuelta' || mod === 'solo_vuelta';
+    }
+  });
+}
+
+/**
  * Estimated driving speed in urban school bus conditions (km/h)
  */
 function getEstimatedSpeedKmh(mode: ModoOptimizacion): number {
-  // In urban areas with stops, turns, speed bumps:
-  // Base speed ~ 26 km/h. Under real traffic ~ 19 km/h
   return mode === 'trafico_real' ? 20.0 : 28.0;
 }
 
@@ -80,19 +92,18 @@ export function formatFriendlyTime(timeStr: string): string {
 
 /**
  * Solves TSP (Traveling Salesperson Problem) for stops using Nearest Neighbor + 2-Opt Heuristic
- * Start: Origin, End: School (Fixed endpoints)
  */
 export function solveOptimalSequence(
-  origin: { lat: number; lng: number },
-  school: { lat: number; lng: number },
+  startPoint: { lat: number; lng: number },
+  endPoint: { lat: number; lng: number },
   students: Alumno[]
 ): Alumno[] {
   if (students.length <= 1) return [...students];
 
-  // Nearest Neighbor from Origin to School
+  // Nearest Neighbor from Start to End
   const remaining = [...students];
   const ordered: Alumno[] = [];
-  let currentPos = origin;
+  let currentPos = startPoint;
 
   while (remaining.length > 0) {
     let bestIdx = 0;
@@ -106,14 +117,13 @@ export function solveOptimalSequence(
         s.lat,
         s.lng
       );
-      // Distance to next + slight penalty if too far from destination school
-      const distToSchool = calculateHaversineDistance(
+      const distToEnd = calculateHaversineDistance(
         s.lat,
         s.lng,
-        school.lat,
-        school.lng
+        endPoint.lat,
+        endPoint.lng
       );
-      const totalScore = distFromCurrent * 1.5 + distToSchool * 0.5;
+      const totalScore = distFromCurrent * 1.5 + distToEnd * 0.5;
 
       if (totalScore < minCost) {
         minCost = totalScore;
@@ -135,14 +145,13 @@ export function solveOptimalSequence(
 
     for (let i = 0; i < ordered.length - 1; i++) {
       for (let j = i + 1; j < ordered.length; j++) {
-        const dCurrent = calculateTotalRouteDistance(origin, school, ordered);
-        // Swap segment
+        const dCurrent = calculateTotalRouteDistance(startPoint, endPoint, ordered);
         const swapped = [
           ...ordered.slice(0, i),
           ...ordered.slice(i, j + 1).reverse(),
           ...ordered.slice(j + 1)
         ];
-        const dSwapped = calculateTotalRouteDistance(origin, school, swapped);
+        const dSwapped = calculateTotalRouteDistance(startPoint, endPoint, swapped);
 
         if (dSwapped < dCurrent - 0.05) {
           ordered.splice(0, ordered.length, ...swapped);
@@ -158,14 +167,14 @@ export function solveOptimalSequence(
 }
 
 function calculateTotalRouteDistance(
-  origin: { lat: number; lng: number },
-  school: { lat: number; lng: number },
+  startPoint: { lat: number; lng: number },
+  endPoint: { lat: number; lng: number },
   sequence: Alumno[]
 ): number {
   if (sequence.length === 0) {
-    return calculateHaversineDistance(origin.lat, origin.lng, school.lat, school.lng);
+    return calculateHaversineDistance(startPoint.lat, startPoint.lng, endPoint.lat, endPoint.lng);
   }
-  let total = calculateHaversineDistance(origin.lat, origin.lng, sequence[0].lat, sequence[0].lng);
+  let total = calculateHaversineDistance(startPoint.lat, startPoint.lng, sequence[0].lat, sequence[0].lng);
   for (let i = 0; i < sequence.length - 1; i++) {
     total += calculateHaversineDistance(
       sequence[i].lat,
@@ -177,8 +186,8 @@ function calculateTotalRouteDistance(
   total += calculateHaversineDistance(
     sequence[sequence.length - 1].lat,
     sequence[sequence.length - 1].lng,
-    school.lat,
-    school.lng
+    endPoint.lat,
+    endPoint.lng
   );
   return total;
 }
@@ -255,7 +264,7 @@ export async function fetchRoadGeometryAndDuration(
 }
 
 /**
- * Main Inverse Departure Algorithm (Cálculo de Salida Inversa)
+ * Main Route Optimization & Departure Algorithm (Cálculo de Rutas de Ida y Vuelta)
  */
 export async function calculateOptimizedRoute(
   origin: { lat: number; lng: number; direccion?: string },
@@ -263,52 +272,73 @@ export async function calculateOptimizedRoute(
   students: Alumno[],
   options: {
     modo?: ModoOptimizacion;
+    tipoTrayecto?: TipoTrayecto;
     tiempoAbordajeMin?: number;
     horaLlegadaLimite?: string;
     ordenManual?: string[]; // student ids
   }
 ): Promise<RouteOptimizationResult> {
   const modo = options.modo || 'fijo';
+  const tipoTrayecto: TipoTrayecto = options.tipoTrayecto || 'ida';
   const tiempoAbordajeMin = options.tiempoAbordajeMin ?? 2.5;
-  const horaLlegadaStr = options.horaLlegadaLimite || school.hora_llegada_limite || '08:00:00';
-  const horaLlegadaMinutos = timeStringToMinutes(horaLlegadaStr);
 
-  // 1. Determine stop sequence
+  // 1. Filter students according to service modality (ida vs vuelta)
+  const eligibleStudents = filterStudentsForJourney(students, tipoTrayecto);
+
+  // 2. Determine Start and End points
+  // For 'ida': Driver Origin -> Stops -> School
+  // For 'vuelta': School -> Stops -> Driver Origin
+  const startPoint = tipoTrayecto === 'ida' ? origin : { lat: school.lat, lng: school.lng };
+  const endPoint = tipoTrayecto === 'ida' ? { lat: school.lat, lng: school.lng } : origin;
+
+  // 3. Determine stop sequence
   let orderedStudents: Alumno[] = [];
-  if (options.ordenManual && options.ordenManual.length === students.length) {
-    const map = new Map(students.map((s) => [s.id, s]));
+  if (options.ordenManual && options.ordenManual.length === eligibleStudents.length) {
+    const map = new Map(eligibleStudents.map((s) => [s.id, s]));
     orderedStudents = options.ordenManual.map((id) => map.get(id)!).filter(Boolean);
   } else {
-    orderedStudents = solveOptimalSequence(origin, { lat: school.lat, lng: school.lng }, students);
+    orderedStudents = solveOptimalSequence(startPoint, endPoint, eligibleStudents);
   }
 
-  // 2. Build full waypoint array: [Origin, Stop1, Stop2, ... StopN, School]
+  // 4. Build full waypoint array: [StartPoint, Stop1, Stop2, ... StopN, EndPoint]
   const fullWaypoints = [
-    { lat: origin.lat, lng: origin.lng },
+    { lat: startPoint.lat, lng: startPoint.lng },
     ...orderedStudents.map((s) => ({ lat: s.lat, lng: s.lng })),
-    { lat: school.lat, lng: school.lng }
+    { lat: endPoint.lat, lng: endPoint.lng }
   ];
 
-  // 3. Obtain realistic road geometry and total driving time
+  // 5. Obtain realistic road geometry and total driving time
   const { polyline, realDrivingMinutes, totalDistanceKm } = await fetchRoadGeometryAndDuration(
     fullWaypoints,
     modo
   );
 
-  // 4. Calculate boarding time
+  // 6. Calculate boarding/drop-off time
   const N = orderedStudents.length;
   const tiempoAbordajeTotal = Math.round(N * tiempoAbordajeMin * 10) / 10;
 
-  // 5. Total time: T_total = T_manejo + (N * T_abordaje)
+  // 7. Total time: T_total = T_manejo + (N * T_abordaje)
   const tiempoTotalMin = Math.round((realDrivingMinutes + tiempoAbordajeTotal) * 10) / 10;
 
-  // 6. Inverse Departure Time: H_salida = H_llegada - T_total
-  const horaSalidaMinutos = horaLlegadaMinutos - tiempoTotalMin;
-  const horaSalidaEstimada = minutesToTimeString(horaSalidaMinutos);
+  let horaSalidaEstimada: string;
+  let runningTimeMinutes: number;
 
-  // 7. Calculate individual stop ETAs
-  let runningTimeMinutes = horaSalidaMinutos;
-  let previousPoint = { lat: origin.lat, lng: origin.lng };
+  if (tipoTrayecto === 'ida') {
+    // Inverse Departure Time: H_salida = H_llegada - T_total
+    const horaLlegadaStr = options.horaLlegadaLimite || school.hora_llegada_limite || '08:00:00';
+    const horaLlegadaMinutos = timeStringToMinutes(horaLlegadaStr);
+    const horaSalidaMinutos = horaLlegadaMinutos - tiempoTotalMin;
+    horaSalidaEstimada = minutesToTimeString(horaSalidaMinutos);
+    runningTimeMinutes = horaSalidaMinutos;
+  } else {
+    // Forward Route from School Departure Time
+    const horaSalidaStr = options.horaLlegadaLimite || '14:00:00';
+    horaSalidaEstimada = horaSalidaStr.length === 5 ? `${horaSalidaStr}:00` : horaSalidaStr;
+    runningTimeMinutes = timeStringToMinutes(horaSalidaEstimada);
+  }
+
+  // 8. Calculate individual stop ETAs
+  let previousPoint = { lat: startPoint.lat, lng: startPoint.lng };
   const speed = (totalDistanceKm / (realDrivingMinutes / 60)) || getEstimatedSpeedKmh(modo);
 
   const paradasOrdenadas = orderedStudents.map((student, index) => {
@@ -324,7 +354,7 @@ export async function calculateOptimizedRoute(
 
     const stopEta = minutesToTimeString(runningTimeMinutes);
 
-    // Add boarding duration before heading to next
+    // Add boarding / drop-off duration before heading to next
     runningTimeMinutes += tiempoAbordajeMin;
     previousPoint = { lat: student.lat, lng: student.lng };
 
@@ -345,6 +375,7 @@ export async function calculateOptimizedRoute(
     tiempo_abordaje_total_min: tiempoAbordajeTotal,
     tiempo_total_min: tiempoTotalMin,
     distancia_total_km: totalDistanceKm,
+    tipo_trayecto: tipoTrayecto,
     paradas_ordenadas: paradasOrdenadas,
     polyline_geometry: polyline,
     traffic_factor: modo === 'trafico_real' ? 1.35 : 1.12
