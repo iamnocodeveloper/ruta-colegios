@@ -236,8 +236,9 @@ export default function App() {
     return map;
   }, [colegios]);
 
-  // Local override for quick UI feedback when toggling activo_en_rutas
-  const [alumnosOverride, setAlumnosOverride] = useState<Record<string, boolean> | null>(null);
+  // Local override for quick UI feedback when toggling activo_en_rutas / saving students
+  // Stores full student snapshots keyed by id (modalidad, dias_ruta, activo, etc.)
+  const [alumnosOverride, setAlumnosOverride] = useState<Record<string, Partial<Alumno>> | null>(null);
 
   const alumnos: Alumno[] = useMemo(() => {
     const raw = instantData?.alumnos;
@@ -253,6 +254,7 @@ export default function App() {
         const aluId = String(alu.id);
         const colId = String(alu.colegio_id);
         const repId = String(alu.representante_id);
+        const override = alumnosOverride?.[aluId];
         return {
           id: aluId,
           nombre: alu.nombre || 'Estudiante',
@@ -265,8 +267,9 @@ export default function App() {
           notas_medicas: alu.notas_medicas || '',
           tiempo_abordaje_estimado_min: Number(alu.tiempo_abordaje_estimado_min || 2.5),
           // Apply local override (instant UI feedback) if present, else read from DB
-          activo_en_rutas: alumnosOverride ? (alumnosOverride[aluId] ?? alu.activo_en_rutas !== false) : alu.activo_en_rutas !== false,
-          dias_ruta: alu.dias_ruta || ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'],
+          modalidad_servicio: override?.modalidad_servicio || alu.modalidad_servicio || 'ida_y_vuelta',
+          activo_en_rutas: override?.activo_en_rutas ?? alu.activo_en_rutas !== false,
+          dias_ruta: override?.dias_ruta || alu.dias_ruta || ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'],
           created_at: alu.created_at,
           colegio: colegiosMap.get(colId) || selectedColegio,
           representante: repsMap.get(repId)
@@ -281,7 +284,9 @@ export default function App() {
         if (alumnosOverride) {
           return parsed.map((a) => ({
             ...a,
-            activo_en_rutas: alumnosOverride[a.id] ?? a.activo_en_rutas !== false,
+            modalidad_servicio: alumnosOverride[a.id]?.modalidad_servicio || a.modalidad_servicio || 'ida_y_vuelta',
+            activo_en_rutas: alumnosOverride[a.id]?.activo_en_rutas ?? a.activo_en_rutas !== false,
+            dias_ruta: alumnosOverride[a.id]?.dias_ruta || a.dias_ruta || ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'],
           }));
         }
         return parsed;
@@ -545,10 +550,16 @@ export default function App() {
     localStorage.setItem('rutaescolar_alumnos', JSON.stringify(updatedAlumnos));
     localStorage.setItem('rutaescolar_representantes', JSON.stringify(updatedReps));
 
-    // Force React refresh: bump the override so the useMemo re-reads from DB / local
+    // Force React refresh: store full snapshot so modalidad/dias/activo reflect instantly
     setAlumnosOverride((prev) => ({
       ...(prev || {}),
-      [newAlumno.id]: newAlumno.activo_en_rutas !== false,
+      [newAlumno.id]: {
+        nombre: newAlumno.nombre,
+        modalidad_servicio: newAlumno.modalidad_servicio,
+        activo_en_rutas: newAlumno.activo_en_rutas !== false,
+        dias_ruta: newAlumno.dias_ruta,
+        direccion_recogida: newAlumno.direccion_recogida,
+      },
     }));
   };
 
@@ -659,7 +670,11 @@ export default function App() {
   // Toggle student active in routes
   const handleToggleActivoRutas = async (alumnoId: string, activo: boolean) => {
     // 1. Instant UI feedback: update local override so the toggle reflects immediately
-    setAlumnosOverride((prev) => ({ ...(prev || {}), [alumnoId]: activo }));
+    const current = alumnos.find((a) => a.id === alumnoId);
+    setAlumnosOverride((prev) => ({
+      ...(prev || {}),
+      [alumnoId]: { ...(prev?.[alumnoId] || {}), activo_en_rutas: activo, modalidad_servicio: current?.modalidad_servicio, dias_ruta: current?.dias_ruta },
+    }));
 
     // 2. Update localStorage for resilience
     const updated = alumnos.map((a) => (a.id === alumnoId ? { ...a, activo_en_rutas: activo } : a));
