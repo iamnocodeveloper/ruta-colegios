@@ -1,7 +1,19 @@
 # 📚 Documentación del Sistema — RutaEscolar PWA
 
 > **Documento vivo**: actualizar siempre que haya avances, mejoras o cambios en el sistema.
-> Última actualización: **22/08/2026**
+> **Última actualización:** 22/08/2026
+
+---
+
+## 📑 Índice de Documentación
+
+| Documento | Descripción |
+|---|---|
+| [`docs/MEMORIA.md`](docs/MEMORIA.md) | 🧠 Memoria del proyecto: decisiones, contexto, estado mental |
+| [`docs/AVANCES.md`](docs/AVANCES.md) | 🚀 Registro cronológico de avances por commit y fase |
+| [`docs/DESCRIPCION_SISTEMA.md`](docs/DESCRIPCION_SISTEMA.md) | 🏫 Descripción funcional y técnica profunda (servicios, componentes, flujos) |
+| [`docs/SEGURIDAD.md`](docs/SEGURIDAD.md) | 🔒 Auditoría de seguridad y recomendaciones de hardening |
+| [`docs/GUIA_DESARROLLO.md`](docs/GUIA_DESARROLLO.md) | 🛠️ Guía para desarrolladores (setup, convenciones, deploy) |
 
 ---
 
@@ -226,9 +238,17 @@ En dev, Vite sirve el frontend; en producción se sirve `dist/` (SPA fallback a 
 - [x] **Reordenamiento manual** de paradas (mover arriba/abajo) con variante "Manual" en rojo.
 - [x] **Historial de rutas** con snapshot completo y persistencia.
 - [x] **Link de revisión solo lectura** (`?view=review&routeId=`).
+- [x] **Botones de navegación y contacto** por parada: Waze, Google Maps, Llamar Representante, WhatsApp (en revisión, cabina, historial y cards de alumnos).
 - [x] SQL oculto del menú (acceso por URL).
 - [x] PWA instalable (manifest + service worker).
 - [x] Mapa Leaflet con paradas numeradas, polyline y unidad en vivo.
+- [x] **ErrorBoundary global** (nunca pantalla en blanco).
+- [x] **Fix deploy**: assets relativos (`base: './'`), fallback SPA solo sin extensión, service worker network-first (`v3`).
+- [x] **Fix datos**: `normalizeDays()` (días como string JSON de InstantDB), `modalidad_servicio` mapeado desde InstantDB.
+
+### 🔒 Seguridad (auditoría completada — ver `docs/SEGURIDAD.md`)
+- ✅ `npm audit`: **0 vulnerabilidades** (323 dependencias).
+- ⚠️ 7 hallazgos de severidad Alta (headers Express, backdoor demo, sesión localStorage, magic tokens, portal por ID, PII local) — **prototipo demo, no apto para producción real sin hardening**.
 
 ### 🔜 Pendientes / Ideas de mejora
 - [ ] Vista de perfil por conductor con login propio (email/código) que filtre automáticamente sus rutas.

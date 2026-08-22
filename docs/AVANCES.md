@@ -1,0 +1,114 @@
+# 🚀 Avances del Proyecto — RutaEscolar PWA
+
+> **Registro cronológico de avances.** Cada entrada incluye el commit, la fecha y qué se implementó.
+> **Última actualización:** 22/08/2026
+
+---
+
+## Historial de commits
+
+| Commit | Descripción | Fecha aprox. |
+|---|---|---|
+| `c0e0cd6` | Initial commit (plantilla AI Studio) | — |
+| `2e9354e` | feat: initialize RutaEscolar PWA project | — |
+| `d67c5c6` | feat: add driver management and route journey types | — |
+| `6dd5931` | feat(ruta): persist active route and refine filtering | — |
+| `91f7445` | feat(routes): implement route re-sync functionality | — |
+| `323be86` | Cabina conductor simplificada, historial de rutas, toggle alumnos, revisión solo lectura | 22/08 |
+| `5b15311` | fix: toggle activo en rutas no actualizaba la UI inmediatamente | 22/08 |
+| `6e89a6e` | chore: ignore tsc-output.txt | 22/08 |
+| `e66688a` | Variantes de ruta con colores, reordenamiento manual, días por alumno | 22/08 |
+| `cef91c1` | Botones Waze/Maps/Llamar/WhatsApp + fix filtros alumnos | 22/08 |
+| `3b11272` | fix: pantalla en blanco — accesos seguros + ErrorBoundary | 22/08 |
+| `88f09b6` | fix: error MIME text/html en assets (base './' + fallback SPA) | 22/08 |
+| `2cf340a` | fix: service worker network-first para HTML | 22/08 |
+| `72126d1` | fix: modalidad de servicio no se reflejaba en lista de ruta | 22/08 |
+| `e065b08` | fix: alumnos no aparecían en lista — dias_ruta string JSON | 22/08 |
+
+---
+
+## Fase 1 — Fundación (commits c0e0cd6 → 91f7445)
+
+### ✅ Lo que se logró
+- PWA instalable (manifest, service worker, iconos).
+- Integración **InstantDB** con schema completo (8 entidades) y seed de datos Quito.
+- **Algoritmo de optimización** (`routeCalculator.ts`): salida inversa, TSP Nearest Neighbor + 2-Opt, OSRM para geometría real, ETAs por parada.
+- Mapa Leaflet interactivo con paradas numeradas, polyline y unidad en vivo.
+- CRUD de alumnos, colegios, conductores y representantes.
+- Portal del representante con seguimiento en vivo (polling `/api/tracking`).
+- Cabina del conductor completa (DriverPanel original, 1.479 líneas).
+
+---
+
+## Fase 2 — Rediseño Soft UI / Bento Grid (commit 323be86)
+
+### ✅ Lo que se logró
+- Tema claro global con **design system propio** en `index.css` (`@theme` tokens).
+- **Sidebar izquierdo** con pastilla activa blanca + **header superior** + drawer móvil.
+- **Dashboard Inicio (Bento)**: card principal "Ruta de Hoy", KPIs, gauge circular negro/lima, timeline de paradas, feed "Lo nuevo".
+- SQL **oculto del menú** (acceso por `?view=sql`).
+- Migración de los 13 componentes al tema claro.
+
+### 📝 Notas
+- Los ítems del menú conservan sus `id` (`nav-*`, `btn-*`, `tab-*`) para automatización.
+
+---
+
+## Fase 3 — Cabina conductor + Historial + Toggle alumnos (commit 323be86)
+
+### ✅ Lo que se logró
+- **`DriverPanelSimple.tsx`** (451 líneas vs 1.479 del original): rutas asignadas, empezar ruta, marcar recogido/ausente/pendiente, mapa opcional.
+- **`routeHistory.ts`**: snapshot completo de cada ruta guardada (localStorage, tope 200) + sync best-effort a InstantDB.
+- **`RouteHistory.tsx`**: listado con ver recorrido, copiar link de revisión, usar hoy, eliminar.
+- **`RouteReviewView.tsx`**: vista solo lectura con mapa + itinerario.
+- **Toggle "Activo en Rutas"** por alumno (`activo_en_rutas`), excluye del cálculo.
+
+---
+
+## Fase 4 — Variantes, reordenamiento, días por alumno (commit e66688a)
+
+### ✅ Lo que se logró
+- **`generateRouteVariants()`**: 4 variantes (2-Opt, Vecino Cercano, Extremos Primero, Aleatoria).
+- **Colores por variante** en el mapa (`polylineColor`/`polylineDash` en SchoolRouteMap).
+- **Badge "MÁS CORTA"** con distancia haversine de cada variante (`variantDistance()`).
+- **Reordenamiento manual** → variante "Manual" en rojo.
+- **`dias_ruta`** (Lun–Vie) por alumno con checkboxes en el formulario y chips en la card.
+- **Selector de día** en el planificador con contador de alumnos por día.
+- **Carga automática** del listado según día + modalidad + activo.
+- Ruta guardada persiste `dia_semana` y `variante`.
+
+---
+
+## Fase 5 — Botones de navegación y contacto (commit cef91c1)
+
+### ✅ Lo que se logró
+- **Waze + Google Maps + Llamar Representante + WhatsApp** en cada parada de:
+  - `RouteReviewView` (detalles de ruta)
+  - `DriverPanelSimple` (paradas de hoy + rutas asignadas)
+  - `RouteHistory` (paradas expandidas)
+  - `StudentManager` (cards de alumnos)
+- Fix: filtros de servicio en Alumnos ya no se cortan (`py-2.5`).
+
+---
+
+## Fase 6 — Estabilidad y fixes de producción (commits 3b11272 → e065b08)
+
+### ✅ Lo que se logró
+- **`ErrorBoundary.tsx`** global: nunca más pantalla en blanco, fallback con mensaje y recarga.
+- Vista de revisión **sin login** (link público) + estado "Ruta no encontrada".
+- Accesos seguros (`ruta.paradas?.[0]`, `ruta.paradas || []`) en HomeDashboard, DriverPanelSimple, RouteReviewView.
+- **Fix MIME text/html**: `base: './'` en Vite + fallback SPA solo para rutas sin extensión en server.ts.
+- **Service worker network-first** para HTML (invalida caché vieja, `rutaescolar-v3`).
+- **Fix modalidad**: el mapeo de InstantDB ahora copia `modalidad_servicio` (antes todos caían a `ida_y_vuelta`).
+- **Fix días**: `normalizeDays()` maneja array/string JSON/CSV (InstantDB devolvía string que rompía el filtro → lista vacía).
+
+---
+
+## Pendientes / Ideas futuras
+
+- [ ] Login real por conductor (email/código) que filtre sus rutas automáticamente.
+- [ ] Notificaciones push PWA al representante.
+- [ ] Reporte semanal/mensual de asistencia.
+- [ ] Exportar rutas a PDF/CSV.
+- [ ] Eliminar código huérfano (`DriverPanel.tsx` original, `@google/genai`).
+- [ ] Hardening de seguridad (ver `docs/SEGURIDAD.md`).
