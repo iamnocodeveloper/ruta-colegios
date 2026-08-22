@@ -266,6 +266,7 @@ export default function App() {
           tiempo_abordaje_estimado_min: Number(alu.tiempo_abordaje_estimado_min || 2.5),
           // Apply local override (instant UI feedback) if present, else read from DB
           activo_en_rutas: alumnosOverride ? (alumnosOverride[aluId] ?? alu.activo_en_rutas !== false) : alu.activo_en_rutas !== false,
+          dias_ruta: alu.dias_ruta || ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'],
           created_at: alu.created_at,
           colegio: colegiosMap.get(colId) || selectedColegio,
           representante: repsMap.get(repId)
@@ -545,6 +546,12 @@ export default function App() {
       : [...alumnos, newAlumno];
     localStorage.setItem('rutaescolar_alumnos', JSON.stringify(updatedAlumnos));
     localStorage.setItem('rutaescolar_representantes', JSON.stringify(updatedReps));
+
+    // Force React refresh: bump the override so the useMemo re-reads from DB / local
+    setAlumnosOverride((prev) => ({
+      ...(prev || {}),
+      [newAlumno.id]: newAlumno.activo_en_rutas !== false,
+    }));
   };
 
   const handleDeleteAlumno = async (id: string) => {

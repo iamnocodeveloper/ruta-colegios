@@ -81,7 +81,7 @@ public/                          # Manifest PWA, iconos, service worker
 |---|---|
 | `colegios` | nombre, direccion, lat, lng, hora_llegada_limite, contacto_telefono |
 | `representantes` | nombre, telefono_whatsapp, magic_token, email |
-| `alumnos` | nombre, colegio_id, representante_id, direccion_recogida, lat, lng, grado, notas_medicas, tiempo_abordaje_estimado_min, modalidad_servicio, **activo_en_rutas** |
+| `alumnos` | nombre, colegio_id, representante_id, direccion_recogida, lat, lng, grado, notas_medicas, tiempo_abordaje_estimado_min, modalidad_servicio, **activo_en_rutas**, **dias_ruta** |
 | `conductores` | nombre, telefono, licencia, vehiculo_modelo, vehiculo_placa, capacidad_pasajeros, activo |
 | `rutas_diarias` | fecha, colegio_id, conductor_id, origen_lat/lng, modo_optimizacion, tipo_trayecto, hora_llegada_objetivo, hora_salida_estimada, tiempos, distancia_total_km, estado, polyline_json |
 | `paradas_ruta` | ruta_id, alumno_id, orden, hora_estimada, hora_real, estado, lat, lng, distancias |
@@ -221,6 +221,9 @@ En dev, Vite sirve el frontend; en producción se sirve `dist/` (SPA fallback a 
 - [x] Dashboard Inicio con KPIs, gauge, timeline y feed.
 - [x] **Cabina del conductor simplificada** (empezar ruta, marcar recogido/ausente/pendiente, ver rutas asignadas).
 - [x] **Toggle Activo en Rutas** por alumno (excluido del cálculo de paradas).
+- [x] **Días de ruta por alumno** (checkboxes Lun–Vie) con carga automática del listado según día + modalidad.
+- [x] **Variantes de ruta**: cálculo de 4 alternativas (Óptima 2-Opt, Vecino Cercano, Extremos Primero, Aleatoria), cada una con **color propio en el mapa**, distancia mostrada y badge **MÁS CORTA**.
+- [x] **Reordenamiento manual** de paradas (mover arriba/abajo) con variante "Manual" en rojo.
 - [x] **Historial de rutas** con snapshot completo y persistencia.
 - [x] **Link de revisión solo lectura** (`?view=review&routeId=`).
 - [x] SQL oculto del menú (acceso por URL).

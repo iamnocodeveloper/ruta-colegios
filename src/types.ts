@@ -53,6 +53,7 @@ export interface Alumno {
   tiempo_abordaje_estimado_min?: number; // default 2.5 min
   modalidad_servicio?: ModalidadTransporte; // 'ida_y_vuelta' | 'solo_ida' | 'solo_vuelta'
   activo_en_rutas?: boolean; // false = excluido de las rutas (no se le asigna parada)
+  dias_ruta?: string[]; // días de la semana en que usa la ruta: ['Lun','Mar','Mié','Jue','Vie']
   created_at?: string;
   // Joined fields for UI convenience
   colegio?: Colegio;
@@ -87,6 +88,8 @@ export interface RutaDiaria {
   origen_direccion?: string;
   modo_optimizacion: ModoOptimizacion;
   tipo_trayecto?: TipoTrayecto; // 'ida' (mañana: casa -> colegio) | 'vuelta' (tarde: colegio -> casa)
+  dia_semana?: string; // día de la semana planificado: 'Lun'..'Vie'
+  variante?: string; // variante de ruta seleccionada: '2opt' | 'nearest' | 'farthest' | 'random' | 'manual'
   hora_llegada_objetivo: string; // e.g. "08:00:00"
   hora_salida_estimada: string; // calculated by algorithm e.g. "06:58:00"
   hora_salida_real?: string;

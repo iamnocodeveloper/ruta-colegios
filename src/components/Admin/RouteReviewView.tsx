@@ -78,7 +78,7 @@ export const RouteReviewView: React.FC<RouteReviewViewProps> = ({ entry, alumnos
                 <span className="rounded-full bg-soft-blue px-2 py-0.5 text-[10px] font-extrabold text-primary border border-primary/25">Solo Lectura</span>
               </div>
               <p className="text-xs text-muted">
-                {entry.colegio_nombre} · {entry.fecha} · Creada el {new Date(entry.created_at).toLocaleString('es-EC')}
+                {entry.colegio_nombre} · {entry.fecha} · {entry.dia_semana || ''} · Creada el {new Date(entry.created_at).toLocaleString('es-EC')}
               </p>
             </div>
           </div>
@@ -142,6 +142,7 @@ export const RouteReviewView: React.FC<RouteReviewViewProps> = ({ entry, alumnos
               </p>
               <p className="text-[11px] text-muted capitalize">
                 {ruta.modo_optimizacion === 'trafico_real' ? 'Modo tráfico real' : 'Modo estándar'} · Tiempo total {ruta.tiempo_total_estimado_min} min
+                {ruta.variante ? ` · Variante: ${ruta.variante}` : ''}
               </p>
             </div>
           </div>

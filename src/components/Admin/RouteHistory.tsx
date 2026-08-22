@@ -140,10 +140,20 @@ export const RouteHistory: React.FC<RouteHistoryProps> = ({
                     </div>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-[11px] text-muted font-semibold">
                       <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{entry.fecha}</span>
+                      {entry.dia_semana && (
+                        <span className="rounded bg-primary/10 text-primary border border-primary/25 px-1.5 py-0.5 text-[10px] font-extrabold">
+                          {entry.dia_semana}
+                        </span>
+                      )}
                       <span className="flex items-center gap-1"><Clock className="h-3 w-3" />Salida {formatFriendlyTime(entry.hora_salida_estimada)}</span>
                       <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{entry.distancia_total_km} km</span>
                       <span className="flex items-center gap-1"><Users className="h-3 w-3" />{entry.total_paradas} paradas</span>
                       <span className="flex items-center gap-1"><Truck className="h-3 w-3" />{entry.conductor_nombre}</span>
+                      {entry.variante && (
+                        <span className="rounded bg-soft-blue text-primary border border-primary/25 px-1.5 py-0.5 text-[10px] font-extrabold">
+                          Variante: {entry.variante}
+                        </span>
+                      )}
                     </div>
                   </div>
 

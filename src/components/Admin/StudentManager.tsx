@@ -61,6 +61,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
   const [colegioId, setColegioId] = useState<string>(colegios[0]?.id || '');
   const [tiempoAbordaje, setTiempoAbordaje] = useState<number>(2.5);
   const [modalidadServicio, setModalidadServicio] = useState<ModalidadTransporte>('ida_y_vuelta');
+  const [diasRuta, setDiasRuta] = useState<string[]>(['Lun', 'Mar', 'Mié', 'Jue', 'Vie']);
   const [nombreRep, setNombreRep] = useState<string>('');
   const [telefonoWhatsApp, setTelefonoWhatsApp] = useState<string>('+593990000000');
   const [emailRep, setEmailRep] = useState<string>('');
@@ -76,6 +77,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     setColegioId(colegios[0]?.id || '');
     setTiempoAbordaje(2.5);
     setModalidadServicio('ida_y_vuelta');
+    setDiasRuta(['Lun', 'Mar', 'Mié', 'Jue', 'Vie']);
     setNombreRep('');
     setTelefonoWhatsApp('+593991234567');
     setEmailRep('');
@@ -93,6 +95,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     setColegioId(alumno.colegio_id);
     setTiempoAbordaje(alumno.tiempo_abordaje_estimado_min || 2.5);
     setModalidadServicio(alumno.modalidad_servicio || 'ida_y_vuelta');
+    setDiasRuta(alumno.dias_ruta && alumno.dias_ruta.length > 0 ? alumno.dias_ruta : ['Lun', 'Mar', 'Mié', 'Jue', 'Vie']);
 
     const rep = alumno.representante;
     setNombreRep(rep?.nombre || '');
@@ -136,6 +139,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
       notas_medicas: notas.trim(),
       tiempo_abordaje_estimado_min: Number(tiempoAbordaje) || 2.5,
       modalidad_servicio: modalidadServicio,
+      dias_ruta: diasRuta.length > 0 ? diasRuta : ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'],
       representante: newRep,
       colegio: targetColegio
     };
@@ -298,6 +302,26 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                     <School className="h-3 w-3 shrink-0" />
                     <span className="truncate max-w-[150px]">{targetSchool?.nombre || 'Colegio'}</span>
                   </div>
+                </div>
+
+                {/* Days of week chips */}
+                <div className="mt-2 flex items-center gap-1 flex-wrap">
+                  {['Lun', 'Mar', 'Mié', 'Jue', 'Vie'].map((day) => {
+                    const studentDays = alumno.dias_ruta && alumno.dias_ruta.length > 0 ? alumno.dias_ruta : ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'];
+                    const isOn = studentDays.includes(day);
+                    return (
+                      <span
+                        key={day}
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-black ${
+                          isOn
+                            ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                            : 'bg-canvas text-muted border border-line line-through'
+                        }`}
+                      >
+                        {day}
+                      </span>
+                    );
+                  })}
                 </div>
 
                 {/* Pickup Address */}
@@ -512,6 +536,54 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                   {modalidadServicio === 'ida_y_vuelta' && '• El alumno será incluido en el cálculo tanto de la ruta de ida (mañana) como en la de vuelta (tarde).'}
                   {modalidadServicio === 'solo_ida' && '• El alumno SOLO se incluirá al planificar la ruta de la mañana (recogida en casa hacia el colegio).'}
                   {modalidadServicio === 'solo_vuelta' && '• El alumno SOLO se incluirá al planificar la ruta de la tarde (salida del colegio hacia casa).'}
+                </p>
+              </div>
+
+              {/* Days of Week Checkboxes */}
+              <div className="rounded-xl border border-line bg-soft-gray p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-primary block">
+                    Días que asiste a la ruta
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDiasRuta(diasRuta.length === 5 ? [] : ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'])
+                    }
+                    className="text-[10px] font-bold text-primary hover:underline cursor-pointer"
+                  >
+                    {diasRuta.length === 5 ? 'Quitar todos' : 'Marcar todos'}
+                  </button>
+                </div>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {['Lun', 'Mar', 'Mié', 'Jue', 'Vie'].map((day) => {
+                    const isOn = diasRuta.includes(day);
+                    return (
+                      <label
+                        key={day}
+                        className={`flex flex-col items-center rounded-lg border py-2 cursor-pointer transition-all ${
+                          isOn
+                            ? 'bg-primary text-white border-primary shadow-md'
+                            : 'bg-surface border-line text-muted hover:border-primary/40'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          className="hidden"
+                          checked={isOn}
+                          onChange={() =>
+                            setDiasRuta((prev) =>
+                              isOn ? prev.filter((d) => d !== day) : [...prev, day]
+                            )
+                          }
+                        />
+                        <span className="text-xs font-black">{day}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-muted">
+                  Los días marcados controlan si el alumno se carga automáticamente al planificar la ruta de ese día.
                 </p>
               </div>
 

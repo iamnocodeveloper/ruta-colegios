@@ -24,6 +24,8 @@ export interface RouteHistoryEntry {
   ausentes: number;
   modo_optimizacion: string;
   tipo_trayecto: string;
+  dia_semana?: string;     // 'Lun'..'Vie'
+  variante?: string;       // variant id
   created_at: string;      // ISO timestamp
   ruta: RutaDiaria;        // full snapshot
 }
@@ -67,6 +69,8 @@ export function buildHistoryEntry(ruta: RutaDiaria): RouteHistoryEntry {
     ausentes: (ruta.paradas || []).filter((p) => p.estado === 'ausente').length,
     modo_optimizacion: ruta.modo_optimizacion,
     tipo_trayecto: ruta.tipo_trayecto || 'ida',
+    dia_semana: ruta.dia_semana,
+    variante: ruta.variante,
     created_at: new Date().toISOString(),
     ruta: JSON.parse(JSON.stringify(ruta)) as RutaDiaria,
   };

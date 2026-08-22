@@ -36,10 +36,22 @@ export function calculateHaversineDistance(
 /**
  * Filter students eligible for the given journey type (ida vs vuelta)
  * Excludes students marked as inactive for routes (activo_en_rutas === false)
+ * Optionally filters by day of week (dias_ruta)
  */
-export function filterStudentsForJourney(students: Alumno[], tipoTrayecto: TipoTrayecto = 'ida'): Alumno[] {
+export function filterStudentsForJourney(
+  students: Alumno[],
+  tipoTrayecto: TipoTrayecto = 'ida',
+  dia?: string
+): Alumno[] {
   return students.filter((s) => {
     if (s.activo_en_rutas === false) return false;
+
+    // Day filter: if a specific day is requested, only include students attending that day
+    if (dia) {
+      const dias = s.dias_ruta && s.dias_ruta.length > 0 ? s.dias_ruta : ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'];
+      if (!dias.includes(dia)) return false;
+    }
+
     const mod = s.modalidad_servicio || 'ida_y_vuelta';
     if (tipoTrayecto === 'ida') {
       return mod === 'ida_y_vuelta' || mod === 'solo_ida';
@@ -47,6 +59,14 @@ export function filterStudentsForJourney(students: Alumno[], tipoTrayecto: TipoT
       return mod === 'ida_y_vuelta' || mod === 'solo_vuelta';
     }
   });
+}
+
+/**
+ * Map a Date / weekday index to the label used in dias_ruta.
+ */
+export function weekdayLabel(date: Date = new Date()): string {
+  const labels = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+  return labels[date.getDay()] || 'Lun';
 }
 
 /**
@@ -195,8 +215,142 @@ function calculateTotalRouteDistance(
 }
 
 /**
- * Fetches real road polyline and accurate driving duration using OSRM public routing or fallback
+ * Generate alternative route variants with different strategies:
+ *   - '2opt': Nearest Neighbor + 2-Opt (shortest, default)
+ *   - 'nearest': Pure Nearest Neighbor (greedy)
+ *   - 'farthest': Farthest-first (spreads stops, different shape)
+ *   - 'random': Random seed (exploration)
+ * Returns the sequence of student ids for each variant.
  */
+export function generateRouteVariants(
+  startPoint: { lat: number; lng: number },
+  endPoint: { lat: number; lng: number },
+  students: Alumno[]
+): { id: string; label: string; description: string; studentIds: string[] }[] {
+  if (students.length <= 1) {
+    return [{
+      id: '2opt',
+      label: 'Única (1 parada)',
+      description: 'Ruta directa',
+      studentIds: students.map((s) => s.id),
+    }];
+  }
+
+  const variants: { id: string; label: string; description: string; studentIds: string[] }[] = [];
+
+  // 1. 2-Opt (default shortest)
+  variants.push({
+    id: '2opt',
+    label: 'Óptima (2-Opt)',
+    description: 'Menor distancia probable',
+    studentIds: solveOptimalSequence(startPoint, endPoint, students).map((s) => s.id),
+  });
+
+  // 2. Pure nearest neighbor
+  const nearest: Alumno[] = [];
+  const remainingNN = [...students];
+  let curNN = startPoint;
+  while (remainingNN.length > 0) {
+    let bestIdx = 0;
+    let bestDist = Infinity;
+    for (let i = 0; i < remainingNN.length; i++) {
+      const d = calculateHaversineDistance(curNN.lat, curNN.lng, remainingNN[i].lat, remainingNN[i].lng);
+      if (d < bestDist) {
+        bestDist = d;
+        bestIdx = i;
+      }
+    }
+    const next = remainingNN.splice(bestIdx, 1)[0];
+    nearest.push(next);
+    curNN = { lat: next.lat, lng: next.lng };
+  }
+  variants.push({
+    id: 'nearest',
+    label: 'Vecino Cercano',
+    description: 'Greedy, rápido',
+    studentIds: nearest.map((s) => s.id),
+  });
+
+  // 3. Farthest-first (spread)
+  const farthest: Alumno[] = [];
+  const remainingFF = [...students];
+  let curFF = startPoint;
+  while (remainingFF.length > 0) {
+    let bestIdx = 0;
+    let bestDist = -Infinity;
+    for (let i = 0; i < remainingFF.length; i++) {
+      const d = calculateHaversineDistance(curFF.lat, curFF.lng, remainingFF[i].lat, remainingFF[i].lng);
+      if (d > bestDist) {
+        bestDist = d;
+        bestIdx = i;
+      }
+    }
+    const next = remainingFF.splice(bestIdx, 1)[0];
+    farthest.push(next);
+    curFF = { lat: next.lat, lng: next.lng };
+  }
+  variants.push({
+    id: 'farthest',
+    label: 'Extremos Primero',
+    description: 'Barrido geográfico',
+    studentIds: farthest.map((s) => s.id),
+  });
+
+  // 4. Randomized (seeded shuffle + nearest-neighbor reorder)
+  const shuffled = [...students].sort(() => Math.random() - 0.5);
+  const random: Alumno[] = [];
+  const remainingR = [...shuffled];
+  let curR = startPoint;
+  while (remainingR.length > 0) {
+    let bestIdx = 0;
+    let bestDist = Infinity;
+    for (let i = 0; i < remainingR.length; i++) {
+      const d = calculateHaversineDistance(curR.lat, curR.lng, remainingR[i].lat, remainingR[i].lng);
+      if (d < bestDist) {
+        bestDist = d;
+        bestIdx = i;
+      }
+    }
+    const next = remainingR.splice(bestIdx, 1)[0];
+    random.push(next);
+    curR = { lat: next.lat, lng: next.lng };
+  }
+  variants.push({
+    id: 'random',
+    label: 'Aleatoria',
+    description: 'Exploración',
+    studentIds: random.map((s) => s.id),
+  });
+
+  return variants;
+}
+
+/**
+ * Calculate total distance (km) for a given student ordering (using Haversine).
+ */
+export function variantDistance(
+  startPoint: { lat: number; lng: number },
+  endPoint: { lat: number; lng: number },
+  studentIds: string[],
+  alumnosMap: Map<string, Alumno>
+): number {
+  const points = studentIds
+    .map((id) => alumnosMap.get(id))
+    .filter((s): s is Alumno => Boolean(s))
+    .map((s) => ({ lat: s.lat, lng: s.lng }));
+
+  if (points.length === 0) {
+    return calculateHaversineDistance(startPoint.lat, startPoint.lng, endPoint.lat, endPoint.lng);
+  }
+
+  let total = calculateHaversineDistance(startPoint.lat, startPoint.lng, points[0].lat, points[0].lng);
+  for (let i = 0; i < points.length - 1; i++) {
+    total += calculateHaversineDistance(points[i].lat, points[i].lng, points[i + 1].lat, points[i + 1].lng);
+  }
+  total += calculateHaversineDistance(points[points.length - 1].lat, points[points.length - 1].lng, endPoint.lat, endPoint.lng);
+  return Math.round(total * 10) / 10;
+}
+
 export async function fetchRoadGeometryAndDuration(
   points: Array<{ lat: number; lng: number }>,
   mode: ModoOptimizacion

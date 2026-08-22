@@ -114,7 +114,8 @@ export const INITIAL_ALUMNOS: Alumno[] = [
     grado: '4to Grado A',
     notas_medicas: 'Lentes permanentes. Esperar frente a la garita.',
     tiempo_abordaje_estimado_min: 2.5,
-    modalidad_servicio: 'ida_y_vuelta'
+    modalidad_servicio: 'ida_y_vuelta',
+    dias_ruta: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie']
   },
   {
     id: 'e3000000-0000-4000-8000-000000000002',
@@ -127,7 +128,8 @@ export const INITIAL_ALUMNOS: Alumno[] = [
     grado: '2do Grado B',
     notas_medicas: 'Alérgica al polvo. Salir con lonchera térmica.',
     tiempo_abordaje_estimado_min: 2.5,
-    modalidad_servicio: 'ida_y_vuelta'
+    modalidad_servicio: 'ida_y_vuelta',
+    dias_ruta: ['Lun', 'Mié', 'Vie']
   },
   {
     id: 'e3000000-0000-4000-8000-000000000003',
@@ -140,7 +142,8 @@ export const INITIAL_ALUMNOS: Alumno[] = [
     grado: '6to Grado C',
     notas_medicas: 'Lleva mochila con ruedas.',
     tiempo_abordaje_estimado_min: 2.0,
-    modalidad_servicio: 'solo_ida'
+    modalidad_servicio: 'solo_ida',
+    dias_ruta: ['Lun', 'Mar', 'Mié', 'Jue']
   },
   {
     id: 'e3000000-0000-4000-8000-000000000004',
@@ -153,7 +156,8 @@ export const INITIAL_ALUMNOS: Alumno[] = [
     grado: '5to Grado A',
     notas_medicas: 'Acompañada de su abuela en la puerta.',
     tiempo_abordaje_estimado_min: 2.5,
-    modalidad_servicio: 'solo_vuelta'
+    modalidad_servicio: 'solo_vuelta',
+    dias_ruta: ['Mar', 'Jue']
   },
   {
     id: 'e3000000-0000-4000-8000-000000000005',
@@ -166,6 +170,7 @@ export const INITIAL_ALUMNOS: Alumno[] = [
     grado: '1er Grado A',
     notas_medicas: 'Asiento delantero o con cinturón ajustado.',
     tiempo_abordaje_estimado_min: 3.0,
-    modalidad_servicio: 'ida_y_vuelta'
+    modalidad_servicio: 'ida_y_vuelta',
+    dias_ruta: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie']
   }
 ];

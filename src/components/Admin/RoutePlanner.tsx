@@ -32,13 +32,33 @@ import {
   ShieldAlert,
   Truck,
   Phone,
-  ShieldCheck
+  ShieldCheck,
+  Route,
+  Palette,
+  CalendarDays
 } from 'lucide-react';
 import { Alumno, Colegio, Conductor, ModoOptimizacion, RouteOptimizationResult, RutaDiaria, TipoTrayecto } from '../../types';
-import { calculateOptimizedRoute, formatFriendlyTime, filterStudentsForJourney } from '../../services/routeCalculator';
+import {
+  calculateOptimizedRoute,
+  formatFriendlyTime,
+  filterStudentsForJourney,
+  generateRouteVariants,
+  variantDistance,
+  weekdayLabel
+} from '../../services/routeCalculator';
 import { SchoolRouteMap } from '../Map/SchoolRouteMap';
 import { LocationPicker } from '../Map/LocationPicker';
 import { ensureUUID } from '../../services/instantDb';
+
+export const WEEK_DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'];
+
+export const ROUTE_VARIANT_COLORS: Record<string, { color: string; dash: string; label: string }> = {
+  '2opt': { color: '#0084FF', dash: '0', label: 'Óptima' },
+  nearest: { color: '#10B981', dash: '6, 4', label: 'Vecino Cercano' },
+  farthest: { color: '#F59E0B', dash: '2, 6', label: 'Extremos Primero' },
+  random: { color: '#8B5CF6', dash: '10, 4', label: 'Aleatoria' },
+  manual: { color: '#EF4444', dash: '4, 4', label: 'Manual' },
+};
 
 interface RoutePlannerProps {
   colegios: Colegio[];
@@ -88,17 +108,31 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
     }
   }, [activeRuta.conductor_id, activeRuta.conductor, conductores]);
   
+  // Route variants & day selection
+  const [selectedDay, setSelectedDay] = useState<string>(weekdayLabel(new Date()));
+  const [variants, setVariants] = useState<{ id: string; label: string; description: string; studentIds: string[] }[]>([]);
+  const [activeVariantId, setActiveVariantId] = useState<string>('2opt');
+
   // Eligible / Available students (default to all students of school or all registered)
   const schoolStudents = useMemo(() => {
     const list = allAlumnos.filter((s) => !s.colegio_id || s.colegio_id === selectedColegio.id);
     return list.length > 0 ? list : allAlumnos;
   }, [allAlumnos, selectedColegio.id]);
 
-  const eligibleStudents = schoolStudents;
-  
+  // Auto-load students according to their configuration:
+  // active in routes + attending selected day + matching journey type (ida/vuelta)
+  const eligibleStudents = useMemo(() => {
+    return filterStudentsForJourney(schoolStudents, tipoTrayecto, selectedDay);
+  }, [schoolStudents, tipoTrayecto, selectedDay]);
+
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>(
-    () => schoolStudents.map((s) => s.id)
+    () => eligibleStudents.map((s) => s.id)
   );
+
+  // When day / direction / students change, re-select the eligible list automatically
+  useEffect(() => {
+    setSelectedStudentIds(eligibleStudents.map((s) => s.id));
+  }, [eligibleStudents.map((s) => s.id).join(','), tipoTrayecto, selectedDay]);
 
   const [horaLlegada, setHoraLlegada] = useState<string>(() => {
     if (activeRuta.hora_llegada_objetivo) return activeRuta.hora_llegada_objetivo;
@@ -128,37 +162,56 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
     }
   }, [selectedColegio, tipoTrayecto]);
 
-  // When school changes, select all students of this school
-  useEffect(() => {
-    const list = allAlumnos.filter((s) => !s.colegio_id || s.colegio_id === selectedColegio.id);
-    const targetList = list.length > 0 ? list : allAlumnos;
-    setSelectedStudentIds(targetList.map((s) => s.id));
-  }, [selectedColegio.id, allAlumnos]);
+  // When school changes, select all students of this school (now handled by eligibleStudents effect)
 
   // Recalculate route whenever parameters change
-  const runRouteCalculation = async (useManualOrder: boolean = false) => {
+  const runRouteCalculation = async (useManualOrder: boolean = false, variantId?: string) => {
     setIsCalculating(true);
     try {
       const studentsToRoute = selectedStudentIds
         .map((id) => alumnosMap.get(id))
         .filter(Boolean) as Alumno[];
 
-      const result = await calculateOptimizedRoute(
-        origen,
-        selectedColegio,
-        studentsToRoute,
-        {
+      // Manual order: use it directly
+      if (useManualOrder && orderedStudentIds.length > 0) {
+        const orderedStudents = orderedStudentIds.map((id) => alumnosMap.get(id)!).filter(Boolean) as Alumno[];
+        const result = await calculateOptimizedRoute(origen, selectedColegio, orderedStudents, {
           modo,
           tipoTrayecto,
           tiempoAbordajeMin,
           horaLlegadaLimite: horaLlegada,
-          ordenManual: useManualOrder ? orderedStudentIds : undefined
-        }
-      );
+          ordenManual: orderedStudentIds
+        });
+        setOptimizationResult(result);
+        setIsManualOrder(true);
+        return;
+      }
+
+      // Generate route variants (different orderings)
+      const startPoint = tipoTrayecto === 'ida' ? origen : { lat: selectedColegio.lat, lng: selectedColegio.lng };
+      const endPoint = tipoTrayecto === 'ida' ? { lat: selectedColegio.lat, lng: selectedColegio.lng } : origen;
+      const generated = generateRouteVariants(startPoint, endPoint, studentsToRoute);
+      setVariants(generated);
+
+      // Determine which variant to compute
+      const targetVariantId = variantId || activeVariantId;
+      const targetVariant = generated.find((v) => v.id === targetVariantId) || generated[0];
+      const variantStudents = targetVariant.studentIds
+        .map((id) => alumnosMap.get(id)!)
+        .filter(Boolean) as Alumno[];
+
+      const result = await calculateOptimizedRoute(origen, selectedColegio, variantStudents, {
+        modo,
+        tipoTrayecto,
+        tiempoAbordajeMin,
+        horaLlegadaLimite: horaLlegada,
+        ordenManual: targetVariant.studentIds
+      });
 
       setOptimizationResult(result);
       setOrderedStudentIds(result.paradas_ordenadas.map((p) => p.alumno_id));
-      setIsManualOrder(useManualOrder);
+      setActiveVariantId(targetVariant.id);
+      setIsManualOrder(false);
     } catch (err) {
       console.error('Calculation error:', err);
     } finally {
@@ -166,8 +219,27 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
     }
   };
 
+  // Select a variant (recalculate with that ordering)
+  const selectVariant = (variantId: string) => {
+    setActiveVariantId(variantId);
+    const variant = variants.find((v) => v.id === variantId);
+    if (!variant) return;
+    setOrderedStudentIds(variant.studentIds);
+    setIsManualOrder(false);
+
+    const variantStudents = variant.studentIds.map((id) => alumnosMap.get(id)!).filter(Boolean) as Alumno[];
+    calculateOptimizedRoute(origen, selectedColegio, variantStudents, {
+      modo,
+      tipoTrayecto,
+      tiempoAbordajeMin,
+      horaLlegadaLimite: horaLlegada,
+      ordenManual: variant.studentIds
+    }).then((res) => setOptimizationResult(res));
+  };
+
   useEffect(() => {
     runRouteCalculation(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedColegio, origen, selectedStudentIds, modo, tiempoAbordajeMin, horaLlegada, tipoTrayecto]);
 
   // Manual reordering handlers
@@ -181,6 +253,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
 
     setOrderedStudentIds(newOrder);
     setIsManualOrder(true);
+    setActiveVariantId('manual');
 
     // Recalculate with this manual order
     const studentsToRoute = newOrder.map((id) => alumnosMap.get(id)!).filter(Boolean);
@@ -235,6 +308,8 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
       origen_direccion: origen.direccion,
       modo_optimizacion: modo,
       tipo_trayecto: tipoTrayecto,
+      dia_semana: selectedDay,
+      variante: activeVariantId,
       hora_llegada_objetivo: horaLlegada,
       hora_salida_estimada: optimizationResult.hora_salida_estimada,
       tiempo_manejo_estimado_min: optimizationResult.tiempo_manejo_min,
@@ -303,6 +378,43 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
               <span className="text-[10px] mt-0.5 opacity-80">Tarde: Escuela ➔ Casas</span>
             </button>
           </div>
+        </div>
+
+        {/* Day of Week Selector */}
+        <div className="rounded-xl border border-line bg-soft-gray p-3 space-y-2">
+          <label className="text-[11px] font-black text-primary uppercase tracking-wider flex items-center gap-1.5">
+            <CalendarDays className="h-3.5 w-3.5" />
+            <span>Día de la Ruta</span>
+          </label>
+          <div className="grid grid-cols-5 gap-1.5">
+            {WEEK_DAYS.map((day) => {
+              const isActive = selectedDay === day;
+              const count = schoolStudents.filter((s) => {
+                const dias = s.dias_ruta && s.dias_ruta.length > 0 ? s.dias_ruta : WEEK_DAYS;
+                return dias.includes(day) && s.activo_en_rutas !== false;
+              }).length;
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => setSelectedDay(day)}
+                  className={`flex flex-col items-center rounded-lg py-1.5 text-center border transition-all cursor-pointer ${
+                    isActive
+                      ? 'bg-primary text-white border-primary font-black shadow-md'
+                      : 'bg-surface border-line text-muted hover:text-ink hover:border-primary/40'
+                  }`}
+                >
+                  <span className="text-[11px] font-black">{day}</span>
+                  <span className={`text-[9px] font-bold ${isActive ? 'text-white/80' : 'text-muted'}`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-[10px] text-muted">
+            Solo se cargan alumnos con ese día activo y según su modalidad (ida/vuelta).
+          </p>
         </div>
 
         {/* School & Target Time */}
@@ -588,19 +700,19 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
           </div>
         </div>
 
-        {/* Students Checklist with Modality Tag */}
+        {/* Students Checklist with Modality Tag + Day config */}
         <div className="rounded-xl border border-line bg-soft-gray p-3 space-y-2">
           <div className="flex items-center justify-between">
             <label className="text-[11px] font-bold text-ink uppercase tracking-wider">
-              Alumnos Seleccionados ({selectedStudentIds.length}/{allAlumnos.length})
+              Alumnos en esta Ruta ({eligibleStudents.length}/{schoolStudents.length})
             </label>
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setSelectedStudentIds(allAlumnos.map((s) => s.id))}
+                onClick={() => setSelectedStudentIds(eligibleStudents.map((s) => s.id))}
                 className="text-[10px] font-bold text-primary hover:underline cursor-pointer"
               >
-                Marcar todos ({allAlumnos.length})
+                Marcar todos ({eligibleStudents.length})
               </button>
               <span className="text-muted">|</span>
               <button
@@ -612,10 +724,20 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
               </button>
             </div>
           </div>
+          <p className="text-[10px] text-muted">
+            Lista cargada automáticamente según días configurados, modalidad (ida/vuelta) y estado activo.
+          </p>
 
           <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
-            {allAlumnos.map((student) => {
+            {schoolStudents.map((student) => {
               const mod = student.modalidad_servicio || 'ida_y_vuelta';
+              const studentDays = student.dias_ruta && student.dias_ruta.length > 0 ? student.dias_ruta : WEEK_DAYS;
+              const attendsToday = studentDays.includes(selectedDay);
+              const matchesJourney =
+                tipoTrayecto === 'ida'
+                  ? mod === 'ida_y_vuelta' || mod === 'solo_ida'
+                  : mod === 'ida_y_vuelta' || mod === 'solo_vuelta';
+              const isEligible = student.activo_en_rutas !== false && attendsToday && matchesJourney;
               const isSelected = selectedStudentIds.includes(student.id);
 
               return (
@@ -624,40 +746,64 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
                   className={`flex items-center justify-between gap-2 rounded-lg p-2 text-xs border transition-all cursor-pointer ${
                     isSelected
                       ? 'bg-primary/10 border-primary/30 text-ink shadow-sm'
-                      : 'bg-surface/60 border-line text-muted hover:border-line'
+                      : isEligible
+                      ? 'bg-surface/60 border-line text-ink hover:border-line'
+                      : 'bg-canvas/60 border-line text-muted opacity-60 cursor-not-allowed'
                   }`}
                 >
                   <div className="flex items-center gap-2 truncate">
                     <input
                       type="checkbox"
                       checked={isSelected}
+                      disabled={!isEligible}
                       onChange={() => toggleStudent(student.id)}
                       className="accent-primary h-4 w-4 rounded cursor-pointer"
                     />
                     <div className="truncate">
-                      <span className={`font-bold truncate block ${isSelected ? 'text-ink' : 'text-muted'}`}>
+                      <span className={`font-bold truncate block ${isSelected ? 'text-ink' : isEligible ? 'text-ink' : 'text-muted'}`}>
                         {student.nombre}
                       </span>
                       <span className="text-[10px] text-muted truncate block">
                         {student.direccion_recogida}
                       </span>
+                      <span className="flex items-center gap-0.5 mt-0.5">
+                        {WEEK_DAYS.map((d) => (
+                          <span
+                            key={d}
+                            className={`px-1 rounded text-[8px] font-bold ${
+                              studentDays.includes(d)
+                                ? d === selectedDay
+                                  ? 'bg-primary text-white'
+                                  : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                                : 'bg-canvas text-muted border border-line line-through'
+                            }`}
+                          >
+                            {d}
+                          </span>
+                        ))}
+                      </span>
                     </div>
                   </div>
 
-                  <div className="shrink-0 text-right">
+                  <div className="shrink-0 text-right space-y-1">
                     {mod === 'ida_y_vuelta' && (
-                      <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50/60 px-1.5 py-0.5 rounded border border-emerald-200">
+                      <span className="block text-[9px] font-bold text-emerald-600 bg-emerald-50/60 px-1.5 py-0.5 rounded border border-emerald-200">
                         🔄 Ida/Vuelta
                       </span>
                     )}
                     {mod === 'solo_ida' && (
-                      <span className="text-[9px] font-bold text-primary bg-sky-950/60 px-1.5 py-0.5 rounded border border-primary/25">
+                      <span className="block text-[9px] font-bold text-primary bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200">
                         🌅 Solo Ida
                       </span>
                     )}
                     {mod === 'solo_vuelta' && (
-                      <span className="text-[9px] font-bold text-purple-600 bg-purple-950/60 px-1.5 py-0.5 rounded border border-purple-800/40">
+                      <span className="block text-[9px] font-bold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
                         🌇 Solo Vuelta
+                      </span>
+                    )}
+                    {!attendsToday && (
+                      <span className="block text-[8px] font-bold text-muted bg-canvas px-1 py-0.5 rounded border border-line">
+                        No va el {selectedDay}
                       </span>
                     )}
                   </div>
@@ -727,6 +873,73 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
           </div>
         )}
 
+        {/* Route Variants Selector */}
+        {variants.length > 1 && (
+          <div className="rounded-xl border border-line bg-surface p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-bold text-ink flex items-center gap-2">
+                  <Palette className="h-4 w-4 text-primary" />
+                  Variantes de Ruta
+                </h4>
+                <p className="text-[11px] text-muted">
+                  Elige la variante que más te convenga. Cada una se dibuja con su color en el mapa.
+                </p>
+              </div>
+              <span className="text-[10px] font-bold text-muted">{variants.length} opciones</span>
+            </div>
+
+            {(() => {
+              // Compute haversine distance per variant and find the shortest
+              const startPoint = tipoTrayecto === 'ida' ? origen : { lat: selectedColegio.lat, lng: selectedColegio.lng };
+              const endPoint = tipoTrayecto === 'ida' ? { lat: selectedColegio.lat, lng: selectedColegio.lng } : origen;
+              const withDist = variants.map((v) => ({
+                ...v,
+                distanceKm: variantDistance(startPoint, endPoint, v.studentIds, alumnosMap),
+              }));
+              const shortest = Math.min(...withDist.map((v) => v.distanceKm));
+
+              return (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {withDist.map((v) => {
+                    const meta = ROUTE_VARIANT_COLORS[v.id] || ROUTE_VARIANT_COLORS['2opt'];
+                    const isActive = activeVariantId === v.id;
+                    const isShortest = v.distanceKm === shortest;
+                    return (
+                      <button
+                        key={v.id}
+                        onClick={() => selectVariant(v.id)}
+                        className={`rounded-xl border p-2.5 text-left transition-all cursor-pointer ${
+                          isActive
+                            ? 'border-primary bg-primary/5 shadow-md ring-1 ring-primary/30'
+                            : 'border-line bg-soft-gray hover:border-primary/40'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className="inline-block h-2 w-4 rounded-full"
+                            style={{ backgroundColor: meta.color, boxShadow: `0 0 0 1px ${meta.color}55` }}
+                          />
+                          <span className={`text-[11px] font-black ${isActive ? 'text-primary' : 'text-ink'}`}>
+                            {v.label}
+                          </span>
+                          {isShortest && (
+                            <span className="ml-auto rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 px-1.5 py-0.5 text-[8px] font-black">
+                              MÁS CORTA
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[9px] text-muted mt-0.5 truncate">{v.description}</p>
+                        <p className="text-[10px] font-black text-primary mt-0.5">{v.distanceKm} km</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
         {/* Map Preview Stage */}
         <div className="h-[340px] sm:h-[380px] w-full rounded-xl overflow-hidden border border-line">
           <SchoolRouteMap
@@ -755,6 +968,8 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
             }
             alumnosMap={alumnosMap}
             polylineGeometry={optimizationResult?.polyline_geometry}
+            polylineColor={(ROUTE_VARIANT_COLORS[activeVariantId] || ROUTE_VARIANT_COLORS['2opt']).color}
+            polylineDash={(ROUTE_VARIANT_COLORS[activeVariantId] || ROUTE_VARIANT_COLORS['2opt']).dash}
           />
         </div>
 

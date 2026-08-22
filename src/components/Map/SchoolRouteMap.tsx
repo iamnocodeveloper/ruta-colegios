@@ -25,6 +25,8 @@ interface SchoolRouteMapProps {
   targetArrivalTime?: string; // Explicit target arrival / meta time
   tipoTrayecto?: 'ida' | 'vuelta';
   onMarkerClick?: (parada: ParadaRuta) => void;
+  polylineColor?: string; // Custom route line color (for variant selection)
+  polylineDash?: string; // Custom dash array (e.g. '8, 8' or '0')
   className?: string;
 }
 
@@ -41,6 +43,8 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
   targetArrivalTime,
   tipoTrayecto = 'ida',
   onMarkerClick,
+  polylineColor = '#f59e0b',
+  polylineDash = '8, 8',
   className = 'h-full w-full'
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -144,7 +148,7 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
     if (polylineGeometry && polylineGeometry.length > 0) {
       // Background glow
       L.polyline(polylineGeometry, {
-        color: '#f59e0b',
+        color: polylineColor,
         weight: 6,
         opacity: 0.8,
         lineCap: 'round',
@@ -153,11 +157,11 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
 
       // Inner stroke
       L.polyline(polylineGeometry, {
-        color: '#fbbf24',
+        color: polylineColor,
         weight: 3,
         opacity: 1,
         lineCap: 'round',
-        dashArray: '8, 8'
+        dashArray: polylineDash
       }).addTo(polylineLayer);
     }
 
@@ -328,7 +332,7 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
       const bounds = L.latLngBounds(allCoords);
       map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
     }
-  }, [colegio, origen, paradas, polylineGeometry, activeStopIndex, highlightStudentId, onOriginChange, targetArrivalTime, tipoTrayecto]);
+  }, [colegio, origen, paradas, polylineGeometry, activeStopIndex, highlightStudentId, onOriginChange, targetArrivalTime, tipoTrayecto, polylineColor, polylineDash]);
 
   // Handle Real-Time School Van Marker
   useEffect(() => {

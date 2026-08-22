@@ -58,6 +58,7 @@ const _schema = i.schema({
       tiempo_abordaje_estimado_min: i.number().optional(),
       modalidad_servicio: i.string().optional(),
       activo_en_rutas: i.boolean().optional(),
+      dias_ruta: i.json().optional(),
       created_at: i.string().optional(),
     }),
     conductores: i.entity({
@@ -81,6 +82,8 @@ const _schema = i.schema({
       origen_direccion: i.string().optional(),
       modo_optimizacion: i.string(),
       tipo_trayecto: i.string().optional(),
+      dia_semana: i.string().optional(),
+      variante: i.string().optional(),
       hora_llegada_objetivo: i.string(),
       hora_salida_estimada: i.string(),
       hora_salida_real: i.string().optional(),
@@ -210,6 +213,7 @@ export async function seedInstantDatabase(force: boolean = false) {
           tiempo_abordaje_estimado_min: alu.tiempo_abordaje_estimado_min || 2.5,
           modalidad_servicio: alu.modalidad_servicio || 'ida_y_vuelta',
           activo_en_rutas: alu.activo_en_rutas !== false,
+          dias_ruta: alu.dias_ruta || ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'],
           created_at: new Date().toISOString(),
         })
       );
@@ -376,6 +380,7 @@ export async function upsertAlumnoInstant(alumno: Alumno, rep?: Representante) {
       tiempo_abordaje_estimado_min: Number(alumno.tiempo_abordaje_estimado_min || 2.5),
       modalidad_servicio: alumno.modalidad_servicio || 'ida_y_vuelta',
       activo_en_rutas: alumno.activo_en_rutas !== false,
+      dias_ruta: alumno.dias_ruta || ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'],
       created_at: alumno.created_at || new Date().toISOString(),
     })
   );
@@ -452,6 +457,8 @@ export async function saveRutaInstant(ruta: RutaDiaria) {
       origen_direccion: ruta.origen_direccion || '',
       modo_optimizacion: ruta.modo_optimizacion,
       tipo_trayecto: ruta.tipo_trayecto || 'ida',
+      dia_semana: ruta.dia_semana || '',
+      variante: ruta.variante || '',
       hora_llegada_objetivo: ruta.hora_llegada_objetivo,
       hora_salida_estimada: ruta.hora_salida_estimada,
       hora_salida_real: ruta.hora_salida_real || '',
