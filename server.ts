@@ -70,9 +70,33 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
+    // Resolve dist/ robustly: some deployments run from a different cwd
+    const candidates = [
+      path.join(process.cwd(), 'dist'),
+      path.join(__dirname, 'dist'),
+      path.join(__dirname, '..', 'dist'),
+    ];
+    let distPath = candidates.find((p) => {
+      try {
+        return require('fs').existsSync(path.join(p, 'index.html'));
+      } catch {
+        return false;
+      }
+    });
+    if (!distPath) distPath = candidates[0];
+
+    console.log('📁 Serving static from:', distPath);
+
+    app.use(express.static(distPath, { index: 'index.html', maxAge: '1h' }));
+
+    // SPA fallback: ONLY for paths without a file extension (real routes).
+    // Never serve index.html for missing .js/.css/.png assets (avoids MIME errors).
+    app.get(/^\/(?!api\/).*/, (req, res) => {
+      const p = req.path.split('?')[0];
+      const hasExtension = /\.[a-z0-9]+$/i.test(p);
+      if (hasExtension) {
+        return res.status(404).send('Not found');
+      }
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
