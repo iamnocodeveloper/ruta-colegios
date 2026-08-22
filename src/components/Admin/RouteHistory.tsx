@@ -252,13 +252,35 @@ export const RouteHistory: React.FC<RouteHistoryProps> = ({
                       <p className="text-[11px] font-black uppercase tracking-wide text-muted mb-2">Paradas ({entry.total_paradas})</p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                         {(entry.ruta.paradas || []).map((p, idx) => (
-                          <div key={p.id || idx} className="flex items-center gap-2 rounded-lg bg-soft-gray px-2.5 py-1.5 text-[11px]">
-                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-surface border border-line text-[9px] font-black text-primary shrink-0">
-                              {p.orden}
-                            </span>
-                            <span className="truncate font-bold text-ink flex-1">{p.alumno?.nombre || 'Alumno'}</span>
-                            <span className="text-muted font-mono">{formatFriendlyTime(p.hora_estimada)}</span>
-                            {stopStateIcon(p.estado)}
+                          <div key={p.id || idx} className="rounded-lg bg-soft-gray px-2.5 py-1.5 text-[11px]">
+                            <div className="flex items-center gap-2">
+                              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-surface border border-line text-[9px] font-black text-primary shrink-0">
+                                {p.orden}
+                              </span>
+                              <span className="truncate font-bold text-ink flex-1">{p.alumno?.nombre || 'Alumno'}</span>
+                              <span className="text-muted font-mono">{formatFriendlyTime(p.hora_estimada)}</span>
+                              {stopStateIcon(p.estado)}
+                            </div>
+                            <div className="mt-1 flex items-center gap-1 pl-7">
+                              <a
+                                href={`https://waze.com/ul?ll=${p.lat},${p.lng}&navigate=yes`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="rounded bg-surface border border-line px-1.5 py-0.5 text-[8px] font-extrabold text-ink hover:border-primary/40 hover:text-primary transition-colors"
+                                title="Abrir en Waze"
+                              >
+                                🚗 Waze
+                              </a>
+                              <a
+                                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${p.lat},${p.lng}`)}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="rounded bg-surface border border-line px-1.5 py-0.5 text-[8px] font-extrabold text-ink hover:border-primary/40 hover:text-primary transition-colors"
+                                title="Abrir en Google Maps"
+                              >
+                                📍 Maps
+                              </a>
+                            </div>
                           </div>
                         ))}
                       </div>

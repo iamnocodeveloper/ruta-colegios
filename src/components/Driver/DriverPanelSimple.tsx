@@ -18,7 +18,9 @@ import {
   School,
   Truck,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Phone,
+  MessageCircle
 } from 'lucide-react';
 import { Alumno, Colegio, RutaDiaria, ParadaRuta, Conductor } from '../../types';
 import { RouteHistoryEntry } from '../../services/routeHistory';
@@ -264,6 +266,48 @@ export const DriverPanelSimple: React.FC<DriverPanelSimpleProps> = ({
                     <p className="text-[10px] text-muted font-mono mt-0.5">
                       ETA {formatFriendlyTime(parada.hora_estimada)} · {parada.distancia_desde_anterior_km || 0} km
                     </p>
+
+                    {/* Navigation & contact quick actions */}
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      <a
+                        href={`https://waze.com/ul?ll=${parada.lat},${parada.lng}&navigate=yes`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-1 rounded-lg bg-surface border border-line px-2 py-1 text-[9px] font-extrabold text-ink hover:border-primary/40 hover:text-primary transition-colors"
+                        title="Abrir en Waze"
+                      >
+                        🚗 Waze
+                      </a>
+                      <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${parada.lat},${parada.lng}`)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-1 rounded-lg bg-surface border border-line px-2 py-1 text-[9px] font-extrabold text-ink hover:border-primary/40 hover:text-primary transition-colors"
+                        title="Abrir en Google Maps"
+                      >
+                        📍 Maps
+                      </a>
+                      {alumno?.representante?.telefono_whatsapp && (
+                        <a
+                          href={`tel:${alumno.representante.telefono_whatsapp.replace(/[^0-9]/g, '')}`}
+                          className="flex items-center gap-1 rounded-lg bg-primary/10 border border-primary/25 px-2 py-1 text-[9px] font-extrabold text-primary hover:bg-primary/20 transition-colors"
+                          title={`Llamar al representante ${alumno.representante.nombre || ''}`}
+                        >
+                          <Phone className="h-2.5 w-2.5" /> Llamar
+                        </a>
+                      )}
+                      {alumno?.representante?.telefono_whatsapp && (
+                        <a
+                          href={`https://wa.me/${alumno.representante.telefono_whatsapp.replace(/[^0-9]/g, '')}?text=${encodeURIComponent('Hola, le escribimos por la ruta escolar de RutaEscolar.')}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center gap-1 rounded-lg bg-emerald-50 border border-emerald-200 px-2 py-1 text-[9px] font-extrabold text-emerald-600 hover:bg-emerald-100 transition-colors"
+                          title={`WhatsApp de ${alumno.representante.nombre || 'representante'}`}
+                        >
+                          <MessageCircle className="h-2.5 w-2.5" /> WhatsApp
+                        </a>
+                      )}
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -382,17 +426,39 @@ export const DriverPanelSimple: React.FC<DriverPanelSimpleProps> = ({
                     <div className="border-t border-line/70 px-4 py-3 space-y-2 animate-fadeIn">
                       <p className="text-[11px] font-black uppercase text-muted">Paradas</p>
                       {(entry.ruta.paradas || []).map((p, idx) => (
-                        <div key={p.id || idx} className="flex items-center gap-2.5 rounded-lg bg-soft-gray px-3 py-2 text-xs">
-                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-surface border border-line text-[9px] font-black text-primary shrink-0">
-                            {p.orden}
-                          </span>
-                          <span className="truncate font-bold text-ink flex-1">{p.alumno?.nombre || 'Alumno'}</span>
-                          <span className="text-muted font-mono">{formatFriendlyTime(p.hora_estimada)}</span>
-                          <span className={`text-[10px] font-extrabold ${
-                            p.estado === 'recogido' ? 'text-emerald-600' : p.estado === 'ausente' ? 'text-alert' : 'text-muted'
-                          }`}>
-                            {p.estado === 'recogido' ? '✓' : p.estado === 'ausente' ? '✗' : '⏳'}
-                          </span>
+                        <div key={p.id || idx} className="rounded-lg bg-soft-gray px-3 py-2 text-xs">
+                          <div className="flex items-center gap-2.5">
+                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-surface border border-line text-[9px] font-black text-primary shrink-0">
+                              {p.orden}
+                            </span>
+                            <span className="truncate font-bold text-ink flex-1">{p.alumno?.nombre || 'Alumno'}</span>
+                            <span className="text-muted font-mono">{formatFriendlyTime(p.hora_estimada)}</span>
+                            <span className={`text-[10px] font-extrabold ${
+                              p.estado === 'recogido' ? 'text-emerald-600' : p.estado === 'ausente' ? 'text-alert' : 'text-muted'
+                            }`}>
+                              {p.estado === 'recogido' ? '✓' : p.estado === 'ausente' ? '✗' : '⏳'}
+                            </span>
+                          </div>
+                          <div className="mt-1.5 flex items-center gap-1.5 pl-8">
+                            <a
+                              href={`https://waze.com/ul?ll=${p.lat},${p.lng}&navigate=yes`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center gap-1 rounded bg-surface border border-line px-2 py-1 text-[9px] font-extrabold text-ink hover:border-primary/40 hover:text-primary transition-colors"
+                              title="Abrir en Waze"
+                            >
+                              🚗 Waze
+                            </a>
+                            <a
+                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${p.lat},${p.lng}`)}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center gap-1 rounded bg-surface border border-line px-2 py-1 text-[9px] font-extrabold text-ink hover:border-primary/40 hover:text-primary transition-colors"
+                              title="Abrir en Google Maps"
+                            >
+                              📍 Maps
+                            </a>
+                          </div>
                         </div>
                       ))}
                     </div>

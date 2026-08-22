@@ -16,7 +16,9 @@ import {
   AlertTriangle,
   Hourglass,
   Copy,
-  Check
+  Check,
+  Phone,
+  MessageCircle
 } from 'lucide-react';
 import { RouteHistoryEntry } from '../../services/routeHistory';
 import { SchoolRouteMap } from '../Map/SchoolRouteMap';
@@ -167,29 +169,78 @@ export const RouteReviewView: React.FC<RouteReviewViewProps> = ({ entry, alumnos
         {/* Stops list */}
         <div className="rounded-card bg-surface border border-line p-4 shadow-soft">
           <h3 className="font-extrabold text-ink text-sm mb-3">Itinerario de Paradas ({ruta.paradas?.length || 0})</h3>
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             {(ruta.paradas || []).map((p, idx) => {
               const alumno = alumnosMap.get(p.alumno_id) || p.alumno;
+              const rep = alumno?.representante;
+              const repPhone = rep?.telefono_whatsapp || '';
+              const repPhoneDigits = repPhone.replace(/[^0-9]/g, '');
+              const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${p.lat},${p.lng}`)}`;
+              const wazeUrl = `https://waze.com/ul?ll=${p.lat},${p.lng}&navigate=yes`;
               return (
-                <div key={p.id || idx} className="flex items-center gap-3 rounded-xl bg-soft-gray px-3 py-2.5 text-xs">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface border border-line text-[10px] font-black text-primary">
-                    {p.orden}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-bold text-ink truncate">{alumno?.nombre || 'Alumno'}</p>
-                    <p className="text-[10px] text-muted truncate">{alumno?.direccion_recogida || 'Dirección no registrada'}</p>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <span className="text-muted font-mono">{formatFriendlyTime(p.hora_estimada)}</span>
-                    <span className="flex items-center gap-1 font-bold">
-                      {stateIcon(p.estado)}
-                      <span className={
-                        p.estado === 'recogido' || p.estado === 'completado' ? 'text-emerald-600' :
-                        p.estado === 'ausente' ? 'text-alert' : 'text-muted'
-                      }>
-                        {p.estado === 'recogido' || p.estado === 'completado' ? 'Recogido' : p.estado === 'ausente' ? 'Ausente' : 'Pendiente'}
-                      </span>
+                <div key={p.id || idx} className="rounded-xl bg-soft-gray px-3 py-2.5 text-xs">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface border border-line text-[10px] font-black text-primary">
+                      {p.orden}
                     </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-ink truncate">{alumno?.nombre || 'Alumno'}</p>
+                      <p className="text-[10px] text-muted truncate">{alumno?.direccion_recogida || 'Dirección no registrada'}</p>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="text-muted font-mono">{formatFriendlyTime(p.hora_estimada)}</span>
+                      <span className="flex items-center gap-1 font-bold">
+                        {stateIcon(p.estado)}
+                        <span className={
+                          p.estado === 'recogido' || p.estado === 'completado' ? 'text-emerald-600' :
+                          p.estado === 'ausente' ? 'text-alert' : 'text-muted'
+                        }>
+                          {p.estado === 'recogido' || p.estado === 'completado' ? 'Recogido' : p.estado === 'ausente' ? 'Ausente' : 'Pendiente'}
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Navigation & Contact actions */}
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 pl-9">
+                    <a
+                      href={wazeUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1 rounded-lg bg-surface border border-line px-2.5 py-1.5 text-[10px] font-extrabold text-ink hover:border-primary/40 hover:text-primary transition-colors"
+                      title="Abrir en Waze"
+                    >
+                      🚗 Waze
+                    </a>
+                    <a
+                      href={mapsUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1 rounded-lg bg-surface border border-line px-2.5 py-1.5 text-[10px] font-extrabold text-ink hover:border-primary/40 hover:text-primary transition-colors"
+                      title="Abrir en Google Maps"
+                    >
+                      📍 Google Maps
+                    </a>
+                    {repPhoneDigits && (
+                      <a
+                        href={`tel:${repPhoneDigits}`}
+                        className="flex items-center gap-1 rounded-lg bg-primary/10 border border-primary/25 px-2.5 py-1.5 text-[10px] font-extrabold text-primary hover:bg-primary/20 transition-colors"
+                        title={`Llamar al representante ${rep?.nombre || ''}`}
+                      >
+                        <Phone className="h-3 w-3" /> Llamar Representante
+                      </a>
+                    )}
+                    {repPhoneDigits && (
+                      <a
+                        href={`https://wa.me/${repPhoneDigits}?text=${encodeURIComponent('Hola, le escribimos por la ruta escolar de RutaEscolar.')}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-1 rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 text-[10px] font-extrabold text-emerald-600 hover:bg-emerald-100 transition-colors"
+                        title={`WhatsApp de ${rep?.nombre || 'representante'}`}
+                      >
+                        <MessageCircle className="h-3 w-3" /> WhatsApp Rep.
+                      </a>
+                    )}
                   </div>
                 </div>
               );

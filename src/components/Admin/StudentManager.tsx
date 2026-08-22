@@ -185,7 +185,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
       </div>
 
       {/* Filter Tabs by Modality */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+      <div className="flex items-center gap-2 overflow-x-auto py-2.5 px-0.5 text-xs">
         <span className="text-muted text-xs font-bold shrink-0">Filtrar por servicio:</span>
         <button
           onClick={() => setFilterModalidad('todos')}
@@ -389,7 +389,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
               </div>
 
               {/* Magic Link & Parent Portal Action Buttons */}
-              <div className="pt-2 border-t border-line/80 flex items-center justify-between gap-2">
+              <div className="pt-2 border-t border-line/80 flex items-center justify-between gap-2 flex-wrap">
                 <button
                   onClick={() => copyMagicLink(alumno.id, magicToken)}
                   className="flex-1 flex items-center justify-center gap-1 rounded-lg bg-soft-gray py-1.5 px-2 text-[11px] font-semibold text-ink hover:bg-line transition-all cursor-pointer"
@@ -407,6 +407,37 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                   <ExternalLink className="h-3 w-3" />
                   <span>Ver Portal</span>
                 </button>
+
+                {/* Location & call quick actions */}
+                <div className="flex items-center gap-1 w-full sm:w-auto">
+                  <a
+                    href={`https://waze.com/ul?ll=${alumno.lat},${alumno.lng}&navigate=yes`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex flex-1 sm:flex-none items-center justify-center gap-1 rounded-lg bg-surface border border-line py-1.5 px-2.5 text-[11px] font-bold text-ink hover:border-primary/40 hover:text-primary transition-all"
+                    title="Abrir ubicación en Waze"
+                  >
+                    🚗 Waze
+                  </a>
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${alumno.lat},${alumno.lng}`)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex flex-1 sm:flex-none items-center justify-center gap-1 rounded-lg bg-surface border border-line py-1.5 px-2.5 text-[11px] font-bold text-ink hover:border-primary/40 hover:text-primary transition-all"
+                    title="Abrir ubicación en Google Maps"
+                  >
+                    📍 Maps
+                  </a>
+                  {rep?.telefono_whatsapp && (
+                    <a
+                      href={`tel:${rep.telefono_whatsapp.replace(/[^0-9]/g, '')}`}
+                      className="flex flex-1 sm:flex-none items-center justify-center gap-1 rounded-lg bg-primary/10 border border-primary/25 py-1.5 px-2.5 text-[11px] font-bold text-primary hover:bg-primary/20 transition-all"
+                      title={`Llamar a ${rep.nombre || 'representante'}`}
+                    >
+                      <Phone className="h-3 w-3" /> Llamar
+                    </a>
+                  )}
+                </div>
               </div>
             </div>
           );
