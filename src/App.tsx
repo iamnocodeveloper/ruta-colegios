@@ -497,12 +497,10 @@ export default function App() {
     const routeIdParam = urlParams.get('routeId');
 
     if (routeIdParam && viewParam === 'review') {
-      // Read-only review link: load the route from history
+      // Read-only review link: load the route from history (works without login)
       const entry = getRouteHistoryById(routeIdParam);
-      if (entry) {
-        setReviewEntry(entry);
-        setCurrentView('review');
-      }
+      setReviewEntry(entry || null);
+      setCurrentView('review');
       return;
     }
 
@@ -754,6 +752,42 @@ export default function App() {
     localStorage.removeItem('rutaescolar_demo_user');
     db.auth.signOut().catch(() => {});
   };
+
+  // REVIEW VIEW: Read-only route link works WITHOUT login (shared link)
+  if (currentView === 'review') {
+    return (
+      <div className="flex h-screen w-screen bg-canvas text-ink font-sans overflow-hidden">
+        <div className="flex flex-1 flex-col min-w-0">
+          <main className="flex-1 overflow-hidden relative">
+            {reviewEntry ? (
+              <RouteReviewView
+                entry={reviewEntry}
+                alumnosMap={alumnosMap}
+                onBack={() => setCurrentView('home')}
+              />
+            ) : (
+              <div className="h-full flex items-center justify-center bg-canvas p-6">
+                <div className="rounded-card bg-surface border border-line shadow-soft p-8 max-w-md w-full text-center space-y-3">
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-soft-gray text-3xl">🔍</div>
+                  <h2 className="text-lg font-black text-ink">Ruta no encontrada</h2>
+                  <p className="text-sm text-muted">
+                    No pudimos encontrar la ruta solicitada en este dispositivo. El enlace de revisión
+                    solo funciona en el navegador donde se creó la ruta (los datos se guardan localmente).
+                  </p>
+                  <button
+                    onClick={() => setCurrentView('home')}
+                    className="mt-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-black text-white hover:bg-blue-600 transition-colors cursor-pointer"
+                  >
+                    Ir al Inicio
+                  </button>
+                </div>
+              </div>
+            )}
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   // MANDATORY LOGIN GATE: If not logged in, render ONLY the LoginGateway component
   if (!authSession) {

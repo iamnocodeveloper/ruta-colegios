@@ -72,23 +72,24 @@ export const DriverPanelSimple: React.FC<DriverPanelSimpleProps> = ({
     return todayEntry ? [todayEntry, ...rest] : rest;
   }, [history, currentDriverId, conductor, ruta.id]);
 
-  const totalParadas = ruta.paradas.length;
-  const recogidos = ruta.paradas.filter((p) => p.estado === 'recogido').length;
-  const ausentes = ruta.paradas.filter((p) => p.estado === 'ausente').length;
-  const pendientes = ruta.paradas.filter((p) => p.estado === 'pendiente').length;
+  const paradas = ruta.paradas || [];
+  const totalParadas = paradas.length;
+  const recogidos = paradas.filter((p) => p.estado === 'recogido').length;
+  const ausentes = paradas.filter((p) => p.estado === 'ausente').length;
+  const pendientes = paradas.filter((p) => p.estado === 'pendiente').length;
   const progreso = totalParadas > 0 ? Math.round((recogidos / totalParadas) * 100) : 0;
 
   const handleParadaClick = (parada: ParadaRuta, nuevo: ParadaEstado) => {
     if (parada.estado === nuevo) return;
     const updated = {
       ...ruta,
-      paradas: ruta.paradas.map((p) => (p.id === parada.id ? { ...p, estado: nuevo } : p)),
+      paradas: paradas.map((p) => (p.id === parada.id ? { ...p, estado: nuevo } : p)),
     };
     onUpdateRuta(updated);
     onUpdateParada(parada.id, nuevo);
   };
 
-  const nextParada = ruta.paradas.find((p) => p.estado === 'pendiente');
+  const nextParada = paradas.find((p) => p.estado === 'pendiente');
 
   return (
     <div className="h-full overflow-y-auto bg-canvas p-4 sm:p-6">
@@ -242,7 +243,7 @@ export const DriverPanelSimple: React.FC<DriverPanelSimpleProps> = ({
               </div>
             )}
 
-            {ruta.paradas.map((parada, idx) => {
+            {paradas.map((parada, idx) => {
               const alumno = alumnosMap.get(parada.alumno_id);
               const isDone = parada.estado === 'recogido' || parada.estado === 'ausente';
               return (
@@ -364,7 +365,7 @@ export const DriverPanelSimple: React.FC<DriverPanelSimpleProps> = ({
                   <SchoolRouteMap
                     colegio={colegio}
                     origen={{ lat: ruta.origen_lat, lng: ruta.origen_lng, direccion: ruta.origen_direccion }}
-                    paradas={ruta.paradas}
+                    paradas={paradas}
                     alumnosMap={alumnosMap}
                     polylineGeometry={ruta.polyline_geometry}
                     targetArrivalTime={ruta.hora_llegada_objetivo}

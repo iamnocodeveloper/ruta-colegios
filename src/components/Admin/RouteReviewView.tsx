@@ -50,8 +50,8 @@ export const RouteReviewView: React.FC<RouteReviewViewProps> = ({ entry, alumnos
     id: ruta.colegio_id,
     nombre: entry.colegio_nombre,
     direccion: '',
-    lat: ruta.paradas[0]?.lat || -0.1872,
-    lng: ruta.paradas[0]?.lng || -78.4975,
+    lat: ruta.paradas?.[0]?.lat || -0.1872,
+    lng: ruta.paradas?.[0]?.lng || -78.4975,
     hora_llegada_limite: ruta.hora_llegada_objetivo
   };
 

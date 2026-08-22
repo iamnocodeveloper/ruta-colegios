@@ -81,18 +81,19 @@ function RouteGauge({ percent, label }: { percent: number; label: string }) {
 export const HomeDashboard: React.FC<HomeDashboardProps> = ({ ruta, colegio, alumnos, conductores, onNavigate }) => {
   const [filter, setFilter] = useState<'todos' | 'ruta' | 'alumnos' | 'sistema'>('todos');
 
-  const totalStops = ruta.paradas.length;
-  const completedStops = ruta.paradas.filter((p) => p.estado === 'recogido' || p.estado === 'completado').length;
-  const absentStops = ruta.paradas.filter((p) => p.estado === 'ausente').length;
+  const paradas = ruta.paradas || [];
+  const totalStops = paradas.length;
+  const completedStops = paradas.filter((p) => p.estado === 'recogido' || p.estado === 'completado').length;
+  const absentStops = paradas.filter((p) => p.estado === 'ausente').length;
   const progress = totalStops > 0 ? (completedStops / totalStops) * 100 : 0;
   const pickedUp = completedStops;
   const pickUpPercent = totalStops > 0 ? (completedStops / totalStops) * 100 : 0;
   const conductor = ruta.conductor || conductores[0];
 
   const nextStop = useMemo(() => {
-    const pending = ruta.paradas.filter((p) => p.estado === 'pendiente').sort((a, b) => a.orden - b.orden);
+    const pending = paradas.filter((p) => p.estado === 'pendiente').sort((a, b) => a.orden - b.orden);
     return pending[0];
-  }, [ruta.paradas]);
+  }, [paradas]);
 
   const activeDriver = useMemo(() => conductores.find((c) => c.id === ruta.conductor_id) || conductores[0], [conductores, ruta.conductor_id]);
 
@@ -348,16 +349,16 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ ruta, colegio, alu
 
           {/* Timeline */}
           <div className="mt-4 space-y-0">
-            {ruta.paradas.length === 0 && (
+            {paradas.length === 0 && (
               <div className="flex flex-col items-center gap-2 py-8 text-muted">
                 <Hourglass className="h-8 w-8" />
                 <p className="text-xs font-bold">Sin paradas planificadas</p>
               </div>
             )}
-            {ruta.paradas.map((p, idx) => {
+            {paradas.map((p, idx) => {
               const status = getStopStatusLabel(p.estado);
               const StatusIcon = status.icon;
-              const isLast = idx === ruta.paradas.length - 1;
+              const isLast = idx === paradas.length - 1;
               return (
                 <div key={p.id} className="relative flex gap-3 pb-4">
                   {!isLast && <span className="absolute left-[13px] top-7 bottom-0 w-px border-l border-dashed border-line" />}
