@@ -285,16 +285,16 @@ export const SqlSchemaViewer: React.FC = () => {
   };
 
   return (
-    <div className="flex h-full flex-col bg-slate-950 text-slate-100 p-4 space-y-4 overflow-hidden">
+    <div className="flex h-full flex-col bg-canvas text-ink p-4 space-y-4 overflow-hidden">
       {/* Top Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
         <div>
-          <h2 className="text-base sm:text-lg font-black text-slate-100 flex items-center gap-2">
-            <Database className="h-5 w-5 text-amber-400" />
+          <h2 className="text-base sm:text-lg font-black text-ink flex items-center gap-2">
+            <Database className="h-5 w-5 text-primary" />
             <span>Esquema y Modelos de Datos</span>
           </h2>
-          <p className="text-xs text-slate-400">
-            InstantDB Reactiva (App ID: <code className="text-amber-400 font-mono">{INSTANT_APP_ID}</code>) & PostgreSQL PostGIS DDL
+          <p className="text-xs text-muted">
+            InstantDB Reactiva (App ID: <code className="text-primary font-mono">{INSTANT_APP_ID}</code>) & PostgreSQL PostGIS DDL
           </p>
         </div>
 
@@ -303,28 +303,28 @@ export const SqlSchemaViewer: React.FC = () => {
           <button
             onClick={handleSeedData}
             disabled={isSeeding}
-            className="flex items-center gap-1.5 rounded-xl bg-emerald-500/20 px-3 py-1.5 text-xs font-bold text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30 transition-all cursor-pointer disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-xl bg-emerald-500/20 px-3 py-1.5 text-xs font-bold text-emerald-600 border border-emerald-200 hover:bg-emerald-500/30 transition-all cursor-pointer disabled:opacity-50"
             title="Sincronizar entidades con datos reales en InstantDB"
           >
             {seedSuccess ? (
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
             ) : (
-              <RefreshCw className={`h-3.5 w-3.5 text-emerald-400 ${isSeeding ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-3.5 w-3.5 text-emerald-600 ${isSeeding ? 'animate-spin' : ''}`} />
             )}
             <span>{seedSuccess ? '¡Sincronizado!' : isSeeding ? 'Sincronizando...' : 'Poblar InstantDB'}</span>
           </button>
 
           <button
             onClick={handleCopy}
-            className="flex items-center gap-1.5 rounded-xl bg-slate-800 px-3.5 py-1.5 text-xs font-bold text-slate-200 border border-slate-700 hover:bg-slate-700 transition-all cursor-pointer"
+            className="flex items-center gap-1.5 rounded-xl bg-soft-gray px-3.5 py-1.5 text-xs font-bold text-ink border border-line hover:bg-line transition-all cursor-pointer"
           >
-            {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+            {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
             <span>{copied ? '¡Copiado!' : 'Copiar'}</span>
           </button>
 
           <button
             onClick={handleDownload}
-            className="flex items-center gap-1.5 rounded-xl bg-amber-500 px-3.5 py-1.5 text-xs font-black text-slate-950 hover:bg-amber-400 transition-all cursor-pointer"
+            className="flex items-center gap-1.5 rounded-xl bg-primary px-3.5 py-1.5 text-xs font-black text-ink hover:bg-primary transition-all cursor-pointer"
           >
             <Download className="h-3.5 w-3.5" />
             <span>Descargar</span>
@@ -333,13 +333,13 @@ export const SqlSchemaViewer: React.FC = () => {
       </div>
 
       {/* Tabs Switcher: InstantDB vs PostgreSQL */}
-      <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+      <div className="flex items-center gap-2 border-b border-line pb-2">
         <button
           onClick={() => setActiveSchemaTab('instantdb')}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
             activeSchemaTab === 'instantdb'
-              ? 'bg-amber-500 text-slate-950 shadow-md'
-              : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
+              ? 'bg-primary text-white shadow-md'
+              : 'bg-surface text-muted hover:text-ink border border-line'
           }`}
         >
           <Zap className="h-3.5 w-3.5" />
@@ -350,8 +350,8 @@ export const SqlSchemaViewer: React.FC = () => {
           onClick={() => setActiveSchemaTab('postgresql')}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
             activeSchemaTab === 'postgresql'
-              ? 'bg-amber-500 text-slate-950 shadow-md'
-              : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
+              ? 'bg-primary text-white shadow-md'
+              : 'bg-surface text-muted hover:text-ink border border-line'
           }`}
         >
           <Database className="h-3.5 w-3.5" />
@@ -361,34 +361,34 @@ export const SqlSchemaViewer: React.FC = () => {
 
       {/* Summary Chips */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
-        <div className="rounded-lg bg-slate-900 border border-slate-800 p-2.5">
-          <span className="text-[10px] text-slate-400 uppercase font-bold block">1. Colegios</span>
-          <span className="font-semibold text-amber-400">Destinos escolares</span>
+        <div className="rounded-lg bg-surface border border-line p-2.5">
+          <span className="text-[10px] text-muted uppercase font-bold block">1. Colegios</span>
+          <span className="font-semibold text-primary">Destinos escolares</span>
         </div>
-        <div className="rounded-lg bg-slate-900 border border-slate-800 p-2.5">
-          <span className="text-[10px] text-slate-400 uppercase font-bold block">2. Representantes</span>
-          <span className="font-semibold text-amber-400">Magic tokens & WA</span>
+        <div className="rounded-lg bg-surface border border-line p-2.5">
+          <span className="text-[10px] text-muted uppercase font-bold block">2. Representantes</span>
+          <span className="font-semibold text-primary">Magic tokens & WA</span>
         </div>
-        <div className="rounded-lg bg-slate-900 border border-slate-800 p-2.5">
-          <span className="text-[10px] text-slate-400 uppercase font-bold block">3. Alumnos</span>
-          <span className="font-semibold text-amber-400">Coordenadas & Grado</span>
+        <div className="rounded-lg bg-surface border border-line p-2.5">
+          <span className="text-[10px] text-muted uppercase font-bold block">3. Alumnos</span>
+          <span className="font-semibold text-primary">Coordenadas & Grado</span>
         </div>
-        <div className="rounded-lg bg-slate-900 border border-slate-800 p-2.5">
-          <span className="text-[10px] text-slate-400 uppercase font-bold block">4. Rutas Diarias</span>
-          <span className="font-semibold text-amber-400">Algoritmo H_salida</span>
+        <div className="rounded-lg bg-surface border border-line p-2.5">
+          <span className="text-[10px] text-muted uppercase font-bold block">4. Rutas Diarias</span>
+          <span className="font-semibold text-primary">Algoritmo H_salida</span>
         </div>
-        <div className="rounded-lg bg-slate-900 border border-slate-800 p-2.5">
-          <span className="text-[10px] text-slate-400 uppercase font-bold block">5. Paradas Ruta</span>
-          <span className="font-semibold text-amber-400">Recogido / Ausente</span>
+        <div className="rounded-lg bg-surface border border-line p-2.5">
+          <span className="text-[10px] text-muted uppercase font-bold block">5. Paradas Ruta</span>
+          <span className="font-semibold text-primary">Recogido / Ausente</span>
         </div>
-        <div className="rounded-lg bg-slate-900 border border-slate-800 p-2.5">
-          <span className="text-[10px] text-slate-400 uppercase font-bold block">6. Tracking Logs</span>
-          <span className="font-semibold text-amber-400">GPS en Tiempo Real</span>
+        <div className="rounded-lg bg-surface border border-line p-2.5">
+          <span className="text-[10px] text-muted uppercase font-bold block">6. Tracking Logs</span>
+          <span className="font-semibold text-primary">GPS en Tiempo Real</span>
         </div>
       </div>
 
       {/* Code Viewer */}
-      <div className="flex-1 overflow-auto rounded-xl border border-slate-800 bg-slate-950 p-4 font-mono text-xs text-slate-300 shadow-inner">
+      <div className="flex-1 overflow-auto rounded-xl border border-line bg-canvas p-4 font-mono text-xs text-ink shadow-inner">
         <pre className="whitespace-pre-wrap">{currentContent}</pre>
       </div>
     </div>

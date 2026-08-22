@@ -67,9 +67,9 @@ export const LocationPicker: React.FC<LocationPickerProps> = ({
     const isSchool = pinType === 'school';
     const isOrigin = pinType === 'origin';
     const bgClass = isSchool
-      ? 'bg-amber-500 text-slate-950 border-white'
+      ? 'bg-primary text-white border-white'
       : isOrigin
-      ? 'bg-sky-500 text-slate-950 border-white'
+      ? 'bg-sky-500 text-white border-white'
       : 'bg-emerald-500 text-white border-white';
     const iconEmoji = isSchool ? '🏫' : isOrigin ? '🏁' : '📍';
     const labelText = isSchool ? 'Sede Colegio' : isOrigin ? 'Punto de Salida' : 'Punto Recogida';
@@ -81,8 +81,8 @@ export const LocationPicker: React.FC<LocationPickerProps> = ({
           <div class="w-10 h-10 ${bgClass} border-2 rounded-full shadow-2xl flex items-center justify-center text-base font-black transform -translate-y-2 animate-bounce transition-transform">
             ${iconEmoji}
           </div>
-          <div class="w-3 h-1.5 bg-slate-950/60 rounded-full blur-[1px] -mt-1.5"></div>
-          <span class="absolute -bottom-5 bg-slate-900/90 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow border border-slate-700 whitespace-nowrap">
+          <div class="w-3 h-1.5 bg-ink/40 rounded-full blur-[1px] -mt-1.5"></div>
+          <span class="absolute -bottom-5 bg-surface/90 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow border border-line whitespace-nowrap">
             ${labelText}
           </span>
         </div>
@@ -372,7 +372,7 @@ export const LocationPicker: React.FC<LocationPickerProps> = ({
   };
 
   return (
-    <div className="space-y-2 rounded-xl border border-slate-700/80 bg-slate-950/80 p-2.5">
+    <div className="space-y-2 rounded-xl border border-line bg-surface p-2.5">
       {/* Real-time Search & Location Input Bar */}
       <div className="relative">
         <div className="flex items-center gap-1.5">
@@ -387,14 +387,14 @@ export const LocationPicker: React.FC<LocationPickerProps> = ({
               }}
               onKeyDown={handleKeyDown}
               placeholder="Buscar dirección en tiempo real (ej: La Carolina, Cumbayá, Av. Shyris, González Suárez...)"
-              className="w-full rounded-lg bg-slate-900 border border-slate-700 py-1.5 pl-8 pr-8 text-xs text-slate-100 placeholder:text-slate-500 focus:border-amber-400 focus:outline-none shadow-inner"
+              className="w-full rounded-lg bg-canvas border border-line py-1.5 pl-8 pr-8 text-xs text-ink placeholder:text-muted focus:border-primary/40 focus:outline-none shadow-inner"
             />
-            <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-amber-400/80" />
+            <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-primary/80" />
 
             {/* Clear or loading indicator inside input */}
             <div className="absolute right-2 top-2 flex items-center gap-1">
               {isSearching ? (
-                <Loader2 className="h-3.5 w-3.5 text-amber-400 animate-spin" />
+                <Loader2 className="h-3.5 w-3.5 text-primary animate-spin" />
               ) : searchQuery ? (
                 <button
                   type="button"
@@ -403,7 +403,7 @@ export const LocationPicker: React.FC<LocationPickerProps> = ({
                     setSearchResults([]);
                     setIsOpenDropdown(false);
                   }}
-                  className="text-slate-400 hover:text-slate-200 cursor-pointer p-0.5"
+                  className="text-muted hover:text-ink cursor-pointer p-0.5"
                   title="Limpiar búsqueda"
                 >
                   <X className="h-3 w-3" />
@@ -426,10 +426,10 @@ export const LocationPicker: React.FC<LocationPickerProps> = ({
 
         {/* Real-time Autocomplete Dropdown List */}
         {isOpenDropdown && searchResults.length > 0 && (
-          <div className="absolute z-[1000] left-0 right-0 top-full mt-1 rounded-xl bg-slate-900/95 backdrop-blur-md border border-slate-700 shadow-2xl overflow-hidden max-h-56 overflow-y-auto divide-y divide-slate-800">
-            <div className="bg-slate-950/90 px-3 py-1.5 flex items-center justify-between text-[10px] text-slate-400 font-bold">
+          <div className="absolute z-[1000] left-0 right-0 top-full mt-1 rounded-xl bg-surface backdrop-blur-md border border-line shadow-soft overflow-hidden max-h-56 overflow-y-auto divide-y divide-slate-800">
+            <div className="bg-soft-gray px-3 py-1.5 flex items-center justify-between text-[10px] text-muted font-bold">
               <span>📍 Selecciona una ubicación para mover el pin:</span>
-              <span className="text-amber-400">{searchResults.length} resultados</span>
+              <span className="text-primary">{searchResults.length} resultados</span>
             </div>
 
             {searchResults.map((item, idx) => {
@@ -442,27 +442,27 @@ export const LocationPicker: React.FC<LocationPickerProps> = ({
                   onMouseEnter={() => setSelectedIndex(idx)}
                   className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between gap-2 transition-all cursor-pointer ${
                     isSelected
-                      ? 'bg-amber-500/20 text-amber-200 border-l-2 border-amber-400'
-                      : 'text-slate-200 hover:bg-slate-800/80'
+                      ? 'bg-primary/10 text-primary border-l-2 border-primary/40'
+                      : 'text-ink hover:bg-line'
                   }`}
                 >
                   <div className="flex items-start gap-2 truncate min-w-0">
-                    <MapPin className={`h-4 w-4 shrink-0 mt-0.5 ${item.isLocal ? 'text-amber-400' : 'text-emerald-400'}`} />
+                    <MapPin className={`h-4 w-4 shrink-0 mt-0.5 ${item.isLocal ? 'text-primary' : 'text-emerald-600'}`} />
                     <div className="truncate">
-                      <div className="font-bold text-[11px] text-slate-100 truncate">
+                      <div className="font-bold text-[11px] text-ink truncate">
                         {item.short_name || item.display_name.split(',')[0]}
                       </div>
-                      <div className="text-[10px] text-slate-400 truncate">
+                      <div className="text-[10px] text-muted truncate">
                         {item.subtitle || item.display_name}
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1 shrink-0 text-slate-500">
+                  <div className="flex items-center gap-1 shrink-0 text-muted">
                     <span className="text-[9px] font-mono opacity-70">
                       {Number(item.lat).toFixed(3)}, {Number(item.lon || item.lng).toFixed(3)}
                     </span>
-                    <ChevronRight className="h-3 w-3 text-slate-400" />
+                    <ChevronRight className="h-3 w-3 text-muted" />
                   </div>
                 </button>
               );
@@ -472,30 +472,30 @@ export const LocationPicker: React.FC<LocationPickerProps> = ({
       </div>
 
       {/* Map Container */}
-      <div className="relative overflow-hidden rounded-lg border border-slate-700/80 shadow-inner">
+      <div className="relative overflow-hidden rounded-lg border border-line shadow-inner">
         <div ref={mapContainerRef} style={{ height }} className="w-full z-0" />
 
         {/* Map instruction badge */}
-        <div className="absolute top-2 left-2 z-[400] pointer-events-none rounded-lg bg-slate-950/90 backdrop-blur-xs px-2.5 py-1 text-[10px] font-semibold text-amber-300 border border-slate-700 shadow flex items-center gap-1.5">
-          <Compass className="h-3 w-3 text-amber-400" />
+        <div className="absolute top-2 left-2 z-[400] pointer-events-none rounded-lg bg-canvas backdrop-blur-xs px-2.5 py-1 text-[10px] font-semibold text-primary border border-line shadow flex items-center gap-1.5">
+          <Compass className="h-3 w-3 text-primary" />
           <span>El pin se mueve en tiempo real al buscar o hacer clic</span>
         </div>
 
         {/* Live coordinate badge */}
-        <div className="absolute bottom-2 left-2 z-[400] rounded-lg bg-slate-950/90 px-2 py-1 text-[10px] font-mono text-slate-300 border border-slate-800 shadow flex items-center gap-2">
-          <span className="text-amber-400 font-bold">GPS:</span>
+        <div className="absolute bottom-2 left-2 z-[400] rounded-lg bg-canvas px-2 py-1 text-[10px] font-mono text-ink border border-line shadow flex items-center gap-2">
+          <span className="text-primary font-bold">GPS:</span>
           <span>{Number(lat).toFixed(5)}, {Number(lng).toFixed(5)}</span>
         </div>
       </div>
 
       {/* Reverse Geocoding Auto-fill Banner if address detected */}
       {detectedAddress && (
-        <div className="flex items-center justify-between gap-2 rounded-lg bg-amber-950/30 border border-amber-800/40 p-2 text-xs text-amber-200">
+        <div className="flex items-center justify-between gap-2 rounded-lg bg-primary/10 border border-primary/25 p-2 text-xs text-primary">
           <div className="flex items-start gap-1.5 min-w-0">
-            <Sparkles className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
+            <Sparkles className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
             <div className="truncate">
-              <span className="text-[10px] text-amber-400 font-bold block">Ubicación exacta del pin:</span>
-              <span className="truncate block text-slate-200 text-[11px] font-medium">{detectedAddress}</span>
+              <span className="text-[10px] text-primary font-bold block">Ubicación exacta del pin:</span>
+              <span className="truncate block text-ink text-[11px] font-medium">{detectedAddress}</span>
             </div>
           </div>
           <button
@@ -504,7 +504,7 @@ export const LocationPicker: React.FC<LocationPickerProps> = ({
               onChange(lat, lng, detectedAddress);
               setSearchQuery(detectedAddress);
             }}
-            className="shrink-0 rounded-md bg-amber-500 px-2.5 py-1 text-[11px] font-black text-slate-950 hover:bg-amber-400 transition-all flex items-center gap-1 cursor-pointer shadow"
+            className="shrink-0 rounded-md bg-primary px-2.5 py-1 text-[11px] font-black text-slate-950 hover:bg-blue-400 transition-all flex items-center gap-1 cursor-pointer shadow"
             title="Copiar esta dirección al campo de texto del formulario"
           >
             <Check className="h-3 w-3" />

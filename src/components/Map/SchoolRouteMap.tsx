@@ -167,11 +167,11 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
       className: 'custom-map-marker',
       html: `
         <div class="relative flex flex-col items-center group ${isOriginDraggable ? 'cursor-grab active:cursor-grabbing' : ''}">
-          <div class="w-10 h-10 bg-slate-950 border-2 border-sky-400 rounded-full shadow-2xl flex items-center justify-center text-sky-300 font-bold text-sm ${isOriginDraggable ? 'ring-4 ring-sky-500/30 animate-pulse' : ''}">
+          <div class="w-10 h-10 bg-canvas border-2 border-primary rounded-full shadow-2xl flex items-center justify-center text-sky-600 font-bold text-sm ${isOriginDraggable ? 'ring-4 ring-sky-500/30 animate-pulse' : ''}">
             🏁
           </div>
-          <div class="w-3 h-1 bg-slate-950/60 rounded-full blur-[1px] -mt-0.5"></div>
-          <span class="absolute -bottom-5 bg-slate-900/95 text-sky-300 text-[10px] font-bold px-1.5 py-0.5 rounded shadow border border-sky-500/40 whitespace-nowrap">
+          <div class="w-3 h-1 bg-ink/40 rounded-full blur-[1px] -mt-0.5"></div>
+          <span class="absolute -bottom-5 bg-surface/95 text-sky-600 text-[10px] font-bold px-1.5 py-0.5 rounded shadow border border-primary/40 whitespace-nowrap">
             ${isOriginDraggable ? 'Arrastra Salida 🏁' : 'Punto Salida'}
           </span>
         </div>
@@ -191,7 +191,7 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
             <span>🏁 Punto de Salida / Origen</span>
           </div>
           <p class="text-[11px] text-slate-700 font-semibold mt-0.5">${origen.direccion || 'Base del Conductor'}</p>
-          <div class="mt-1 font-mono text-[10px] text-slate-500">
+          <div class="mt-1 font-mono text-[10px] text-muted">
             ${Number(origen.lat).toFixed(5)}, ${Number(origen.lng).toFixed(5)}
           </div>
           ${isOriginDraggable ? '<div class="mt-1 text-[10px] text-amber-700 font-bold bg-amber-50 p-1 rounded">💡 Puedes arrastrar este marcador a cualquier calle o lugar en el mapa</div>' : ''}
@@ -223,10 +223,10 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
       className: 'custom-map-marker',
       html: `
         <div class="relative flex items-center justify-center">
-          <div class="w-10 h-10 bg-amber-500 border-2 border-white rounded-full shadow-xl flex items-center justify-center text-slate-950 font-black text-sm">
+          <div class="w-10 h-10 bg-primary border-2 border-white rounded-full shadow-xl flex items-center justify-center text-slate-950 font-black text-sm">
             🏫
           </div>
-          <span class="absolute -bottom-6 bg-amber-500 text-slate-950 font-bold text-[10px] px-2 py-0.5 rounded-full shadow border border-amber-600 whitespace-nowrap">
+          <span class="absolute -bottom-6 bg-primary text-slate-950 font-bold text-[10px] px-2 py-0.5 rounded-full shadow border border-amber-600 whitespace-nowrap">
             ${tipoTrayecto === 'vuelta' ? 'Salida: ' : 'Meta: '} ${cleanTargetTime}
           </span>
         </div>
@@ -254,7 +254,7 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
       const isCurrentActive = activeStopIndex !== undefined && activeStopIndex === idx;
       const isParentStudent = highlightStudentId && parada.alumno_id === highlightStudentId;
 
-      let bgColor = 'bg-slate-800 border-amber-400 text-amber-300';
+      let bgColor = 'bg-slate-800 border-primary/40 text-primary';
       let statusBadge = 'Pendiente';
 
       if (parada.estado === 'recogido') {
@@ -264,7 +264,7 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
         bgColor = 'bg-rose-700 border-white text-white';
         statusBadge = 'Ausente';
       } else if (isCurrentActive) {
-        bgColor = 'bg-amber-500 border-amber-200 text-slate-950 animate-bounce';
+        bgColor = 'bg-primary border-amber-200 text-slate-950 animate-bounce';
         statusBadge = 'Siguiente';
       }
 
@@ -274,12 +274,12 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
 
       const markerHtml = `
         <div class="relative flex items-center justify-center group cursor-pointer">
-          ${isCurrentActive ? '<div class="absolute w-12 h-12 rounded-full bg-amber-400/40 animate-ping"></div>' : ''}
+          ${isCurrentActive ? '<div class="absolute w-12 h-12 rounded-full bg-primary/40 animate-ping"></div>' : ''}
           ${isParentStudent ? '<div class="absolute w-14 h-14 rounded-full bg-emerald-400/30 animate-pulse"></div>' : ''}
           <div class="w-8 h-8 ${bgColor} rounded-full border-2 shadow-md flex items-center justify-center font-bold text-xs transition-transform duration-200">
             ${parada.orden}
           </div>
-          <span class="absolute -bottom-5 bg-slate-900/90 text-slate-200 text-[9px] font-semibold px-1.5 py-0.5 rounded shadow border border-slate-700 whitespace-nowrap">
+          <span class="absolute -bottom-5 bg-surface/90 text-ink text-[9px] font-semibold px-1.5 py-0.5 rounded shadow border border-line whitespace-nowrap">
             ${student ? student.nombre.split(' ')[0] : `Parada #${parada.orden}`} (${parada.hora_estimada.substring(0, 5)})
           </span>
         </div>
@@ -304,7 +304,7 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
             </div>
             <p class="font-bold text-sm text-slate-900 mt-1">${student?.nombre || 'Alumno'}</p>
             <p class="text-[11px] text-slate-600 mt-0.5">${student?.direccion_recogida || 'Dirección de recogida'}</p>
-            <div class="mt-2 text-[10px] text-slate-500 border-t pt-1 flex justify-between">
+            <div class="mt-2 text-[10px] text-muted border-t pt-1 flex justify-between">
               <span>Hora estimada:</span>
               <b class="text-slate-800">${parada.hora_estimada}</b>
             </div>
@@ -347,11 +347,11 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
       className: 'custom-van-marker',
       html: `
         <div class="relative flex items-center justify-center">
-          <div class="absolute w-12 h-12 rounded-full bg-amber-500/40 animate-ping"></div>
-          <div class="w-10 h-10 bg-amber-500 border-2 border-slate-950 rounded-full shadow-2xl flex items-center justify-center text-slate-950 font-black text-base z-10">
+          <div class="absolute w-12 h-12 rounded-full bg-primary/40 animate-ping"></div>
+          <div class="w-10 h-10 bg-primary border-2 border-surface rounded-full shadow-2xl flex items-center justify-center text-white font-black text-base z-10">
             🚐
           </div>
-          <span class="absolute -bottom-6 bg-slate-950 text-amber-400 text-[10px] font-black px-2 py-0.5 rounded shadow-lg border border-amber-500/50 whitespace-nowrap z-20">
+          <span class="absolute -bottom-6 bg-surface text-primary text-[10px] font-black px-2 py-0.5 rounded shadow-lg border border-primary/40 whitespace-nowrap z-20">
             Unidad en Vivo ${vanLocation.velocidad_kmh ? `• ${Math.round(vanLocation.velocidad_kmh)} km/h` : ''}
           </span>
         </div>
@@ -369,7 +369,7 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
   }, [vanLocation]);
 
   return (
-    <div className="relative h-full w-full overflow-hidden rounded-xl border border-slate-800 bg-slate-900 shadow-inner">
+    <div className="relative h-full w-full overflow-hidden rounded-xl border border-line bg-surface shadow-inner">
       <div ref={mapContainerRef} className={`${className} ${clickToPickOrigin ? 'cursor-crosshair' : ''}`} />
 
       {/* Floating control buttons & Origin Click mode */}
@@ -381,7 +381,7 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
             className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold shadow-lg backdrop-blur transition-all border cursor-pointer ${
               clickToPickOrigin
                 ? 'bg-sky-500 text-slate-950 border-sky-300 ring-2 ring-sky-400/50 animate-pulse'
-                : 'bg-slate-900/90 text-sky-300 border-sky-600/40 hover:bg-slate-800 hover:text-white'
+                : 'bg-surface/90 text-sky-600 border-sky-600/40 hover:bg-line hover:text-ink'
             }`}
             title="Haz clic en cualquier punto del mapa para mover la salida"
           >
@@ -407,7 +407,7 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
             }
           }}
           title="Centrar vista"
-          className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-900/90 text-slate-200 shadow-md backdrop-blur border border-slate-700 hover:bg-slate-800 hover:text-amber-400 active:scale-95 transition-all text-sm font-semibold cursor-pointer"
+          className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface/90 text-ink shadow-md backdrop-blur border border-line hover:bg-line hover:text-primary active:scale-95 transition-all text-sm font-semibold cursor-pointer"
         >
           🎯
         </button>
@@ -422,13 +422,13 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
       )}
 
       {/* Mini Legend Overlay */}
-      <div className="absolute bottom-3 left-3 z-[400] hidden sm:flex items-center gap-2.5 rounded-lg bg-slate-950/85 px-3 py-1.5 text-[11px] font-medium text-slate-300 backdrop-blur border border-slate-800 shadow-lg">
+      <div className="absolute bottom-3 left-3 z-[400] hidden sm:flex items-center gap-2.5 rounded-lg bg-surface px-3 py-1.5 text-[11px] font-medium text-ink backdrop-blur border border-line shadow-lg">
         <div className="flex items-center gap-1">
           <span className="h-2.5 w-2.5 rounded-full bg-sky-500"></span>
           <span>Salida (🏁)</span>
         </div>
         <div className="flex items-center gap-1">
-          <span className="h-2.5 w-2.5 rounded-full bg-slate-800 border border-amber-400"></span>
+          <span className="h-2.5 w-2.5 rounded-full bg-slate-800 border border-primary/40"></span>
           <span>Pendiente</span>
         </div>
         <div className="flex items-center gap-1">
@@ -436,7 +436,7 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
           <span>Recogido</span>
         </div>
         <div className="flex items-center gap-1">
-          <span className="h-2.5 w-2.5 rounded-full bg-amber-500"></span>
+          <span className="h-2.5 w-2.5 rounded-full bg-primary"></span>
           <span>Escuela</span>
         </div>
       </div>

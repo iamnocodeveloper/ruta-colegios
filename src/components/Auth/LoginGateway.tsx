@@ -161,38 +161,38 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-slate-950 p-4 sm:p-6 text-slate-100 font-sans selection:bg-amber-500 selection:text-slate-950">
+    <div className="min-h-screen w-full flex items-center justify-center bg-canvas p-4 sm:p-6 text-ink font-sans selection:bg-primary selection:text-white">
       <div className="w-full max-w-lg space-y-5 animate-fadeIn">
         {/* Brand Header */}
         <div className="text-center space-y-2">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-400 text-3xl text-slate-950 font-black shadow-xl shadow-amber-500/20">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-tr from-primary to-blue-500 text-3xl text-white font-black shadow-xl shadow-primary/20">
             🚌
           </div>
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-100 flex items-center justify-center gap-2">
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-ink flex items-center justify-center gap-2">
             <span>RutaEscolar</span>
-            <span className="rounded-lg bg-amber-500/20 px-2 py-0.5 text-xs font-black text-amber-400 border border-amber-500/30">
+            <span className="rounded-lg bg-primary/10 px-2 py-0.5 text-xs font-black text-primary border border-primary/25">
               PWA
             </span>
           </h1>
-          <p className="text-xs sm:text-sm text-slate-400 max-w-sm mx-auto">
+          <p className="text-xs sm:text-sm text-muted max-w-sm mx-auto">
             Plataforma Inteligente de Transporte Escolar con Sincronización en Tiempo Real en InstantDB
           </p>
 
           {/* InstantDB App ID Status Pill */}
-          <div className="inline-flex items-center gap-1.5 rounded-full bg-slate-900 border border-slate-800 px-3 py-1 text-[11px] text-amber-400 font-mono">
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-surface border border-line px-3 py-1 text-[11px] text-primary font-mono">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
             </span>
             <span>InstantDB Conectado:</span>
-            <span className="text-slate-300 font-bold">{INSTANT_APP_ID.substring(0, 8)}...</span>
+            <span className="text-ink font-bold">{INSTANT_APP_ID.substring(0, 8)}...</span>
           </div>
         </div>
 
         {/* Main Card */}
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/90 shadow-2xl p-5 sm:p-7 backdrop-blur-sm space-y-5">
+        <div className="rounded-2xl border border-line bg-surface shadow-2xl p-5 sm:p-7 backdrop-blur-sm space-y-5">
           {/* Access Switcher Tabs */}
-          <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-slate-950 border border-slate-800">
+          <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-canvas border border-line">
             <button
               id="tab-staff-login"
               type="button"
@@ -202,8 +202,8 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
               }}
               className={`flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'staff'
-                  ? 'bg-amber-500 text-slate-950 shadow-md font-black'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-primary text-white shadow-md font-black'
+                  : 'text-muted hover:text-ink'
               }`}
             >
               <Shield className="h-4 w-4" />
@@ -219,8 +219,8 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
               }}
               className={`flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'parent'
-                  ? 'bg-amber-500 text-slate-950 shadow-md font-black'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-primary text-white shadow-md font-black'
+                  : 'text-muted hover:text-ink'
               }`}
             >
               <Users className="h-4 w-4" />
@@ -232,17 +232,17 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
           {activeTab === 'staff' && (
             <div className="space-y-4">
               {/* Quick 1-Click Demo Login Banner */}
-              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 space-y-2.5">
+              <div className="rounded-xl border border-primary/25 bg-primary/10 p-3.5 space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-black uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-primary flex items-center gap-1.5">
                     <Sparkles className="h-3.5 w-3.5" />
                     Acceso Rápido Administrador Demo
                   </span>
-                  <span className="text-[10px] font-mono text-amber-400 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/30">
+                  <span className="text-[10px] font-mono text-primary bg-primary/10 px-2 py-0.5 rounded border border-primary/25">
                     admin@demo.com / 123456
                   </span>
                 </div>
-                <p className="text-xs text-slate-300 leading-relaxed">
+                <p className="text-xs text-ink leading-relaxed">
                   Ingresa con un solo clic con las credenciales de administrador para gestionar rutas, escuelas y alumnos.
                 </p>
                 <button
@@ -250,7 +250,7 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
                   type="button"
                   onClick={handleQuickAdminLogin}
                   disabled={isSubmitting}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-amber-500 py-2.5 text-xs font-black text-slate-950 hover:bg-amber-400 active:scale-95 transition-all shadow-md cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-xs font-black text-white hover:bg-primary active:scale-95 transition-all shadow-md cursor-pointer"
                 >
                   <Zap className="h-4 w-4" />
                   <span>Ingresar como Admin Demo (1-Click)</span>
@@ -259,23 +259,23 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
               </div>
 
               <div className="relative flex py-1 items-center">
-                <div className="flex-grow border-t border-slate-800"></div>
-                <span className="flex-shrink mx-2 text-[10px] uppercase font-bold text-slate-500">
+                <div className="flex-grow border-t border-line"></div>
+                <span className="flex-shrink mx-2 text-[10px] uppercase font-bold text-muted">
                   O inicia con tus datos
                 </span>
-                <div className="flex-grow border-t border-slate-800"></div>
+                <div className="flex-grow border-t border-line"></div>
               </div>
 
               {/* Status messages */}
               {staffError && (
-                <div className="rounded-xl border border-rose-500/40 bg-rose-950/50 p-3 text-xs text-rose-300 flex items-start gap-2">
+                <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-600 flex items-start gap-2">
                   <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                   <span>{staffError}</span>
                 </div>
               )}
 
               {staffSuccess && (
-                <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/50 p-3 text-xs text-emerald-300 flex items-start gap-2">
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-600 flex items-start gap-2">
                   <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
                   <span>{staffSuccess}</span>
                 </div>
@@ -284,35 +284,35 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
               {/* Staff Credentials Form */}
               <form onSubmit={handleStaffFormSubmit} className="space-y-3.5">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-ink mb-1">
                     Correo Electrónico
                   </label>
                   <div className="relative">
-                    <Mail className="absolute left-3.5 top-3 h-4 w-4 text-slate-500" />
+                    <Mail className="absolute left-3.5 top-3 h-4 w-4 text-muted" />
                     <input
                       type="email"
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="admin@demo.com"
-                      className="w-full rounded-xl bg-slate-950 border border-slate-700 pl-10 pr-4 py-2.5 text-xs text-slate-100 placeholder:text-slate-600 focus:border-amber-500 focus:outline-none transition-all shadow-inner"
+                      className="w-full rounded-xl bg-canvas border border-line pl-10 pr-4 py-2.5 text-xs text-ink placeholder:text-muted focus:border-primary focus:outline-none transition-all shadow-inner"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-ink mb-1">
                     Contraseña / Código InstantDB
                   </label>
                   <div className="relative">
-                    <Lock className="absolute left-3.5 top-3 h-4 w-4 text-slate-500" />
+                    <Lock className="absolute left-3.5 top-3 h-4 w-4 text-muted" />
                     <input
                       type="password"
                       required
                       value={passwordOrCode}
                       onChange={(e) => setPasswordOrCode(e.target.value)}
                       placeholder="123456"
-                      className="w-full rounded-xl bg-slate-950 border border-slate-700 pl-10 pr-4 py-2.5 text-xs text-slate-100 placeholder:text-slate-600 focus:border-amber-500 focus:outline-none transition-all shadow-inner"
+                      className="w-full rounded-xl bg-canvas border border-line pl-10 pr-4 py-2.5 text-xs text-ink placeholder:text-muted focus:border-primary focus:outline-none transition-all shadow-inner"
                     />
                   </div>
                 </div>
@@ -321,9 +321,9 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
                   id="btn-staff-submit"
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-slate-800 border border-slate-700 py-3 text-xs font-bold text-slate-100 hover:bg-slate-700 hover:text-amber-400 active:scale-95 transition-all shadow-md cursor-pointer disabled:opacity-50"
+                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-soft-gray border border-line py-3 text-xs font-bold text-ink hover:bg-line hover:text-primary active:scale-95 transition-all shadow-md cursor-pointer disabled:opacity-50"
                 >
-                  <KeyRound className="h-4 w-4 text-amber-400" />
+                  <KeyRound className="h-4 w-4 text-primary" />
                   <span>{isSubmitting ? 'Verificando...' : 'Iniciar Sesión'}</span>
                 </button>
               </form>
@@ -334,17 +334,17 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
           {activeTab === 'parent' && (
             <div className="space-y-4">
               <div className="text-center space-y-1 pb-1">
-                <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 text-lg">
+                <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/25 text-lg">
                   🎒
                 </div>
-                <h3 className="font-black text-slate-100 text-base">Portal del Representante</h3>
-                <p className="text-xs text-slate-400">
-                  Ingresa con el <b className="text-amber-400">ID del Alumno</b> para ver el mapa interactivo y la hora de llegada en vivo.
+                <h3 className="font-black text-ink text-base">Portal del Representante</h3>
+                <p className="text-xs text-muted">
+                  Ingresa con el <b className="text-primary">ID del Alumno</b> para ver el mapa interactivo y la hora de llegada en vivo.
                 </p>
               </div>
 
               {parentError && (
-                <div className="rounded-xl border border-rose-500/40 bg-rose-950/50 p-3 text-xs text-rose-300 flex items-start gap-2">
+                <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-600 flex items-start gap-2">
                   <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                   <span>{parentError}</span>
                 </div>
@@ -352,11 +352,11 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
 
               <form onSubmit={handleParentFormSubmit} className="space-y-3.5">
                 <div>
-                  <label htmlFor="input-student-id-gateway" className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">
+                  <label htmlFor="input-student-id-gateway" className="block text-xs font-bold uppercase tracking-wider text-ink mb-1">
                     ID del Alumno *
                   </label>
                   <div className="relative">
-                    <Search className="absolute left-3.5 top-3 h-4 w-4 text-slate-500" />
+                    <Search className="absolute left-3.5 top-3 h-4 w-4 text-muted" />
                     <input
                       id="input-student-id-gateway"
                       type="text"
@@ -368,7 +368,7 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
                         if (parentError) setParentError(null);
                       }}
                       placeholder="Ej: alu_01, alu_02"
-                      className="w-full rounded-xl bg-slate-950 border border-slate-700 pl-10 pr-4 py-2.5 text-sm font-mono text-amber-400 placeholder:text-slate-600 focus:border-amber-500 focus:outline-none transition-all shadow-inner"
+                      className="w-full rounded-xl bg-canvas border border-line pl-10 pr-4 py-2.5 text-sm font-mono text-primary placeholder:text-muted focus:border-primary focus:outline-none transition-all shadow-inner"
                     />
                   </div>
                 </div>
@@ -376,7 +376,7 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
                 <button
                   id="btn-parent-submit-gateway"
                   type="submit"
-                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-amber-500 py-3 text-xs font-black text-slate-950 hover:bg-amber-400 active:scale-95 transition-all shadow-lg cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-primary py-3 text-xs font-black text-white hover:bg-primary active:scale-95 transition-all shadow-lg cursor-pointer"
                 >
                   <span>Ingresar al Portal del Representante</span>
                   <ArrowRight className="h-4 w-4" />
@@ -385,8 +385,8 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
 
               {/* Quick Student ID Suggestions */}
               {allStudents.length > 0 && (
-                <div className="border-t border-slate-800 pt-3 space-y-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+                <div className="border-t border-line pt-3 space-y-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-muted block">
                     Alumnos de prueba registrados en InstantDB:
                   </span>
                   <div className="flex flex-wrap gap-1.5">
@@ -398,10 +398,10 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
                           setStudentIdInput(s.id);
                           handleParentFormSubmit(undefined, s.id);
                         }}
-                        className="rounded-lg bg-slate-950 border border-slate-800 px-2.5 py-1 text-xs text-slate-300 hover:border-amber-500 hover:text-amber-400 transition-all font-mono cursor-pointer flex items-center gap-1"
+                        className="rounded-lg bg-canvas border border-line px-2.5 py-1 text-xs text-ink hover:border-primary hover:text-primary transition-all font-mono cursor-pointer flex items-center gap-1"
                       >
-                        <span className="font-bold text-amber-400">{s.id}</span>
-                        <span className="text-slate-400">({s.nombre.split(' ')[0]})</span>
+                        <span className="font-bold text-primary">{s.id}</span>
+                        <span className="text-muted">({s.nombre.split(' ')[0]})</span>
                       </button>
                     ))}
                   </div>
@@ -411,9 +411,9 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
           )}
 
           {/* Database Synchronization Helper in InstantDB */}
-          <div className="border-t border-slate-800/80 pt-3 flex items-center justify-between text-[11px] text-slate-400">
+          <div className="border-t border-line/80 pt-3 flex items-center justify-between text-[11px] text-muted">
             <span className="flex items-center gap-1.5">
-              <Database className="h-3.5 w-3.5 text-amber-400" />
+              <Database className="h-3.5 w-3.5 text-primary" />
               <span>Tablas InstantDB Listas</span>
             </span>
 
@@ -422,7 +422,7 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
               type="button"
               onClick={handleSeedDatabase}
               disabled={isSeeding}
-              className="flex items-center gap-1 text-amber-400 hover:text-amber-300 transition-colors font-semibold cursor-pointer"
+              className="flex items-center gap-1 text-primary hover:text-primary transition-colors font-semibold cursor-pointer"
             >
               <RefreshCw className={`h-3 w-3 ${isSeeding ? 'animate-spin' : ''}`} />
               <span>{isSeeding ? 'Sincronizando...' : seedSuccess ? '¡Sincronizado!' : 'Poblar Datos Reales'}</span>

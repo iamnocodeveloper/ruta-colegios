@@ -33,6 +33,7 @@ interface StudentManagerProps {
   onSaveAlumno: (alumno: Alumno, representante: Representante) => void;
   onDeleteAlumno: (alumnoId: string) => void;
   onOpenParentPortal: (studentId: string) => void;
+  onToggleActivoRutas?: (alumnoId: string, activo: boolean) => void;
 }
 
 export const StudentManager: React.FC<StudentManagerProps> = ({
@@ -41,7 +42,8 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
   colegios,
   onSaveAlumno,
   onDeleteAlumno,
-  onOpenParentPortal
+  onOpenParentPortal,
+  onToggleActivoRutas
 }) => {
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [editingAlumnoId, setEditingAlumnoId] = useState<string | null>(null);
@@ -155,15 +157,15 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
   };
 
   return (
-    <div className="flex h-full flex-col bg-slate-950 text-slate-100 p-4 space-y-4 overflow-y-auto">
+    <div className="flex h-full flex-col bg-canvas text-ink p-4 space-y-4 overflow-y-auto">
       {/* Top Action Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
         <div>
-          <h2 className="text-base sm:text-lg font-black text-slate-100 flex items-center gap-2">
-            <Users className="h-5 w-5 text-amber-400" />
+          <h2 className="text-base sm:text-lg font-black text-ink flex items-center gap-2">
+            <Users className="h-5 w-5 text-primary" />
             <span>Gestión de Alumnos y Representantes</span>
           </h2>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-muted">
             Control de paradas de recogida, colegios de destino, contactos de WhatsApp y Magic Tokens
           </p>
         </div>
@@ -171,7 +173,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
         <button
           id="btn-add-student"
           onClick={handleOpenAdd}
-          className="flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-xs font-black text-slate-950 shadow-md hover:bg-amber-400 transition-all cursor-pointer"
+          className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-xs font-black text-ink shadow-md hover:bg-primary transition-all cursor-pointer"
         >
           <UserPlus className="h-4 w-4" />
           <span>Registrar Nuevo Alumno</span>
@@ -180,13 +182,13 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
 
       {/* Filter Tabs by Modality */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
-        <span className="text-slate-400 text-xs font-bold shrink-0">Filtrar por servicio:</span>
+        <span className="text-muted text-xs font-bold shrink-0">Filtrar por servicio:</span>
         <button
           onClick={() => setFilterModalidad('todos')}
           className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer shrink-0 ${
             filterModalidad === 'todos'
-              ? 'bg-amber-400 text-slate-950 shadow'
-              : 'bg-slate-900 text-slate-300 hover:bg-slate-800'
+              ? 'bg-primary text-white shadow'
+              : 'bg-surface text-ink hover:bg-soft-gray'
           }`}
         >
           Todos ({alumnos.length})
@@ -195,8 +197,8 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
           onClick={() => setFilterModalidad('ida_y_vuelta')}
           className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer shrink-0 ${
             filterModalidad === 'ida_y_vuelta'
-              ? 'bg-emerald-500 text-slate-950 shadow'
-              : 'bg-slate-900 text-slate-300 hover:bg-slate-800'
+              ? 'bg-emerald-500 text-ink shadow'
+              : 'bg-surface text-ink hover:bg-soft-gray'
           }`}
         >
           🔄 Ida y Vuelta ({alumnos.filter((a) => (a.modalidad_servicio || 'ida_y_vuelta') === 'ida_y_vuelta').length})
@@ -205,8 +207,8 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
           onClick={() => setFilterModalidad('solo_ida')}
           className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer shrink-0 ${
             filterModalidad === 'solo_ida'
-              ? 'bg-sky-500 text-slate-950 shadow'
-              : 'bg-slate-900 text-slate-300 hover:bg-slate-800'
+              ? 'bg-primary text-white shadow'
+              : 'bg-surface text-ink hover:bg-soft-gray'
           }`}
         >
           🌅 Solo Ida ({alumnos.filter((a) => a.modalidad_servicio === 'solo_ida').length})
@@ -215,8 +217,8 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
           onClick={() => setFilterModalidad('solo_vuelta')}
           className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer shrink-0 ${
             filterModalidad === 'solo_vuelta'
-              ? 'bg-purple-500 text-slate-950 shadow'
-              : 'bg-slate-900 text-slate-300 hover:bg-slate-800'
+              ? 'bg-purple-500 text-ink shadow'
+              : 'bg-surface text-ink hover:bg-soft-gray'
           }`}
         >
           🌇 Solo Vuelta ({alumnos.filter((a) => a.modalidad_servicio === 'solo_vuelta').length})
@@ -241,30 +243,30 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
           return (
             <div
               key={alumno.id}
-              className="rounded-xl border border-slate-800 bg-slate-900/80 p-4 space-y-3 shadow-md hover:border-slate-700 transition-all flex flex-col justify-between"
+              className="rounded-xl border border-line bg-surface p-4 space-y-3 shadow-md hover:border-line transition-all flex flex-col justify-between"
             >
               <div>
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <h3 className="font-bold text-sm text-slate-100">{alumno.nombre}</h3>
+                    <h3 className="font-bold text-sm text-ink">{alumno.nombre}</h3>
                     <div className="flex items-center gap-1.5 mt-0.5">
-                      <span className="text-[11px] text-amber-400 font-semibold">{alumno.grado || 'Estudiante'}</span>
-                      <span className="text-[10px] text-slate-500">•</span>
-                      <span className="text-[10px] font-mono text-slate-400">ID: {alumno.id.substring(0, 8)}...</span>
+                      <span className="text-[11px] text-primary font-semibold">{alumno.grado || 'Estudiante'}</span>
+                      <span className="text-[10px] text-muted">•</span>
+                      <span className="text-[10px] font-mono text-muted">ID: {alumno.id.substring(0, 8)}...</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => handleOpenEdit(alumno)}
                       title="Editar Alumno"
-                      className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-all cursor-pointer"
+                      className="p-1.5 rounded-lg bg-soft-gray text-ink hover:text-white hover:bg-line transition-all cursor-pointer"
                     >
                       <Edit2 className="h-3.5 w-3.5" />
                     </button>
                     <button
                       onClick={() => setConfirmDeleteId(alumno.id)}
                       title="Eliminar Alumno"
-                      className="p-1.5 rounded-lg bg-slate-800 text-rose-400 hover:bg-rose-950/40 transition-all cursor-pointer"
+                      className="p-1.5 rounded-lg bg-soft-gray text-alert hover:bg-rose-50 transition-all cursor-pointer"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -274,71 +276,108 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                 {/* Modality & Destination School Badges */}
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
                   {mod === 'ida_y_vuelta' && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-300 bg-emerald-950/60 border border-emerald-800/50 px-2 py-0.5 rounded-full">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50/60 border border-emerald-800/50 px-2 py-0.5 rounded-full">
                       <ArrowUpDown className="h-3 w-3" />
                       <span>Ida y Vuelta</span>
                     </span>
                   )}
                   {mod === 'solo_ida' && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-sky-300 bg-sky-950/60 border border-sky-800/50 px-2 py-0.5 rounded-full">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-primary bg-sky-50 border border-sky-200 px-2 py-0.5 rounded-full">
                       <Sun className="h-3 w-3" />
                       <span>Solo Ida (Mañana)</span>
                     </span>
                   )}
                   {mod === 'solo_vuelta' && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-purple-300 bg-purple-950/60 border border-purple-800/50 px-2 py-0.5 rounded-full">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-purple-600 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full">
                       <Sunset className="h-3 w-3" />
                       <span>Solo Vuelta (Tarde)</span>
                     </span>
                   )}
 
-                  <div className="flex items-center gap-1 text-[10px] text-amber-300 bg-amber-950/40 border border-amber-800/40 px-2 py-0.5 rounded-full">
+                  <div className="flex items-center gap-1 text-[10px] text-primary bg-primary/10 border border-primary/25 px-2 py-0.5 rounded-full">
                     <School className="h-3 w-3 shrink-0" />
                     <span className="truncate max-w-[150px]">{targetSchool?.nombre || 'Colegio'}</span>
                   </div>
                 </div>
 
                 {/* Pickup Address */}
-                <div className="mt-2 text-xs text-slate-300 flex items-start gap-1.5">
-                  <MapPin className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
+                <div className="mt-2 text-xs text-ink flex items-start gap-1.5">
+                  <MapPin className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
                   <span className="leading-tight">{alumno.direccion_recogida}</span>
                 </div>
 
                 {/* Medical Notes if any */}
                 {alumno.notas_medicas && (
-                  <div className="mt-1.5 text-[11px] text-rose-300 flex items-center gap-1 bg-rose-950/30 px-2 py-0.5 rounded border border-rose-900/30">
-                    <HeartPulse className="h-3 w-3 shrink-0 text-rose-400" />
+                  <div className="mt-1.5 text-[11px] text-rose-600 flex items-center gap-1 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                    <HeartPulse className="h-3 w-3 shrink-0 text-alert" />
                     <span className="truncate">{alumno.notas_medicas}</span>
                   </div>
                 )}
 
-                {/* Representative details */}
-                <div className="mt-2 rounded-lg bg-slate-950/70 p-2 text-xs border border-slate-800/80 space-y-1">
-                  <div className="flex justify-between text-slate-400">
-                    <span>Representante:</span>
-                    <b className="text-slate-200">{rep?.nombre || 'No asignado'}</b>
+                {/* Active in routes toggle */}
+                <div className={`mt-2 flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 border text-xs transition-all ${
+                  alumno.activo_en_rutas === false
+                    ? 'bg-rose-50 border-rose-200'
+                    : 'bg-emerald-50/50 border-emerald-200'
+                }`}>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className={`text-sm ${alumno.activo_en_rutas === false ? 'text-alert' : 'text-emerald-600'}`}>
+                      {alumno.activo_en_rutas === false ? '⛔' : '✅'}
+                    </span>
+                    <div className="min-w-0">
+                      <p className={`font-bold ${alumno.activo_en_rutas === false ? 'text-alert' : 'text-emerald-600'}`}>
+                        {alumno.activo_en_rutas === false ? 'Inactivo en rutas' : 'Activo en rutas'}
+                      </p>
+                      <p className="text-[10px] text-muted truncate">
+                        {alumno.activo_en_rutas === false
+                          ? 'No se le asignará parada en la ruta'
+                          : 'Se incluye en el cálculo de la ruta'}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex justify-between text-slate-400">
+                  <button
+                    id={`btn-toggle-ruta-${alumno.id}`}
+                    onClick={() => onToggleActivoRutas?.(alumno.id, alumno.activo_en_rutas === false)}
+                    title={alumno.activo_en_rutas === false ? 'Activar en rutas' : 'Desactivar de rutas'}
+                    className={`relative h-5 w-9 shrink-0 rounded-full transition-colors cursor-pointer ${
+                      alumno.activo_en_rutas === false ? 'bg-line' : 'bg-emerald-500'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${
+                        alumno.activo_en_rutas === false ? 'left-0.5' : 'left-[18px]'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Representative details */}
+                <div className="mt-2 rounded-lg bg-soft-gray p-2 text-xs border border-line/80 space-y-1">
+                  <div className="flex justify-between text-muted">
+                    <span>Representante:</span>
+                    <b className="text-ink">{rep?.nombre || 'No asignado'}</b>
+                  </div>
+                  <div className="flex justify-between text-muted">
                     <span>Teléfono WhatsApp:</span>
-                    <b className="text-emerald-400">{rep?.telefono_whatsapp || '--'}</b>
+                    <b className="text-emerald-600">{rep?.telefono_whatsapp || '--'}</b>
                   </div>
                 </div>
               </div>
 
               {/* Magic Link & Parent Portal Action Buttons */}
-              <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2">
+              <div className="pt-2 border-t border-line/80 flex items-center justify-between gap-2">
                 <button
                   onClick={() => copyMagicLink(alumno.id, magicToken)}
-                  className="flex-1 flex items-center justify-center gap-1 rounded-lg bg-slate-800 py-1.5 px-2 text-[11px] font-semibold text-slate-300 hover:bg-slate-700 transition-all cursor-pointer"
+                  className="flex-1 flex items-center justify-center gap-1 rounded-lg bg-soft-gray py-1.5 px-2 text-[11px] font-semibold text-ink hover:bg-line transition-all cursor-pointer"
                   title="Copiar Magic Link sin contraseña"
                 >
-                  {isCopied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                  {isCopied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
                   <span>{isCopied ? '¡Enlace Copiado!' : 'Copiar Magic Link'}</span>
                 </button>
 
                 <button
                   onClick={() => onOpenParentPortal(alumno.id)}
-                  className="flex items-center gap-1 rounded-lg bg-amber-500/20 py-1.5 px-2.5 text-[11px] font-bold text-amber-300 hover:bg-amber-500/30 transition-all border border-amber-500/30 cursor-pointer"
+                  className="flex items-center gap-1 rounded-lg bg-primary/10 py-1.5 px-2.5 text-[11px] font-bold text-primary hover:bg-primary/30 transition-all border border-primary/25 cursor-pointer"
                   title="Abrir Vista del Representante"
                 >
                   <ExternalLink className="h-3 w-3" />
@@ -352,19 +391,19 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
 
       {/* Delete Confirmation Modal */}
       {confirmDeleteId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-2xl border border-rose-800/50 bg-slate-900 p-5 shadow-2xl space-y-4">
-            <div className="flex items-center gap-3 text-rose-400">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-soft-gray p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-rose-800/50 bg-surface p-5 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-alert">
               <AlertTriangle className="h-6 w-6 shrink-0" />
-              <h3 className="font-black text-slate-100 text-sm">¿Eliminar alumno?</h3>
+              <h3 className="font-black text-ink text-sm">¿Eliminar alumno?</h3>
             </div>
-            <p className="text-xs text-slate-300">
+            <p className="text-xs text-ink">
               Esta acción eliminará al alumno y su información de parada de la base de datos InstantDB.
             </p>
             <div className="flex justify-end gap-2 pt-2">
               <button
                 onClick={() => setConfirmDeleteId(null)}
-                className="rounded-xl bg-slate-800 px-3.5 py-1.5 text-xs font-bold text-slate-300 hover:bg-slate-700 cursor-pointer"
+                className="rounded-xl bg-soft-gray px-3.5 py-1.5 text-xs font-bold text-ink hover:bg-line cursor-pointer"
               >
                 Cancelar
               </button>
@@ -381,16 +420,16 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
 
       {/* Modal Form: Add / Edit Student */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-xl rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <h3 className="font-black text-slate-100 text-base flex items-center gap-2">
-                <Users className="h-5 w-5 text-amber-400" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-soft-gray p-4 backdrop-blur-sm">
+          <div className="w-full max-w-xl rounded-2xl border border-line bg-surface p-5 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-line pb-2">
+              <h3 className="font-black text-ink text-base flex items-center gap-2">
+                <Users className="h-5 w-5 text-primary" />
                 <span>{editingAlumnoId ? 'Editar Alumno & Representante' : 'Registrar Nuevo Alumno'}</span>
               </h3>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="rounded-lg p-1 text-slate-400 hover:text-slate-100 cursor-pointer"
+                className="rounded-lg p-1 text-muted hover:text-ink cursor-pointer"
               >
                 ✕
               </button>
@@ -399,31 +438,31 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
             <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-slate-300 block mb-1">Nombre del Alumno *</label>
+                  <label className="font-bold text-ink block mb-1">Nombre del Alumno *</label>
                   <input
                     type="text"
                     required
                     value={nombreAlumno}
                     onChange={(e) => setNombreAlumno(e.target.value)}
                     placeholder="Ej. Sofía Martínez"
-                    className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-slate-100 focus:border-amber-400 focus:outline-none"
+                    className="w-full rounded-lg bg-canvas border border-line p-2 text-ink focus:border-primary/40 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-slate-300 block mb-1">Grado / Sección</label>
+                  <label className="font-bold text-ink block mb-1">Grado / Sección</label>
                   <input
                     type="text"
                     value={grado}
                     onChange={(e) => setGrado(e.target.value)}
                     placeholder="Ej. 3er Grado A"
-                    className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-slate-100 focus:border-amber-400 focus:outline-none"
+                    className="w-full rounded-lg bg-canvas border border-line p-2 text-ink focus:border-primary/40 focus:outline-none"
                   />
                 </div>
               </div>
 
               {/* Service Modality Selector (Ida y Vuelta / Solo Ida / Solo Vuelta) */}
-              <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3 space-y-2">
-                <label className="font-bold text-amber-400 block">
+              <div className="rounded-xl border border-line bg-soft-gray p-3 space-y-2">
+                <label className="font-bold text-primary block">
                   Modalidad del Servicio de Transporte *
                 </label>
                 <div className="grid grid-cols-3 gap-2">
@@ -432,13 +471,13 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                     onClick={() => setModalidadServicio('ida_y_vuelta')}
                     className={`flex flex-col items-center justify-center p-2 rounded-lg border text-center transition-all cursor-pointer ${
                       modalidadServicio === 'ida_y_vuelta'
-                        ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300 ring-1 ring-emerald-500'
-                        : 'bg-slate-900 border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                        ? 'bg-emerald-50 border-emerald-500 text-emerald-600 ring-1 ring-emerald-500'
+                        : 'bg-surface border-line text-muted hover:bg-soft-gray hover:text-ink'
                     }`}
                   >
                     <span className="text-base mb-0.5">🔄</span>
                     <span className="font-bold text-[11px] leading-tight">Ida y Vuelta</span>
-                    <span className="text-[9px] text-slate-400 mt-0.5">Mañana y Tarde</span>
+                    <span className="text-[9px] text-muted mt-0.5">Mañana y Tarde</span>
                   </button>
 
                   <button
@@ -446,13 +485,13 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                     onClick={() => setModalidadServicio('solo_ida')}
                     className={`flex flex-col items-center justify-center p-2 rounded-lg border text-center transition-all cursor-pointer ${
                       modalidadServicio === 'solo_ida'
-                        ? 'bg-sky-950/80 border-sky-500 text-sky-300 ring-1 ring-sky-500'
-                        : 'bg-slate-900 border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                        ? 'bg-sky-950/80 border-sky-500 text-primary ring-1 ring-sky-500'
+                        : 'bg-surface border-line text-muted hover:bg-soft-gray hover:text-ink'
                     }`}
                   >
                     <span className="text-base mb-0.5">🌅</span>
                     <span className="font-bold text-[11px] leading-tight">Solo Ida</span>
-                    <span className="text-[9px] text-slate-400 mt-0.5">Solo Mañana</span>
+                    <span className="text-[9px] text-muted mt-0.5">Solo Mañana</span>
                   </button>
 
                   <button
@@ -460,16 +499,16 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                     onClick={() => setModalidadServicio('solo_vuelta')}
                     className={`flex flex-col items-center justify-center p-2 rounded-lg border text-center transition-all cursor-pointer ${
                       modalidadServicio === 'solo_vuelta'
-                        ? 'bg-purple-950/80 border-purple-500 text-purple-300 ring-1 ring-purple-500'
-                        : 'bg-slate-900 border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                        ? 'bg-purple-950/80 border-purple-500 text-purple-600 ring-1 ring-purple-500'
+                        : 'bg-surface border-line text-muted hover:bg-soft-gray hover:text-ink'
                     }`}
                   >
                     <span className="text-base mb-0.5">🌇</span>
                     <span className="font-bold text-[11px] leading-tight">Solo Vuelta</span>
-                    <span className="text-[9px] text-slate-400 mt-0.5">Solo Tarde</span>
+                    <span className="text-[9px] text-muted mt-0.5">Solo Tarde</span>
                   </button>
                 </div>
-                <p className="text-[10px] text-slate-400">
+                <p className="text-[10px] text-muted">
                   {modalidadServicio === 'ida_y_vuelta' && '• El alumno será incluido en el cálculo tanto de la ruta de ida (mañana) como en la de vuelta (tarde).'}
                   {modalidadServicio === 'solo_ida' && '• El alumno SOLO se incluirá al planificar la ruta de la mañana (recogida en casa hacia el colegio).'}
                   {modalidadServicio === 'solo_vuelta' && '• El alumno SOLO se incluirá al planificar la ruta de la tarde (salida del colegio hacia casa).'}
@@ -477,11 +516,11 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
               </div>
 
               <div>
-                <label className="font-bold text-slate-300 block mb-1">Colegio de Destino *</label>
+                <label className="font-bold text-ink block mb-1">Colegio de Destino *</label>
                 <select
                   value={colegioId}
                   onChange={(e) => setColegioId(e.target.value)}
-                  className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-slate-100 focus:border-amber-400 focus:outline-none"
+                  className="w-full rounded-lg bg-canvas border border-line p-2 text-ink focus:border-primary/40 focus:outline-none"
                 >
                   {colegios.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -492,20 +531,20 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
               </div>
 
               <div>
-                <label className="font-bold text-slate-300 block mb-1">Dirección de Recogida *</label>
+                <label className="font-bold text-ink block mb-1">Dirección de Recogida *</label>
                 <input
                   type="text"
                   required
                   value={direccion}
                   onChange={(e) => setDireccion(e.target.value)}
                   placeholder="Calle, Edificio, Apto, Punto de referencia..."
-                  className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-slate-100 focus:border-amber-400 focus:outline-none"
+                  className="w-full rounded-lg bg-canvas border border-line p-2 text-ink focus:border-primary/40 focus:outline-none"
                 />
               </div>
 
               {/* Interactive Location Picker Map for Student Pickup Spot */}
               <div className="space-y-1">
-                <label className="font-bold text-amber-400 flex items-center gap-1">
+                <label className="font-bold text-primary flex items-center gap-1">
                   <MapPin className="h-3.5 w-3.5" />
                   <span>Punto de Recogida en el Mapa (Haz clic o arrastra el pin)</span>
                 </label>
@@ -527,32 +566,32 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-slate-400 block mb-1">Latitud GPS</label>
+                  <label className="font-bold text-muted block mb-1">Latitud GPS</label>
                   <input
                     type="number"
                     step="0.000001"
                     required
                     value={lat}
                     onChange={(e) => setLat(parseFloat(e.target.value) || lat)}
-                    className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-slate-100 font-mono"
+                    className="w-full rounded-lg bg-canvas border border-line p-2 text-ink font-mono"
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-slate-400 block mb-1">Longitud GPS</label>
+                  <label className="font-bold text-muted block mb-1">Longitud GPS</label>
                   <input
                     type="number"
                     step="0.000001"
                     required
                     value={lng}
                     onChange={(e) => setLng(parseFloat(e.target.value) || lng)}
-                    className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-slate-100 font-mono"
+                    className="w-full rounded-lg bg-canvas border border-line p-2 text-ink font-mono"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-slate-300 block mb-1">Tiempo de Abordaje (min)</label>
+                  <label className="font-bold text-ink block mb-1">Tiempo de Abordaje (min)</label>
                   <input
                     type="number"
                     step="0.5"
@@ -560,72 +599,72 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                     max="10"
                     value={tiempoAbordaje}
                     onChange={(e) => setTiempoAbordaje(parseFloat(e.target.value) || 2.5)}
-                    className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-slate-100"
+                    className="w-full rounded-lg bg-canvas border border-line p-2 text-ink"
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-slate-300 block mb-1">Notas Médicas / Alergias</label>
+                  <label className="font-bold text-ink block mb-1">Notas Médicas / Alergias</label>
                   <input
                     type="text"
                     value={notas}
                     onChange={(e) => setNotas(e.target.value)}
                     placeholder="Ej. Alérgico a nueces, Asma..."
-                    className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-slate-100"
+                    className="w-full rounded-lg bg-canvas border border-line p-2 text-ink"
                   />
                 </div>
               </div>
 
               {/* Representative Information */}
-              <div className="border-t border-slate-800 pt-2 space-y-2">
-                <span className="font-bold text-amber-400 block">Datos del Representante (Para WhatsApp & Magic Link)</span>
+              <div className="border-t border-line pt-2 space-y-2">
+                <span className="font-bold text-primary block">Datos del Representante (Para WhatsApp & Magic Link)</span>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="font-bold text-slate-300 block mb-1">Nombre del Representante *</label>
+                    <label className="font-bold text-ink block mb-1">Nombre del Representante *</label>
                     <input
                       type="text"
                       required
                       value={nombreRep}
                       onChange={(e) => setNombreRep(e.target.value)}
                       placeholder="Ej. Carlos Martínez"
-                      className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-slate-100 focus:border-amber-400 focus:outline-none"
+                      className="w-full rounded-lg bg-canvas border border-line p-2 text-ink focus:border-primary/40 focus:outline-none"
                     />
                   </div>
                   <div>
-                    <label className="font-bold text-slate-300 block mb-1">Teléfono WhatsApp *</label>
+                    <label className="font-bold text-ink block mb-1">Teléfono WhatsApp *</label>
                     <input
                       type="text"
                       required
                       value={telefonoWhatsApp}
                       onChange={(e) => setTelefonoWhatsApp(e.target.value)}
                       placeholder="+584121234567"
-                      className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-slate-100 focus:border-amber-400 focus:outline-none"
+                      className="w-full rounded-lg bg-canvas border border-line p-2 text-ink focus:border-primary/40 focus:outline-none"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="font-bold text-slate-400 block mb-1">Correo Electrónico (Opcional)</label>
+                  <label className="font-bold text-muted block mb-1">Correo Electrónico (Opcional)</label>
                   <input
                     type="email"
                     value={emailRep}
                     onChange={(e) => setEmailRep(e.target.value)}
                     placeholder="representante@gmail.com"
-                    className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-slate-100"
+                    className="w-full rounded-lg bg-canvas border border-line p-2 text-ink"
                   />
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+              <div className="flex justify-end gap-2 pt-3 border-t border-line">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="rounded-xl bg-slate-800 px-4 py-2 font-bold text-slate-300 hover:bg-slate-700 cursor-pointer"
+                  className="rounded-xl bg-soft-gray px-4 py-2 font-bold text-ink hover:bg-line cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="rounded-xl bg-amber-500 px-5 py-2 font-black text-slate-950 hover:bg-amber-400 transition-all cursor-pointer shadow-md"
+                  className="rounded-xl bg-primary px-5 py-2 font-black text-ink hover:bg-primary transition-all cursor-pointer shadow-md"
                 >
                   Guardar Alumno
                 </button>

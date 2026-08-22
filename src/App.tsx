@@ -4,25 +4,12 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import {
-  Compass,
-  Users,
-  School,
-  Database,
-  Sparkles,
-  MapPin,
-  Menu,
-  X,
-  ExternalLink,
-  Zap,
-  Lock,
-  LogOut,
-  Truck
-} from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import {
   Alumno,
   Colegio,
   Conductor,
+  ParadaRuta,
   Representante,
   RutaDiaria
 } from './types';
@@ -34,7 +21,16 @@ import {
   INITIAL_SCHOOL
 } from './services/mockData';
 import { calculateOptimizedRoute } from './services/routeCalculator';
-import { DriverPanel } from './components/Driver/DriverPanel';
+import { DriverPanelSimple } from './components/Driver/DriverPanelSimple';
+import { RouteHistory } from './components/Admin/RouteHistory';
+import { RouteReviewView } from './components/Admin/RouteReviewView';
+import {
+  getRouteHistory,
+  saveRouteToHistory,
+  deleteRouteHistory,
+  getRouteHistoryById,
+  RouteHistoryEntry
+} from './services/routeHistory';
 import { ParentPortal } from './components/Parent/ParentPortal';
 import { RoutePlanner } from './components/Admin/RoutePlanner';
 import { StudentManager } from './components/Admin/StudentManager';
@@ -42,6 +38,9 @@ import { SchoolManager } from './components/Admin/SchoolManager';
 import { DriverManager } from './components/Admin/DriverManager';
 import { SqlSchemaViewer } from './components/Admin/SqlSchemaViewer';
 import { PWAInstallBanner } from './components/PWA/PWAInstallBanner';
+import { HomeDashboard } from './components/Home/HomeDashboard';
+import { AppSidebar, StaffView } from './components/Layout/AppSidebar';
+import { AppHeader } from './components/Layout/AppHeader';
 import {
   db,
   INSTANT_APP_ID,
@@ -52,6 +51,7 @@ import {
   deleteColegioInstant,
   upsertConductorInstant,
   deleteConductorInstant,
+  updateAlumnoActivoRutasInstant,
   saveRutaInstant,
   updateParadaEstadoInstant,
   ensureUUID
@@ -67,12 +67,14 @@ export type AuthSession =
 
 export default function App() {
   // Navigation State
-  const [currentView, setCurrentView] = useState<
-    'driver' | 'parent' | 'planner' | 'students' | 'schools' | 'drivers' | 'sql'
-  >('driver');
+  const [currentView, setCurrentView] = useState<StaffView>('home');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [currentDriverId, setCurrentDriverId] = useState<string>('d1000000-0000-4000-8000-000000000001');
+
+  // Route History State
+  const [routeHistory, setRouteHistory] = useState<RouteHistoryEntry[]>(() => getRouteHistory());
+  const [reviewEntry, setReviewEntry] = useState<RouteHistoryEntry | null>(null);
 
   // Authentication Session (Mandatory Login Gate)
   const [authSession, setAuthSession] = useState<AuthSession>(() => {
@@ -259,6 +261,7 @@ export default function App() {
           grado: alu.grado || '',
           notas_medicas: alu.notas_medicas || '',
           tiempo_abordaje_estimado_min: Number(alu.tiempo_abordaje_estimado_min || 2.5),
+          activo_en_rutas: alu.activo_en_rutas !== false,
           created_at: alu.created_at,
           colegio: colegiosMap.get(colId) || selectedColegio,
           representante: repsMap.get(repId)
@@ -476,6 +479,17 @@ export default function App() {
     const magic = urlParams.get('magic');
     const studentParam = urlParams.get('student');
     const viewParam = urlParams.get('view');
+    const routeIdParam = urlParams.get('routeId');
+
+    if (routeIdParam && viewParam === 'review') {
+      // Read-only review link: load the route from history
+      const entry = getRouteHistoryById(routeIdParam);
+      if (entry) {
+        setReviewEntry(entry);
+        setCurrentView('review');
+      }
+      return;
+    }
 
     if (magic || studentParam) {
       if (studentParam && alumnosMap.has(studentParam)) {
@@ -488,8 +502,11 @@ export default function App() {
         }
       }
       setCurrentView('parent');
-    } else if (viewParam === 'driver' || viewParam === 'planner' || viewParam === 'students') {
-      setCurrentView(viewParam as any);
+    } else if (viewParam) {
+      const allowed: StaffView[] = ['home', 'driver', 'planner', 'students', 'schools', 'drivers', 'sql', 'parent'];
+      if (allowed.includes(viewParam as StaffView)) {
+        setCurrentView(viewParam as StaffView);
+      }
     }
 
     // Auto calculate route when students are loaded and paradas are missing or mismatch
@@ -606,9 +623,79 @@ export default function App() {
     setActiveRuta(updatedRuta);
     try {
       await saveRutaInstant(updatedRuta);
+      // Persist to route history (full snapshot)
+      await saveRouteToHistory(updatedRuta);
+      setRouteHistory(getRouteHistory());
     } catch (e) {
       console.warn('InstantDB route save fallback:', e);
+      try {
+        await saveRouteToHistory(updatedRuta);
+        setRouteHistory(getRouteHistory());
+      } catch (e2) {
+        console.warn('Route history save fallback:', e2);
+      }
     }
+  };
+
+  // Toggle student active in routes
+  const handleToggleActivoRutas = async (alumnoId: string, activo: boolean) => {
+    try {
+      await updateAlumnoActivoRutasInstant(alumnoId, activo);
+    } catch (e) {
+      console.warn('InstantDB toggle activo fallback:', e);
+    }
+    // Also update localStorage for resilience
+    const updated = alumnos.map((a) => (a.id === alumnoId ? { ...a, activo_en_rutas: activo } : a));
+    localStorage.setItem('rutaescolar_alumnos', JSON.stringify(updated));
+  };
+
+  // Start today's route (en_curso)
+  const handleStartRoute = () => {
+    const updated: RutaDiaria = {
+      ...activeRuta,
+      estado: 'en_curso',
+      hora_salida_real: new Date().toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    };
+    handleSaveRoute(updated);
+  };
+
+  // Mark a stop as recogido / ausente / pendiente
+  const handleUpdateParada = (paradaId: string, estado: 'pendiente' | 'recogido' | 'ausente') => {
+    const updated: RutaDiaria = {
+      ...activeRuta,
+      paradas: activeRuta.paradas.map((p) =>
+        p.id === paradaId
+          ? {
+              ...p,
+              estado: estado as any,
+              hora_real: estado === 'pendiente' ? undefined : new Date().toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' }),
+            }
+          : p
+      ),
+    };
+    handleSaveRoute(updated);
+    updateParadaEstadoInstant(paradaId, estado as any).catch(() => {});
+  };
+
+  // Reuse a history route as today's route
+  const handleUseRouteToday = async (entry: RouteHistoryEntry) => {
+    const snapshot: RutaDiaria = {
+      ...entry.ruta,
+      id: ensureUUID(entry.ruta.id),
+      fecha: new Date().toISOString().substring(0, 10),
+      estado: 'planificada',
+      hora_salida_real: undefined,
+      hora_llegada_real: undefined,
+      paradas: (entry.ruta.paradas || []).map((p) => ({ ...p, estado: 'pendiente' as const, hora_real: undefined })),
+    };
+    await handleSaveRoute(snapshot);
+    setCurrentView('driver');
+  };
+
+  // Delete a route from history
+  const handleDeleteHistoryEntry = (entry: RouteHistoryEntry) => {
+    const remaining = deleteRouteHistory(entry.id);
+    setRouteHistory(remaining);
   };
 
   const activeParentStudent = selectedParentStudentId
@@ -622,7 +709,7 @@ export default function App() {
     localStorage.setItem('rutaescolar_staff_session', JSON.stringify(user));
     localStorage.setItem('rutaescolar_demo_user', JSON.stringify(user));
     localStorage.removeItem('rutaescolar_parent_student_id');
-    setCurrentView('driver');
+    setCurrentView('home');
   };
 
   const handleParentLogin = (studentId: string) => {
@@ -656,23 +743,23 @@ export default function App() {
   // PARENT VIEW: If logged in as parent, show parent top bar and ParentPortal exclusively
   if (authSession.type === 'parent') {
     return (
-      <div className="flex h-screen w-screen flex-col bg-slate-950 text-slate-100 antialiased overflow-hidden font-sans">
+      <div className="flex h-screen w-screen flex-col bg-canvas text-ink antialiased overflow-hidden font-sans">
         <PWAInstallBanner />
 
         {/* Parent Portal Header */}
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-slate-800 bg-slate-900 px-3 sm:px-5 z-30">
+        <header className="flex h-14 shrink-0 items-center justify-between border-b border-line bg-surface px-3 sm:px-5 z-30">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-amber-500 to-amber-400 text-slate-950 font-black text-lg shadow-md shadow-amber-500/20">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-white font-black text-lg shadow-soft">
               🚌
             </div>
             <div>
-              <h1 className="text-sm sm:text-base font-black tracking-tight text-slate-100 flex items-center gap-1.5">
+              <h1 className="text-sm sm:text-base font-black tracking-tight text-ink flex items-center gap-1.5">
                 <span>RutaEscolar</span>
-                <span className="rounded bg-amber-500/20 px-1.5 py-0.2 text-[10px] font-black text-amber-400 border border-amber-500/30">
+                <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-black text-primary border border-primary/25">
                   Portal Representante
                 </span>
               </h1>
-              <p className="text-[10px] text-slate-400 hidden sm:block">
+              <p className="text-[10px] text-muted hidden sm:block">
                 Seguimiento en Vivo y Estado de Parada
               </p>
             </div>
@@ -680,17 +767,17 @@ export default function App() {
 
           <div className="flex items-center gap-2.5">
             {activeParentStudent && (
-              <div className="hidden sm:flex items-center gap-1.5 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 text-xs font-mono text-amber-400">
-                <span className="text-slate-400">Alumno:</span>
+              <div className="hidden sm:flex items-center gap-1.5 bg-soft-gray px-2.5 py-1 rounded-lg border border-line text-xs font-mono text-primary">
+                <span className="text-muted">Alumno:</span>
                 <span className="font-bold">{activeParentStudent.nombre.split(' ')[0]}</span>
-                <span className="text-slate-500">({activeParentStudent.id})</span>
+                <span className="text-muted">({activeParentStudent.id})</span>
               </div>
             )}
 
             <button
               id="btn-parent-logout"
               onClick={handleSignOut}
-              className="flex items-center gap-1.5 rounded-xl bg-rose-500/10 border border-rose-500/30 px-3 py-1.5 text-xs font-bold text-rose-400 hover:bg-rose-500/20 active:scale-95 transition-all cursor-pointer"
+              className="flex items-center gap-1.5 rounded-xl bg-rose-50 border border-rose-200 px-3 py-1.5 text-xs font-bold text-alert hover:bg-rose-100 active:scale-95 transition-all cursor-pointer"
             >
               <LogOut className="h-3.5 w-3.5" />
               <span>Cerrar Sesión / Salir</span>
@@ -714,334 +801,137 @@ export default function App() {
     );
   }
 
-  // STAFF VIEW: Admin / Driver Cockpit with Full Management Menu
+  // STAFF VIEW: Sidebar + Header + Main Content
   return (
-    <div className="flex h-screen w-screen flex-col bg-slate-950 text-slate-100 antialiased overflow-hidden font-sans">
-      {/* PWA Install Notification */}
-      <PWAInstallBanner />
+    <div className="flex h-screen w-screen bg-canvas text-ink font-sans overflow-hidden">
+      <AppSidebar currentView={currentView} onNavigate={setCurrentView} />
 
-      {/* Main Top Navigation Header */}
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-slate-800 bg-slate-900 px-3 sm:px-5 z-30">
-        <div className="flex items-center gap-3">
-          {/* Brand Bus Logo */}
-          <div
-            onClick={() => setCurrentView('driver')}
-            className="flex items-center gap-2.5 cursor-pointer group"
-          >
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-amber-500 to-amber-400 text-slate-950 font-black text-lg shadow-md shadow-amber-500/20 group-hover:scale-105 transition-transform">
-              🚌
-            </div>
-            <div>
-              <h1 className="text-sm sm:text-base font-black tracking-tight text-slate-100 flex items-center gap-1.5">
-                <span>RutaEscolar</span>
-                <span className="rounded bg-amber-500/20 px-1.5 py-0.2 text-[10px] font-black text-amber-400 border border-amber-500/30">
-                  PWA
-                </span>
-              </h1>
-              <p className="text-[10px] text-slate-400 hidden sm:block">
-                InstantDB Real-Time & Algoritmo de Salida
-              </p>
-            </div>
-          </div>
-        </div>
+      <div className="flex flex-1 flex-col min-w-0">
+        <PWAInstallBanner />
 
-        {/* Desktop View Switcher & InstantDB Badge */}
-        <div className="flex items-center gap-2">
-          <nav className="hidden lg:flex items-center gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800 text-xs font-bold">
-            <button
-              id="nav-driver"
-              onClick={() => setCurrentView('driver')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                currentView === 'driver'
-                  ? 'bg-amber-500 text-slate-950 shadow-md'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Compass className="h-3.5 w-3.5" />
-              <span>Cabina Conductor</span>
-            </button>
+        <AppHeader
+          currentView={currentView}
+          demoUser={demoUser}
+          onOpenAuthModal={() => setAuthModalOpen(true)}
+          onSignOut={handleSignOut}
+          onNavigate={setCurrentView}
+          onToggleMobileMenu={() => setMobileMenuOpen(!mobileMenuOpen)}
+          mobileMenuOpen={mobileMenuOpen}
+        />
 
-            <button
-              id="nav-parent"
-              onClick={() => setCurrentView('parent')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                currentView === 'parent'
-                  ? 'bg-amber-500 text-slate-950 shadow-md'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Users className="h-3.5 w-3.5" />
-              <span>Portal Representante</span>
-            </button>
+        {/* Main Viewport Container */}
+        <main className="flex-1 overflow-hidden relative">
+          {currentView === 'home' && (
+            <HomeDashboard
+              ruta={activeRuta}
+              colegio={selectedColegio}
+              alumnos={alumnos}
+              conductores={conductores}
+              onNavigate={setCurrentView}
+            />
+          )}
 
-            <button
-              id="nav-planner"
-              onClick={() => setCurrentView('planner')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                currentView === 'planner'
-                  ? 'bg-amber-500 text-slate-950 shadow-md'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              <span>Planificador & Salida</span>
-            </button>
+          {currentView === 'driver' && (
+            <DriverPanelSimple
+              ruta={activeRuta}
+              colegio={selectedColegio}
+              alumnosMap={alumnosMap}
+              conductores={conductores}
+              currentDriverId={currentDriverId}
+              history={routeHistory}
+              onSelectDriver={handleSelectDriverForCockpit}
+              onUpdateRuta={handleSaveRoute}
+              onUpdateParada={handleUpdateParada}
+              onStartRoute={handleStartRoute}
+            />
+          )}
 
-            <button
-              id="nav-students"
-              onClick={() => setCurrentView('students')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                currentView === 'students'
-                  ? 'bg-amber-500 text-slate-950 shadow-md'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Users className="h-3.5 w-3.5" />
-              <span>Alumnos ({alumnos.length})</span>
-            </button>
+          {currentView === 'history' && (
+            <RouteHistory
+              history={routeHistory}
+              onReview={(entry) => {
+                setReviewEntry(entry);
+                setCurrentView('review');
+              }}
+              onUseToday={handleUseRouteToday}
+              onDelete={handleDeleteHistoryEntry}
+              onBack={() => setCurrentView('home')}
+            />
+          )}
 
-            <button
-              id="nav-schools"
-              onClick={() => setCurrentView('schools')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                currentView === 'schools'
-                  ? 'bg-amber-500 text-slate-950 shadow-md'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <School className="h-3.5 w-3.5" />
-              <span>Colegios</span>
-            </button>
+          {currentView === 'review' && reviewEntry && (
+            <RouteReviewView
+              entry={reviewEntry}
+              alumnosMap={alumnosMap}
+              onBack={() => setCurrentView('history')}
+            />
+          )}
 
-            <button
-              id="nav-drivers"
-              onClick={() => setCurrentView('drivers')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                currentView === 'drivers'
-                  ? 'bg-amber-500 text-slate-950 shadow-md'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Truck className="h-3.5 w-3.5" />
-              <span>Conductores ({conductores.length})</span>
-            </button>
+          {currentView === 'parent' && (
+            <ParentPortal
+              alumno={activeParentStudent}
+              colegio={selectedColegio}
+              ruta={activeRuta}
+              alumnosMap={alumnosMap}
+              allStudents={alumnos}
+              onSelectAnotherStudent={setSelectedParentStudentId}
+              onSignOut={handleSignOut}
+            />
+          )}
 
-            <button
-              id="nav-sql"
-              onClick={() => setCurrentView('sql')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                currentView === 'sql'
-                  ? 'bg-amber-500 text-slate-950 shadow-md'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Database className="h-3.5 w-3.5" />
-              <span>Esquema SQL & DB</span>
-            </button>
-          </nav>
+          {currentView === 'planner' && (
+            <RoutePlanner
+              colegios={colegios}
+              selectedColegio={selectedColegio}
+              onSelectColegio={(c) => setSelectedColegioId(c.id)}
+              origen={origen}
+              onUpdateOrigen={handleUpdateOrigen}
+              allAlumnos={alumnos}
+              alumnosMap={alumnosMap}
+              conductores={conductores}
+              activeRuta={activeRuta}
+              onSaveRoute={handleSaveRoute}
+              onSwitchToDriver={() => setCurrentView('driver')}
+            />
+          )}
 
-          {/* InstantDB Status & Auth Badge */}
-          <InstantSyncBadge
-            onOpenAuthModal={() => setAuthModalOpen(true)}
-            demoUser={demoUser}
-          />
+          {currentView === 'students' && (
+            <StudentManager
+              alumnos={alumnos}
+              representantes={representantes}
+              colegios={colegios}
+              onSaveAlumno={handleSaveSingleAlumno}
+              onDeleteAlumno={handleDeleteAlumno}
+              onToggleActivoRutas={handleToggleActivoRutas}
+              onOpenParentPortal={(id) => {
+                setSelectedParentStudentId(id);
+                setCurrentView('parent');
+              }}
+            />
+          )}
 
-          {/* Sign Out Button */}
-          <button
-            id="btn-staff-logout"
-            onClick={handleSignOut}
-            title="Cerrar Sesión"
-            className="flex items-center gap-1.5 rounded-lg bg-slate-800/80 px-2.5 py-1.5 text-xs font-semibold text-rose-400 border border-slate-700 hover:bg-slate-700 transition-all cursor-pointer"
-          >
-            <LogOut className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Cerrar Sesión</span>
-          </button>
+          {currentView === 'schools' && (
+            <SchoolManager
+              colegios={colegios}
+              alumnos={alumnos}
+              onSaveColegio={handleSaveColegio}
+              onDeleteColegio={handleDeleteColegio}
+            />
+          )}
 
-          {/* Mobile Menu Hamburger */}
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="lg:hidden rounded-lg bg-slate-800 p-2 text-slate-200 hover:bg-slate-700"
-          >
-            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </button>
-        </div>
-      </header>
+          {currentView === 'drivers' && (
+            <DriverManager
+              conductores={conductores}
+              activeRuta={activeRuta}
+              onSaveConductor={handleSaveConductor}
+              onDeleteConductor={handleDeleteConductor}
+              onSelectDriverForCockpit={handleSelectDriverForCockpit}
+            />
+          )}
 
-      {/* Mobile Drawer Menu */}
-      {mobileMenuOpen && (
-        <div className="lg:hidden z-40 bg-slate-900 border-b border-slate-800 p-3 grid grid-cols-2 gap-2 text-xs font-bold shadow-2xl">
-          <button
-            onClick={() => {
-              setCurrentView('driver');
-              setMobileMenuOpen(false);
-            }}
-            className={`p-2.5 rounded-lg flex items-center gap-2 ${
-              currentView === 'driver' ? 'bg-amber-500 text-slate-950 font-black' : 'bg-slate-800 text-slate-200'
-            }`}
-          >
-            <Compass className="h-4 w-4" />
-            <span>Cabina Conductor</span>
-          </button>
-
-          <button
-            onClick={() => {
-              setCurrentView('parent');
-              setMobileMenuOpen(false);
-            }}
-            className={`p-2.5 rounded-lg flex items-center gap-2 ${
-              currentView === 'parent' ? 'bg-amber-500 text-slate-950 font-black' : 'bg-slate-800 text-slate-200'
-            }`}
-          >
-            <Users className="h-4 w-4" />
-            <span>Portal Representante</span>
-          </button>
-
-          <button
-            onClick={() => {
-              setCurrentView('planner');
-              setMobileMenuOpen(false);
-            }}
-            className={`p-2.5 rounded-lg flex items-center gap-2 ${
-              currentView === 'planner' ? 'bg-amber-500 text-slate-950 font-black' : 'bg-slate-800 text-slate-200'
-            }`}
-          >
-            <Sparkles className="h-4 w-4" />
-            <span>Planificador Salida</span>
-          </button>
-
-          <button
-            onClick={() => {
-              setCurrentView('students');
-              setMobileMenuOpen(false);
-            }}
-            className={`p-2.5 rounded-lg flex items-center gap-2 ${
-              currentView === 'students' ? 'bg-amber-500 text-slate-950 font-black' : 'bg-slate-800 text-slate-200'
-            }`}
-          >
-            <Users className="h-4 w-4" />
-            <span>Alumnos ({alumnos.length})</span>
-          </button>
-
-          <button
-            onClick={() => {
-              setCurrentView('schools');
-              setMobileMenuOpen(false);
-            }}
-            className={`p-2.5 rounded-lg flex items-center gap-2 ${
-              currentView === 'schools' ? 'bg-amber-500 text-slate-950 font-black' : 'bg-slate-800 text-slate-200'
-            }`}
-          >
-            <School className="h-4 w-4" />
-            <span>Colegios</span>
-          </button>
-
-          <button
-            onClick={() => {
-              setCurrentView('drivers');
-              setMobileMenuOpen(false);
-            }}
-            className={`p-2.5 rounded-lg flex items-center gap-2 ${
-              currentView === 'drivers' ? 'bg-amber-500 text-slate-950 font-black' : 'bg-slate-800 text-slate-200'
-            }`}
-          >
-            <Truck className="h-4 w-4" />
-            <span>Conductores ({conductores.length})</span>
-          </button>
-
-          <button
-            onClick={() => {
-              setCurrentView('sql');
-              setMobileMenuOpen(false);
-            }}
-            className={`p-2.5 rounded-lg flex items-center gap-2 ${
-              currentView === 'sql' ? 'bg-amber-500 text-slate-950 font-black' : 'bg-slate-800 text-slate-200'
-            }`}
-          >
-            <Database className="h-4 w-4" />
-            <span>Esquema SQL & DB</span>
-          </button>
-        </div>
-      )}
-
-      {/* Main Viewport Container */}
-      <main className="flex-1 overflow-hidden relative">
-        {currentView === 'driver' && (
-          <DriverPanel
-            ruta={activeRuta}
-            colegio={selectedColegio}
-            alumnosMap={alumnosMap}
-            conductores={conductores}
-            currentDriverId={currentDriverId}
-            allAlumnos={schoolAlumnos}
-            onSyncAllStudents={() => handleSyncAllStudentsToRoute(schoolAlumnos)}
-            onSelectDriver={handleSelectDriverForCockpit}
-            onUpdateRuta={handleSaveRoute}
-          />
-        )}
-
-        {currentView === 'parent' && (
-          <ParentPortal
-            alumno={activeParentStudent}
-            colegio={selectedColegio}
-            ruta={activeRuta}
-            alumnosMap={alumnosMap}
-            allStudents={alumnos}
-            onSelectAnotherStudent={setSelectedParentStudentId}
-            onSignOut={handleSignOut}
-          />
-        )}
-
-        {currentView === 'planner' && (
-          <RoutePlanner
-            colegios={colegios}
-            selectedColegio={selectedColegio}
-            onSelectColegio={(c) => setSelectedColegioId(c.id)}
-            origen={origen}
-            onUpdateOrigen={handleUpdateOrigen}
-            allAlumnos={alumnos}
-            alumnosMap={alumnosMap}
-            conductores={conductores}
-            activeRuta={activeRuta}
-            onSaveRoute={handleSaveRoute}
-            onSwitchToDriver={() => setCurrentView('driver')}
-          />
-        )}
-
-        {currentView === 'students' && (
-          <StudentManager
-            alumnos={alumnos}
-            representantes={representantes}
-            colegios={colegios}
-            onSaveAlumno={handleSaveSingleAlumno}
-            onDeleteAlumno={handleDeleteAlumno}
-            onOpenParentPortal={(id) => {
-              setSelectedParentStudentId(id);
-              setCurrentView('parent');
-            }}
-          />
-        )}
-
-        {currentView === 'schools' && (
-          <SchoolManager
-            colegios={colegios}
-            alumnos={alumnos}
-            onSaveColegio={handleSaveColegio}
-            onDeleteColegio={handleDeleteColegio}
-          />
-        )}
-
-        {currentView === 'drivers' && (
-          <DriverManager
-            conductores={conductores}
-            activeRuta={activeRuta}
-            onSaveConductor={handleSaveConductor}
-            onDeleteConductor={handleDeleteConductor}
-            onSelectDriverForCockpit={handleSelectDriverForCockpit}
-          />
-        )}
-
-        {currentView === 'sql' && <SqlSchemaViewer />}
-      </main>
+          {currentView === 'sql' && <SqlSchemaViewer />}
+        </main>
+      </div>
 
       {/* InstantDB Auth & Sync Modal */}
       <InstantAuthModal

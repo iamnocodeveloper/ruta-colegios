@@ -35,9 +35,11 @@ export function calculateHaversineDistance(
 
 /**
  * Filter students eligible for the given journey type (ida vs vuelta)
+ * Excludes students marked as inactive for routes (activo_en_rutas === false)
  */
 export function filterStudentsForJourney(students: Alumno[], tipoTrayecto: TipoTrayecto = 'ida'): Alumno[] {
   return students.filter((s) => {
+    if (s.activo_en_rutas === false) return false;
     const mod = s.modalidad_servicio || 'ida_y_vuelta';
     if (tipoTrayecto === 'ida') {
       return mod === 'ida_y_vuelta' || mod === 'solo_ida';

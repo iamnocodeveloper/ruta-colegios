@@ -52,6 +52,7 @@ export interface Alumno {
   notas_medicas?: string;
   tiempo_abordaje_estimado_min?: number; // default 2.5 min
   modalidad_servicio?: ModalidadTransporte; // 'ida_y_vuelta' | 'solo_ida' | 'solo_vuelta'
+  activo_en_rutas?: boolean; // false = excluido de las rutas (no se le asigna parada)
   created_at?: string;
   // Joined fields for UI convenience
   colegio?: Colegio;

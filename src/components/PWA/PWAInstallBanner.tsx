@@ -51,7 +51,7 @@ export const PWAInstallBanner: React.FC = () => {
   if (!deferredPrompt || isDismissed) return null;
 
   return (
-    <div className="bg-gradient-to-r from-amber-600 to-amber-500 px-4 py-2 text-slate-950 flex items-center justify-between shadow-lg text-xs font-bold">
+    <div className="bg-gradient-to-r from-primary to-blue-600 px-4 py-2 text-white flex items-center justify-between shadow-lg text-xs font-bold">
       <div className="flex items-center gap-2">
         <span className="text-base">📲</span>
         <span>¡Instala RutaEscolar PWA en tu pantalla de inicio para acceso rápido sin conexión!</span>
@@ -59,7 +59,7 @@ export const PWAInstallBanner: React.FC = () => {
       <div className="flex items-center gap-2">
         <button
           onClick={handleInstallClick}
-          className="rounded-lg bg-slate-950 px-3 py-1 text-xs text-amber-400 hover:bg-slate-900 transition-all cursor-pointer shadow"
+          className="rounded-lg bg-canvas px-3 py-1 text-xs text-primary hover:bg-surface transition-all cursor-pointer shadow"
         >
           Instalar App
         </button>

@@ -57,6 +57,7 @@ const _schema = i.schema({
       notas_medicas: i.string().optional(),
       tiempo_abordaje_estimado_min: i.number().optional(),
       modalidad_servicio: i.string().optional(),
+      activo_en_rutas: i.boolean().optional(),
       created_at: i.string().optional(),
     }),
     conductores: i.entity({
@@ -208,6 +209,7 @@ export async function seedInstantDatabase(force: boolean = false) {
           notas_medicas: alu.notas_medicas || '',
           tiempo_abordaje_estimado_min: alu.tiempo_abordaje_estimado_min || 2.5,
           modalidad_servicio: alu.modalidad_servicio || 'ida_y_vuelta',
+          activo_en_rutas: alu.activo_en_rutas !== false,
           created_at: new Date().toISOString(),
         })
       );
@@ -373,6 +375,7 @@ export async function upsertAlumnoInstant(alumno: Alumno, rep?: Representante) {
       notas_medicas: alumno.notas_medicas || '',
       tiempo_abordaje_estimado_min: Number(alumno.tiempo_abordaje_estimado_min || 2.5),
       modalidad_servicio: alumno.modalidad_servicio || 'ida_y_vuelta',
+      activo_en_rutas: alumno.activo_en_rutas !== false,
       created_at: alumno.created_at || new Date().toISOString(),
     })
   );
@@ -387,6 +390,18 @@ export async function upsertAlumnoInstant(alumno: Alumno, rep?: Representante) {
 export async function deleteAlumnoInstant(alumnoId: string) {
   const safeId = ensureUUID(alumnoId);
   await db.transact([tx.alumnos[safeId].delete()]);
+}
+
+/**
+ * Toggle a student's availability for routes (activo_en_rutas)
+ */
+export async function updateAlumnoActivoRutasInstant(alumnoId: string, activo: boolean) {
+  const safeId = ensureUUID(alumnoId);
+  await db.transact([
+    tx.alumnos[safeId].update({
+      activo_en_rutas: activo,
+    }),
+  ]);
 }
 
 /**

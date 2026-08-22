@@ -22,7 +22,7 @@ export const InstantSyncBadge: React.FC<InstantSyncBadgeProps> = ({
     <button
       id="btn-instantdb-auth"
       onClick={onOpenAuthModal}
-      className="flex items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-950/80 px-2.5 py-1.5 text-xs text-slate-200 hover:border-amber-500/50 hover:bg-slate-900 transition-all cursor-pointer shadow-sm group"
+      className="flex items-center gap-1.5 rounded-xl border border-line bg-soft-gray px-2.5 py-1.5 text-xs text-ink hover:border-primary/40 hover:bg-surface transition-all cursor-pointer shadow-sm group"
       title="InstantDB Real-time Sync & Autenticación de Usuarios"
     >
       <div className="flex items-center gap-1">
@@ -30,18 +30,18 @@ export const InstantSyncBadge: React.FC<InstantSyncBadgeProps> = ({
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
           <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
         </span>
-        <Zap className="h-3.5 w-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
+        <Zap className="h-3.5 w-3.5 text-primary group-hover:scale-110 transition-transform" />
       </div>
 
       <div className="flex items-center gap-1">
-        <span className="font-bold text-[11px] text-slate-300">InstantDB</span>
+        <span className="font-bold text-[11px] text-ink">InstantDB</span>
         {activeUser ? (
-          <span className="rounded bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 text-[10px] font-bold border border-emerald-500/30 flex items-center gap-0.5 max-w-[120px] truncate">
-            <ShieldCheck className="h-2.5 w-2.5 text-emerald-400 shrink-0" />
+          <span className="rounded bg-emerald-50 text-emerald-600 px-1.5 py-0.2 text-[10px] font-bold border border-emerald-200 flex items-center gap-0.5 max-w-[120px] truncate">
+            <ShieldCheck className="h-2.5 w-2.5 text-emerald-600 shrink-0" />
             <span className="truncate">{activeUser.email?.split('@')[0]}</span>
           </span>
         ) : (
-          <span className="rounded bg-amber-500/10 text-amber-400 px-1.5 py-0.2 text-[10px] font-bold border border-amber-500/30">
+          <span className="rounded bg-primary/10 text-primary px-1.5 py-0.2 text-[10px] font-bold border border-primary/25">
             Conectado
           </span>
         )}

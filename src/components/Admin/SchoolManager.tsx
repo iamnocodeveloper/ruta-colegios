@@ -90,15 +90,15 @@ export const SchoolManager: React.FC<SchoolManagerProps> = ({
   };
 
   return (
-    <div className="flex h-full flex-col bg-slate-950 text-slate-100 p-4 space-y-4 overflow-y-auto">
+    <div className="flex h-full flex-col bg-canvas text-ink p-4 space-y-4 overflow-y-auto">
       {/* Top Action Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
         <div>
-          <h2 className="text-base sm:text-lg font-black text-slate-100 flex items-center gap-2">
-            <School className="h-5 w-5 text-amber-400" />
+          <h2 className="text-base sm:text-lg font-black text-ink flex items-center gap-2">
+            <School className="h-5 w-5 text-primary" />
             <span>Colegios e Instituciones de Destino</span>
           </h2>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-muted">
             Administración de sedes, coordenadas de destino y hora límite de llegada (H_llegada)
           </p>
         </div>
@@ -106,7 +106,7 @@ export const SchoolManager: React.FC<SchoolManagerProps> = ({
         <button
           id="btn-add-school"
           onClick={handleOpenAdd}
-          className="flex items-center gap-1.5 rounded-xl bg-amber-500 px-4 py-2 text-xs font-black text-slate-950 hover:bg-amber-400 transition-all shadow-md cursor-pointer"
+          className="flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-black text-ink hover:bg-primary transition-all shadow-md cursor-pointer"
         >
           <Plus className="h-4 w-4" />
           <span>Agregar Nuevo Colegio</span>
@@ -121,13 +121,13 @@ export const SchoolManager: React.FC<SchoolManagerProps> = ({
           return (
             <div
               key={col.id}
-              className="rounded-xl border border-slate-800 bg-slate-900/80 p-4 space-y-3 shadow-md hover:border-slate-700 transition-all flex flex-col justify-between"
+              className="rounded-xl border border-line bg-surface p-4 space-y-3 shadow-md hover:border-line transition-all flex flex-col justify-between"
             >
               <div>
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <h3 className="font-bold text-sm text-slate-100">{col.nombre}</h3>
-                    <div className="mt-1 flex items-center gap-1 text-[11px] text-amber-400 font-semibold">
+                    <h3 className="font-bold text-sm text-ink">{col.nombre}</h3>
+                    <div className="mt-1 flex items-center gap-1 text-[11px] text-primary font-semibold">
                       <Users className="h-3 w-3" />
                       <span>{assignedStudentsCount} alumno(s) asignado(s)</span>
                     </div>
@@ -137,14 +137,14 @@ export const SchoolManager: React.FC<SchoolManagerProps> = ({
                     <button
                       onClick={() => handleOpenEdit(col)}
                       title="Editar Colegio"
-                      className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-all"
+                      className="p-1.5 rounded-lg bg-soft-gray text-ink hover:text-white hover:bg-line transition-all"
                     >
                       <Edit2 className="h-3.5 w-3.5" />
                     </button>
                     <button
                       onClick={() => setConfirmDeleteId(col.id)}
                       title="Eliminar Colegio"
-                      className="p-1.5 rounded-lg bg-slate-800 text-rose-400 hover:bg-rose-950/50 transition-all"
+                      className="p-1.5 rounded-lg bg-soft-gray text-alert hover:bg-rose-50 transition-all"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -152,26 +152,26 @@ export const SchoolManager: React.FC<SchoolManagerProps> = ({
                 </div>
 
                 {/* Address */}
-                <div className="mt-2.5 text-xs text-slate-300 flex items-start gap-1.5">
-                  <MapPin className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
+                <div className="mt-2.5 text-xs text-ink flex items-start gap-1.5">
+                  <MapPin className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
                   <span className="leading-tight">{col.direccion}</span>
                 </div>
 
                 {/* GPS Coordinates */}
-                <div className="mt-2 rounded-lg bg-slate-950/70 p-2 text-[11px] font-mono text-slate-400 border border-slate-800/80 flex justify-between">
+                <div className="mt-2 rounded-lg bg-soft-gray p-2 text-[11px] font-mono text-muted border border-line/80 flex justify-between">
                   <span>GPS:</span>
-                  <span className="text-slate-300">{Number(col.lat).toFixed(4)}, {Number(col.lng).toFixed(4)}</span>
+                  <span className="text-ink">{Number(col.lat).toFixed(4)}, {Number(col.lng).toFixed(4)}</span>
                 </div>
               </div>
 
               {/* Bottom Specs */}
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-800/80 pt-2.5 text-xs">
-                <div className="flex items-center gap-1.5 text-amber-400 font-bold">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line/80 pt-2.5 text-xs">
+                <div className="flex items-center gap-1.5 text-primary font-bold">
                   <Clock className="h-3.5 w-3.5" />
                   <span>Entrada: {col.hora_llegada_limite}</span>
                 </div>
                 {col.contacto_telefono && (
-                  <div className="flex items-center gap-1.5 text-slate-400">
+                  <div className="flex items-center gap-1.5 text-muted">
                     <Phone className="h-3 w-3" />
                     <span>{col.contacto_telefono}</span>
                   </div>
@@ -184,19 +184,19 @@ export const SchoolManager: React.FC<SchoolManagerProps> = ({
 
       {/* Delete Confirmation Modal */}
       {confirmDeleteId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-2xl border border-rose-800/50 bg-slate-900 p-5 shadow-2xl space-y-4">
-            <div className="flex items-center gap-3 text-rose-400">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-soft-gray p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-rose-800/50 bg-surface p-5 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-alert">
               <AlertTriangle className="h-6 w-6 shrink-0" />
-              <h3 className="font-black text-slate-100 text-sm">¿Eliminar este colegio?</h3>
+              <h3 className="font-black text-ink text-sm">¿Eliminar este colegio?</h3>
             </div>
-            <p className="text-xs text-slate-300">
+            <p className="text-xs text-ink">
               Esta acción eliminará el colegio de la base de datos InstantDB. Los alumnos asociados deberán ser reasignados.
             </p>
             <div className="flex justify-end gap-2 pt-2">
               <button
                 onClick={() => setConfirmDeleteId(null)}
-                className="rounded-xl bg-slate-800 px-3.5 py-1.5 text-xs font-bold text-slate-300 hover:bg-slate-700"
+                className="rounded-xl bg-soft-gray px-3.5 py-1.5 text-xs font-bold text-ink hover:bg-line"
               >
                 Cancelar
               </button>
@@ -213,16 +213,16 @@ export const SchoolManager: React.FC<SchoolManagerProps> = ({
 
       {/* Add / Edit Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-xl rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <h3 className="font-black text-slate-100 text-base flex items-center gap-2">
-                <School className="h-5 w-5 text-amber-400" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-soft-gray p-4 backdrop-blur-sm">
+          <div className="w-full max-w-xl rounded-2xl border border-line bg-surface p-5 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-line pb-2">
+              <h3 className="font-black text-ink text-base flex items-center gap-2">
+                <School className="h-5 w-5 text-primary" />
                 <span>{editingId ? 'Editar Colegio' : 'Registrar Nuevo Colegio'}</span>
               </h3>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="rounded-lg p-1 text-slate-400 hover:text-slate-100 cursor-pointer"
+                className="rounded-lg p-1 text-muted hover:text-ink cursor-pointer"
               >
                 ✕
               </button>
@@ -230,32 +230,32 @@ export const SchoolManager: React.FC<SchoolManagerProps> = ({
 
             <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
               <div>
-                <label className="font-bold text-slate-300 block mb-1">Nombre de la Institución *</label>
+                <label className="font-bold text-ink block mb-1">Nombre de la Institución *</label>
                 <input
                   type="text"
                   required
                   value={nombre}
                   onChange={(e) => setNombre(e.target.value)}
                   placeholder="Ej. Colegio Santiago de León de Caracas"
-                  className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-slate-100 focus:border-amber-400 focus:outline-none"
+                  className="w-full rounded-lg bg-canvas border border-line p-2 text-ink focus:border-primary/40 focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="font-bold text-slate-300 block mb-1">Dirección Escrita *</label>
+                <label className="font-bold text-ink block mb-1">Dirección Escrita *</label>
                 <input
                   type="text"
                   required
                   value={direccion}
                   onChange={(e) => setDireccion(e.target.value)}
                   placeholder="Calle, Urbanización, Punto de Referencia..."
-                  className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-slate-100 focus:border-amber-400 focus:outline-none"
+                  className="w-full rounded-lg bg-canvas border border-line p-2 text-ink focus:border-primary/40 focus:outline-none"
                 />
               </div>
 
               {/* Interactive Location Picker Map */}
               <div className="space-y-1">
-                <label className="font-bold text-amber-400 flex items-center gap-1">
+                <label className="font-bold text-primary flex items-center gap-1">
                   <MapPin className="h-3.5 w-3.5" />
                   <span>Ubicación en el Mapa (Haz clic o arrastra el pin)</span>
                 </label>
@@ -277,64 +277,64 @@ export const SchoolManager: React.FC<SchoolManagerProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-slate-400 block mb-1">Latitud GPS</label>
+                  <label className="font-bold text-muted block mb-1">Latitud GPS</label>
                   <input
                     type="number"
                     step="0.000001"
                     required
                     value={lat}
                     onChange={(e) => setLat(parseFloat(e.target.value) || lat)}
-                    className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-slate-100 font-mono"
+                    className="w-full rounded-lg bg-canvas border border-line p-2 text-ink font-mono"
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-slate-400 block mb-1">Longitud GPS</label>
+                  <label className="font-bold text-muted block mb-1">Longitud GPS</label>
                   <input
                     type="number"
                     step="0.000001"
                     required
                     value={lng}
                     onChange={(e) => setLng(parseFloat(e.target.value) || lng)}
-                    className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-slate-100 font-mono"
+                    className="w-full rounded-lg bg-canvas border border-line p-2 text-ink font-mono"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-slate-300 block mb-1">Hora Límite de Llegada</label>
+                  <label className="font-bold text-ink block mb-1">Hora Límite de Llegada</label>
                   <input
                     type="time"
                     step="60"
                     required
                     value={horaLlegada.substring(0, 5)}
                     onChange={(e) => setHoraLlegada(e.target.value + ':00')}
-                    className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-amber-400 font-bold"
+                    className="w-full rounded-lg bg-canvas border border-line p-2 text-primary font-bold"
                   />
                 </div>
                 <div>
-                  <label className="font-bold text-slate-300 block mb-1">Teléfono Contacto</label>
+                  <label className="font-bold text-ink block mb-1">Teléfono Contacto</label>
                   <input
                     type="text"
                     value={telefono}
                     onChange={(e) => setTelefono(e.target.value)}
                     placeholder="+58 212 555 1234"
-                    className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-slate-100"
+                    className="w-full rounded-lg bg-canvas border border-line p-2 text-ink"
                   />
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+              <div className="flex justify-end gap-2 pt-3 border-t border-line">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="rounded-xl bg-slate-800 px-4 py-2 font-bold text-slate-300 hover:bg-slate-700 cursor-pointer"
+                  className="rounded-xl bg-soft-gray px-4 py-2 font-bold text-ink hover:bg-line cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="rounded-xl bg-amber-500 px-5 py-2 font-black text-slate-950 hover:bg-amber-400 transition-all cursor-pointer shadow-md"
+                  className="rounded-xl bg-primary px-5 py-2 font-black text-ink hover:bg-primary transition-all cursor-pointer shadow-md"
                 >
                   Guardar Colegio
                 </button>
