@@ -236,6 +236,9 @@ export default function App() {
     return map;
   }, [colegios]);
 
+  // Local override for quick UI feedback when toggling activo_en_rutas
+  const [alumnosOverride, setAlumnosOverride] = useState<Record<string, boolean> | null>(null);
+
   const alumnos: Alumno[] = useMemo(() => {
     const raw = instantData?.alumnos;
     let list: any[] = [];
@@ -261,7 +264,8 @@ export default function App() {
           grado: alu.grado || '',
           notas_medicas: alu.notas_medicas || '',
           tiempo_abordaje_estimado_min: Number(alu.tiempo_abordaje_estimado_min || 2.5),
-          activo_en_rutas: alu.activo_en_rutas !== false,
+          // Apply local override (instant UI feedback) if present, else read from DB
+          activo_en_rutas: alumnosOverride ? (alumnosOverride[aluId] ?? alu.activo_en_rutas !== false) : alu.activo_en_rutas !== false,
           created_at: alu.created_at,
           colegio: colegiosMap.get(colId) || selectedColegio,
           representante: repsMap.get(repId)
@@ -270,7 +274,17 @@ export default function App() {
     }
     try {
       const saved = localStorage.getItem('rutaescolar_alumnos');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved) as Alumno[];
+        // Apply override to localStorage-loaded students too
+        if (alumnosOverride) {
+          return parsed.map((a) => ({
+            ...a,
+            activo_en_rutas: alumnosOverride[a.id] ?? a.activo_en_rutas !== false,
+          }));
+        }
+        return parsed;
+      }
       return INITIAL_ALUMNOS.map((a) => ({
         ...a,
         colegio: selectedColegio,
@@ -279,7 +293,7 @@ export default function App() {
     } catch {
       return INITIAL_ALUMNOS;
     }
-  }, [instantData?.alumnos, colegiosMap, repsMap, selectedColegio]);
+  }, [instantData?.alumnos, colegiosMap, repsMap, selectedColegio, alumnosOverride]);
 
   const conductores: Conductor[] = useMemo(() => {
     const raw = instantData?.conductores;
@@ -639,14 +653,19 @@ export default function App() {
 
   // Toggle student active in routes
   const handleToggleActivoRutas = async (alumnoId: string, activo: boolean) => {
+    // 1. Instant UI feedback: update local override so the toggle reflects immediately
+    setAlumnosOverride((prev) => ({ ...(prev || {}), [alumnoId]: activo }));
+
+    // 2. Update localStorage for resilience
+    const updated = alumnos.map((a) => (a.id === alumnoId ? { ...a, activo_en_rutas: activo } : a));
+    localStorage.setItem('rutaescolar_alumnos', JSON.stringify(updated));
+
+    // 3. Best-effort cloud sync to InstantDB
     try {
       await updateAlumnoActivoRutasInstant(alumnoId, activo);
     } catch (e) {
       console.warn('InstantDB toggle activo fallback:', e);
     }
-    // Also update localStorage for resilience
-    const updated = alumnos.map((a) => (a.id === alumnoId ? { ...a, activo_en_rutas: activo } : a));
-    localStorage.setItem('rutaescolar_alumnos', JSON.stringify(updated));
   };
 
   // Start today's route (en_curso)
