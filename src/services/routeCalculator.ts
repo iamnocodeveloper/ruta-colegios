@@ -48,7 +48,7 @@ export function filterStudentsForJourney(
 
     // Day filter: if a specific day is requested, only include students attending that day
     if (dia) {
-      const dias = s.dias_ruta && s.dias_ruta.length > 0 ? s.dias_ruta : ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'];
+      const dias = normalizeDays(s.dias_ruta);
       if (!dias.includes(dia)) return false;
     }
 
@@ -67,6 +67,31 @@ export function filterStudentsForJourney(
 export function weekdayLabel(date: Date = new Date()): string {
   const labels = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
   return labels[date.getDay()] || 'Lun';
+}
+
+export const DEFAULT_DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'];
+
+/**
+ * Normalize dias_ruta: accepts array, JSON string, or undefined/null.
+ * Always returns a valid array (defaults to Mon-Fri).
+ */
+export function normalizeDays(dias: any): string[] {
+  if (Array.isArray(dias)) {
+    return dias.length > 0 ? dias : DEFAULT_DAYS;
+  }
+  if (typeof dias === 'string') {
+    try {
+      const parsed = JSON.parse(dias);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    } catch {
+      // not JSON — maybe comma separated
+      const split = dias.split(',').map((d) => d.trim()).filter(Boolean);
+      if (split.length > 0) return split;
+    }
+  }
+  return DEFAULT_DAYS;
 }
 
 /**

@@ -44,7 +44,8 @@ import {
   filterStudentsForJourney,
   generateRouteVariants,
   variantDistance,
-  weekdayLabel
+  weekdayLabel,
+  normalizeDays
 } from '../../services/routeCalculator';
 import { SchoolRouteMap } from '../Map/SchoolRouteMap';
 import { LocationPicker } from '../Map/LocationPicker';
@@ -390,7 +391,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
             {WEEK_DAYS.map((day) => {
               const isActive = selectedDay === day;
               const count = schoolStudents.filter((s) => {
-                const dias = s.dias_ruta && s.dias_ruta.length > 0 ? s.dias_ruta : WEEK_DAYS;
+                const dias = normalizeDays(s.dias_ruta);
                 return dias.includes(day) && s.activo_en_rutas !== false;
               }).length;
               return (
@@ -731,7 +732,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
           <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
             {schoolStudents.map((student) => {
               const mod = student.modalidad_servicio || 'ida_y_vuelta';
-              const studentDays = student.dias_ruta && student.dias_ruta.length > 0 ? student.dias_ruta : WEEK_DAYS;
+              const studentDays = normalizeDays(student.dias_ruta);
               const attendsToday = studentDays.includes(selectedDay);
               const matchesJourney =
                 tipoTrayecto === 'ida'

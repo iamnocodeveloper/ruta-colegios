@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { Alumno, Colegio, ModalidadTransporte, Representante } from '../../types';
 import { ensureUUID } from '../../services/instantDb';
+import { normalizeDays } from '../../services/routeCalculator';
 import { LocationPicker } from '../Map/LocationPicker';
 
 interface StudentManagerProps {
@@ -307,7 +308,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                 {/* Days of week chips */}
                 <div className="mt-2 flex items-center gap-1 flex-wrap">
                   {['Lun', 'Mar', 'Mié', 'Jue', 'Vie'].map((day) => {
-                    const studentDays = alumno.dias_ruta && alumno.dias_ruta.length > 0 ? alumno.dias_ruta : ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'];
+                    const studentDays = normalizeDays(alumno.dias_ruta);
                     const isOn = studentDays.includes(day);
                     return (
                       <span

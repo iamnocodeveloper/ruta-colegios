@@ -20,7 +20,7 @@ import {
   INITIAL_REPRESENTANTES,
   INITIAL_SCHOOL
 } from './services/mockData';
-import { calculateOptimizedRoute } from './services/routeCalculator';
+import { calculateOptimizedRoute, normalizeDays } from './services/routeCalculator';
 import { DriverPanelSimple } from './components/Driver/DriverPanelSimple';
 import { RouteHistory } from './components/Admin/RouteHistory';
 import { RouteReviewView } from './components/Admin/RouteReviewView';
@@ -269,7 +269,7 @@ export default function App() {
           // Apply local override (instant UI feedback) if present, else read from DB
           modalidad_servicio: override?.modalidad_servicio || alu.modalidad_servicio || 'ida_y_vuelta',
           activo_en_rutas: override?.activo_en_rutas ?? alu.activo_en_rutas !== false,
-          dias_ruta: override?.dias_ruta || alu.dias_ruta || ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'],
+          dias_ruta: override?.dias_ruta || normalizeDays(alu.dias_ruta),
           created_at: alu.created_at,
           colegio: colegiosMap.get(colId) || selectedColegio,
           representante: repsMap.get(repId)
@@ -286,10 +286,14 @@ export default function App() {
             ...a,
             modalidad_servicio: alumnosOverride[a.id]?.modalidad_servicio || a.modalidad_servicio || 'ida_y_vuelta',
             activo_en_rutas: alumnosOverride[a.id]?.activo_en_rutas ?? a.activo_en_rutas !== false,
-            dias_ruta: alumnosOverride[a.id]?.dias_ruta || a.dias_ruta || ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'],
+            dias_ruta: alumnosOverride[a.id]?.dias_ruta || normalizeDays(a.dias_ruta),
           }));
         }
-        return parsed;
+        return parsed.map((a) => ({
+          ...a,
+          dias_ruta: normalizeDays(a.dias_ruta),
+          modalidad_servicio: a.modalidad_servicio || 'ida_y_vuelta',
+        }));
       }
       return INITIAL_ALUMNOS.map((a) => ({
         ...a,
