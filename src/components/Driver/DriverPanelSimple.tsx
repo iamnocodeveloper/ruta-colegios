@@ -13,6 +13,7 @@ import {
   XCircle,
   RotateCcw,
   Clock,
+  Flag,
   MapPin,
   Users,
   School,
@@ -40,6 +41,7 @@ interface DriverPanelSimpleProps {
   onUpdateRuta: (ruta: RutaDiaria) => void;  // persist route (saves to history too)
   onUpdateParada: (paradaId: string, estado: ParadaEstado) => void;
   onStartRoute: () => void;
+  onCompleteRoute?: () => void;
 }
 
 export const DriverPanelSimple: React.FC<DriverPanelSimpleProps> = ({
@@ -52,7 +54,8 @@ export const DriverPanelSimple: React.FC<DriverPanelSimpleProps> = ({
   onSelectDriver,
   onUpdateRuta,
   onUpdateParada,
-  onStartRoute
+  onStartRoute,
+  onCompleteRoute
 }) => {
   const [activeTab, setActiveTab] = useState<'hoy' | 'rutas'>('hoy');
   const [expandedRouteId, setExpandedRouteId] = useState<string | null>(null);
@@ -154,7 +157,17 @@ export const DriverPanelSimple: React.FC<DriverPanelSimpleProps> = ({
                 </button>
               )}
               {ruta.estado === 'en_curso' && (
-                <span className="rounded-full bg-emerald-500 px-3 py-1 text-[11px] font-extrabold text-white animate-pulse">● EN CURSO</span>
+                <>
+                  <button
+                    id="btn-simple-complete-route"
+                    onClick={onCompleteRoute}
+                    title="Finalizar la ruta aunque falten paradas"
+                    className="flex items-center gap-1.5 rounded-xl bg-white px-4 py-2.5 text-xs font-black text-emerald-700 border border-emerald-200 shadow-soft hover:bg-emerald-100 transition-colors cursor-pointer"
+                  >
+                    <Flag className="h-4 w-4" /> FINALIZAR RUTA
+                  </button>
+                  <span className="rounded-full bg-emerald-500 px-3 py-1 text-[11px] font-extrabold text-white animate-pulse">● EN CURSO</span>
+                </>
               )}
               {ruta.estado === 'completada' && (
                 <span className="rounded-full bg-primary px-3 py-1 text-[11px] font-extrabold text-white">✓ COMPLETADA</span>

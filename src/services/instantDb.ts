@@ -124,6 +124,37 @@ const _schema = i.schema({
       rol: i.string(),
       created_at: i.string().optional(),
     }),
+    // ===== AUDITORÍA (write-only, NO se consultan desde la app) =====
+    eventos_ruta: i.entity({
+      evento: i.string(),               // ruta_iniciada | parada_recogida | parada_ausente | parada_revertida | ruta_completada
+      ruta_id: i.string(),
+      fecha_ruta: i.string().optional(), // YYYY-MM-DD de la ruta
+      colegio_id: i.string().optional(),
+      colegio_nombre: i.string().optional(),
+      conductor_id: i.string().optional(),
+      conductor_nombre: i.string().optional(),
+      parada_id: i.string().optional(),
+      orden_parada: i.number().optional(),
+      alumno_id: i.string().optional(),
+      alumno_nombre: i.string().optional(),
+      estado_anterior: i.string().optional(),
+      estado_nuevo: i.string().optional(),
+      hora_evento: i.string(),           // ISO 8601 del evento
+      detalle_json: i.json().optional(), // payload completo enviado al webhook
+      created_at: i.string().optional(),
+    }),
+    webhook_logs: i.entity({
+      evento: i.string(),
+      url_destino: i.string(),
+      payload_json: i.string().optional(),
+      estado_envio: i.string(),          // pendiente | enviado | fallido
+      intentos: i.number().optional(),
+      http_status: i.number().optional(),
+      duracion_ms: i.number().optional(),
+      error_mensaje: i.string().optional(),
+      timestamp: i.string(),             // ISO 8601
+      created_at: i.string().optional(),
+    }),
   },
 });
 
@@ -555,5 +586,104 @@ export async function recordTrackingInstant(
     }),
   ]);
   return logId;
+}
+
+// ===========================================================================
+// AUDITORÍA (write-only): eventos de ejecución de rutas y envíos al webhook.
+// Estas entidades NO se incluyen en db.useQuery de App.tsx, por lo que nunca
+// se muestran en la interfaz. Solo sirven como registro/auditoría en la nube.
+// ===========================================================================
+
+export interface EventoRutaRegistro {
+  evento: string;
+  ruta_id: string;
+  fecha_ruta?: string;
+  colegio_id?: string;
+  colegio_nombre?: string;
+  conductor_id?: string;
+  conductor_nombre?: string;
+  parada_id?: string;
+  orden_parada?: number;
+  alumno_id?: string;
+  alumno_nombre?: string;
+  estado_anterior?: string;
+  estado_nuevo?: string;
+  hora_evento: string; // ISO 8601
+  detalle_json?: any;  // payload completo enviado al webhook
+}
+
+/**
+ * Registra un evento de ejecución de ruta en la entidad `eventos_ruta`.
+ */
+export async function logEventoRutaInstant(registro: EventoRutaRegistro) {
+  const logId = id();
+  const safeRutaId = ensureUUID(registro.ruta_id);
+  await db.transact([
+    tx.eventos_ruta[logId].update({
+      evento: registro.evento,
+      ruta_id: safeRutaId,
+      fecha_ruta: registro.fecha_ruta || '',
+      colegio_id: registro.colegio_id ? ensureUUID(registro.colegio_id) : '',
+      colegio_nombre: registro.colegio_nombre || '',
+      conductor_id: registro.conductor_id ? ensureUUID(registro.conductor_id) : '',
+      conductor_nombre: registro.conductor_nombre || '',
+      parada_id: registro.parada_id ? ensureUUID(registro.parada_id) : '',
+      orden_parada: registro.orden_parada !== undefined ? Number(registro.orden_parada) : 0,
+      alumno_id: registro.alumno_id ? ensureUUID(registro.alumno_id) : '',
+      alumno_nombre: registro.alumno_nombre || '',
+      estado_anterior: registro.estado_anterior || '',
+      estado_nuevo: registro.estado_nuevo || '',
+      hora_evento: registro.hora_evento,
+      detalle_json: registro.detalle_json ?? {},
+      created_at: new Date().toISOString(),
+    }),
+  ]);
+  return logId;
+}
+
+/**
+ * Crea un registro de envío a webhook (estado inicial `pendiente`).
+ * Devuelve el id para poder actualizarlo con el resultado del POST.
+ */
+export async function createWebhookLogInstant(registro: {
+  evento: string;
+  url_destino: string;
+  payload_json?: string;
+}) {
+  const logId = id();
+  await db.transact([
+    tx.webhook_logs[logId].update({
+      evento: registro.evento,
+      url_destino: registro.url_destino,
+      payload_json: registro.payload_json || '',
+      estado_envio: 'pendiente',
+      intentos: 0,
+      timestamp: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+    }),
+  ]);
+  return logId;
+}
+
+/**
+ * Actualiza el resultado de un envío a webhook (estado, intentos, HTTP status...).
+ * Solo sobrescribe los campos proporcionados.
+ */
+export async function updateWebhookLogInstant(
+  logId: string,
+  resultado: {
+    estado_envio: 'pendiente' | 'enviado' | 'fallido';
+    intentos?: number;
+    http_status?: number;
+    duracion_ms?: number;
+    error_mensaje?: string;
+  }
+) {
+  const updateData: Record<string, any> = { estado_envio: resultado.estado_envio };
+  if (resultado.intentos !== undefined) updateData.intentos = Number(resultado.intentos);
+  if (resultado.http_status !== undefined) updateData.http_status = Number(resultado.http_status);
+  if (resultado.duracion_ms !== undefined) updateData.duracion_ms = Number(resultado.duracion_ms);
+  if (resultado.error_mensaje !== undefined) updateData.error_mensaje = String(resultado.error_mensaje).slice(0, 500);
+  await db.transact([tx.webhook_logs[ensureUUID(logId)].update(updateData)]);
 }
 

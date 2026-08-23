@@ -1,7 +1,7 @@
 # 📚 Documentación del Sistema — RutaEscolar PWA
 
 > **Documento vivo**: actualizar siempre que haya avances, mejoras o cambios en el sistema.
-> **Última actualización:** 22/08/2026
+> **Última actualización:** 23/08/2026
 
 ---
 
@@ -99,6 +99,10 @@ public/                          # Manifest PWA, iconos, service worker
 | `paradas_ruta` | ruta_id, alumno_id, orden, hora_estimada, hora_real, estado, lat, lng, distancias |
 | `tracking_logs` | ruta_id, lat, lng, velocidad_kmh, rumbo_grados, timestamp |
 | `usuarios` | email, nombre, rol |
+| `eventos_ruta` 🔒 | **Auditoría (write-only, no visible en la app):** evento, ruta_id, fecha_ruta, colegio_id/nombre, conductor_id/nombre, parada_id, orden_parada, alumno_id/nombre, estado_anterior, estado_nuevo, hora_evento, detalle_json (payload completo), created_at |
+| `webhook_logs` 🔒 | **Auditoría de envíos al webhook (write-only, no visible en la app):** evento, url_destino, payload_json, estado_envio (`pendiente`\|`enviado`\|`fallido`), intentos, http_status, duracion_ms, error_mensaje, timestamp, created_at |
+
+🔒 = tablas de auditoría: se escriben automáticamente pero **NO se consultan desde la app** (no están en `db.useQuery`), por lo que nunca aparecen en la interfaz.
 
 ### Tipos de estado
 
@@ -225,6 +229,65 @@ En dev, Vite sirve el frontend; en producción se sirve `dist/` (SPA fallback a 
 
 ---
 
+## 11.1 Sistema de Eventos y Webhook n8n (`webhookNotifier.ts`)
+
+Cada evento de ejecución de ruta dispara automáticamente un **POST JSON silencioso** al webhook de n8n:
+
+**URL:** `https://joel-n8n-2026.rddxeh.easypanel.host/webhook/not-ruta`
+
+| Evento | Disparador |
+|---|---|
+| `ruta_iniciada` | Conductor presiona EMPEZAR RUTA (estado → `en_curso`, registra `hora_salida_real`) |
+| `parada_recogida` | Parada marcada como `recogido` |
+| `parada_ausente` | Parada marcada como `ausente` |
+| `parada_revertida` | Parada devuelta a `pendiente` |
+| `ruta_completada` | Auto: todas las paradas procesadas con ruta `en_curso` (registra `hora_llegada_real`) · Manual: botón FINALIZAR RUTA en la cabina |
+
+### Estructura del JSON enviado
+
+```json
+{
+  "evento": "ruta_iniciada | parada_recogida | parada_ausente | parada_revertida | ruta_completada",
+  "fecha_evento": "2026-08-23T09:15:00.000-05:00",
+  "app": "RutaEscolar",
+  "ruta": {
+    "id", "nombre": "Ruta IDA - <Colegio> - <fecha>",
+    "fecha", "dia_semana", "tipo_trayecto", "estado", "modo_optimizacion", "variante",
+    "hora_llegada_objetivo", "hora_salida_estimada", "hora_salida_real", "hora_llegada_real",
+    "tiempo_manejo_estimado_min", "tiempo_abordaje_total_min", "tiempo_total_estimado_min", "distancia_total_km",
+    "origen": { "direccion", "lat", "lng" },
+    "colegio": { "id", "nombre", "direccion", "lat", "lng", "hora_llegada_limite", "contacto_telefono" },
+    "conductor": { "id", "nombre", "telefono", "licencia", "vehiculo_modelo", "vehiculo_placa", "capacidad_pasajeros" },
+    "resumen": { "total_paradas", "recogidos", "ausentes", "pendientes" },
+    "paradas": [ { "...datos parada...", "alumno": { "...ver abajo..." } } ]
+  },
+  "parada": { "id", "ruta_id", "orden", "estado", "hora_estimada", "hora_real", "lat", "lng" },
+  "alumno": {
+    "id", "nombre", "grado", "direccion_recogida", "lat", "lng",
+    "notas_medicas", "modalidad_servicio", "activo_en_rutas", "dias_ruta",
+    "representante": { "id", "nombre", "telefono_whatsapp", "email" },
+    "colegio": { "id", "nombre", "direccion", "hora_llegada_limite" }
+  }
+}
+```
+
+> `parada` y `alumno` solo se incluyen en eventos de paradas. En `parada_*`, la ruta incluye el `resumen` actualizado tras el cambio.
+
+### Confiabilidad (todo silencioso, nunca visible en la UI)
+
+- POST con timeout de 10 s y **reintentos internos** con backoff (inmediato → 1 s → 5 s).
+- Si todos los intentos fallan, el evento queda en **cola local** (`localStorage`: `rutaescolar_webhook_queue`, tope 100) y se reintenta en el próximo evento o al cargar la app.
+- Cada envío se audita en InstantDB: `eventos_ruta` (el evento y su payload completo) + `webhook_logs` (estado del envío, intentos, HTTP status, duración, error).
+- Errores solo en consola; la app jamás muestra errores ni confirmaciones por el webhook.
+
+### Auditoría en InstantDB (write-only)
+
+- `logEventoRutaInstant()` → guarda cada evento en `eventos_ruta`.
+- `createWebhookLogInstant()` / `updateWebhookLogInstant()` → gestionan el registro de cada envío en `webhook_logs`.
+- Estas entidades **no están en `db.useQuery`** de `App.tsx`, por lo que no aparecen en ninguna vista. Solo consulta directa desde el dashboard de InstantDB.
+
+---
+
 ## 12. Estado Actual y Mejoras Recientes
 
 ### ✅ Implementado
@@ -245,12 +308,22 @@ En dev, Vite sirve el frontend; en producción se sirve `dist/` (SPA fallback a 
 - [x] **ErrorBoundary global** (nunca pantalla en blanco).
 - [x] **Fix deploy**: assets relativos (`base: './'`), fallback SPA solo sin extensión, service worker network-first (`v3`).
 - [x] **Fix datos**: `normalizeDays()` (días como string JSON de InstantDB), `modalidad_servicio` mapeado desde InstantDB.
+- [x] **Webhook n8n para eventos de ejecución** (`ruta_iniciada`, `parada_recogida`, `parada_ausente`, `parada_revertida`, `ruta_completada`) con reintentos silenciosos y cola local — ver sección 11.1.
+- [x] **Auditoría en InstantDB**: tablas write-only `eventos_ruta` + `webhook_logs` (no visibles en la app).
+- [x] **Auto-finalización de ruta**: al procesarse todas las paradas la ruta pasa a `completada` automáticamente.
+- [x] **Botón FINALIZAR RUTA** manual en la cabina del conductor (visible solo con ruta en curso).
 
 ### 🔒 Seguridad (auditoría completada — ver `docs/SEGURIDAD.md`)
 - ✅ `npm audit`: **0 vulnerabilidades** (323 dependencias).
 - ⚠️ 7 hallazgos de severidad Alta (headers Express, backdoor demo, sesión localStorage, magic tokens, portal por ID, PII local) — **prototipo demo, no apto para producción real sin hardening**.
 
 ### 🔜 Pendientes / Ideas de mejora
+- [ ] **🔔 Notificación de cercanía del conductor** (para que el alumno se aliste antes de la llegada):
+  - **Concepto:** cuando el bus esté a X km / Y minutos de la parada de un alumno, notificar automáticamente a su representante ("El bus está cerca, alista a tu hijo").
+  - **Base existente:** `ParentPortal.tsx` ya calcula en vivo la distancia bus→alumno (`distanceToStudentKm`) con las coordenadas GPS de `/api/tracking`.
+  - **Disparo sugerido:** umbral configurable (ej. < 500 m o ETA < 3 min) evaluado en cada punto de tracking; disparar una sola vez por alumno/ruta (flag anti-duplicados).
+  - **Canales candidatos:** Web Push API (PWA ya instalable) y/o flujo n8n → WhatsApp/SMS usando `telefono_whatsapp` del representante.
+  - **Datos necesarios:** posición GPS en curso (ya existe), parada pendiente del alumno (ya existe), token push o webhook n8n (infraestructura de eventos ya implementada).
 - [ ] Vista de perfil por conductor con login propio (email/código) que filtre automáticamente sus rutas.
 - [ ] Notificaciones push (PWA) al representante cuando el bus está cerca.
 - [ ] Reporte semanal/mensual de asistencia (recogidos vs ausentes por alumno).
