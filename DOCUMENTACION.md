@@ -92,7 +92,8 @@ public/                          # Manifest PWA, iconos, service worker
 
 | Entidad | Campos clave |
 |---|---|
-| `colegios` | nombre, direccion, lat, lng, hora_llegada_limite, contacto_telefono |
+| `clientes` 🆕 | **Multi-tenant:** nombre, plan (basico/pro/premium/escolar), activo — aísla los datos por cliente (conductor/colegio) |
+| `colegios` | nombre, direccion, lat, lng, hora_llegada_limite, contacto_telefono, **cliente_id** |
 | `representantes` | nombre, telefono_whatsapp, magic_token, email |
 | `alumnos` | nombre, colegio_id, representante_id, direccion_recogida, lat, lng, grado, notas_medicas, tiempo_abordaje_estimado_min, modalidad_servicio, **activo_en_rutas**, **dias_ruta** |
 | `conductores` | nombre, telefono, licencia, vehiculo_modelo, vehiculo_placa, capacidad_pasajeros, activo |
@@ -111,6 +112,11 @@ public/                          # Manifest PWA, iconos, service worker
 - **Parada:** `pendiente` → `recogido` | `ausente`
 - **Modalidad de servicio:** `ida_y_vuelta` | `solo_ida` | `solo_vuelta`
 - **Tipo de trayecto:** `ida` (mañana) | `vuelta` (tarde)
+- **Rol de usuario:** `superadmin` (dueño) | `admin` (colegio) | `conductor`
+
+### Multi-cliente (multi-tenant)
+
+Una sola app puede atender a varios clientes (conductores/colegios). Cada cliente tiene su `cliente_id` en todas las entidades; el superadmin crea/activa clientes en **Clientes** y "Gestiona" cada uno (navega a sus pantallas). Para **activarlo** hace falta configurar el dashboard de InstantDB (entidad `clientes` + atributo `cliente_id` en las entidades) y pulsar "Activar multi-cliente" — ver `docs/AVANCES.md` Fase 13. Hasta entonces, la app funciona en modo single (sin `cliente_id`).
 
 ### Ruta combinada (ida + vuelta)
 
@@ -161,6 +167,7 @@ Implementado en `src/index.css` con tokens Tailwind v4 `@theme`:
 | Alumnos | sidebar / `?view=students` |
 | Colegios | sidebar / `?view=schools` |
 | Conductores | sidebar / `?view=drivers` |
+| **Clientes (solo superadmin)** | sidebar / `?view=clientes` |
 | Historial de Rutas | sidebar / `?view=history` |
 | Revisión de Ruta (solo lectura) | `?view=review&routeId=<id>` |
 | Esquema SQL (oculto) | `?view=sql` |
@@ -217,10 +224,10 @@ Implementado en `src/index.css` con tokens Tailwind v4 `@theme`:
 ## 10. Autenticación
 
 - **Puerta de acceso obligatoria** (`LoginGateway`) antes de cualquier vista operativa.
-- **Staff**: login 1-click demo (`admin@demo.com` / `123456`) o **Magic Code** de InstantDB (email + código de 6 dígitos).
+- **Staff/admin/conductor**: login por **InstantDB Magic Code** (email + código de 6 dígitos). Al autenticar se resuelve rol y cliente desde `usuarios.email` o `conductores.email` (→ `superadmin`/`admin`/`conductor`). El backdoor demo (`admin@demo.com/123456`) solo existe en **desarrollo** (`import.meta.env.DEV`).
 - **Representante**: acceso por ID de alumno o Magic Link (`?magic=<token>&student=<id>`).
 - Sesión persistida en `localStorage` (`rutaescolar_staff_session`, `rutaescolar_parent_student_id`).
-- Badge `InstantSyncBadge` en el header muestra estado de conexión/autenticación; el modal `InstantAuthModal` permite auth de InstantDB y reseed.
+- Badge `InstantSyncBadge` en el header muestra estado de conexión/autenticación; el modal `InstantAuthModal` permite auth de InstantDB y reseed (herramienta de desarrollo).
 
 ---
 
@@ -312,6 +319,7 @@ Cada evento de ejecución de ruta dispara automáticamente un **POST JSON silenc
 - [x] **Ruta completa con jornadas**: una sola ruta guarda **ida + vuelta** (tipo `RutaTrayecto`). El planificador guarda cada jornada por separado y luego el "registro completo"; la cabina del conductor tiene selector de jornada, y el historial/revisión/PDF muestran ambas jornadas.
 - [x] **Rutas alternativas estilo Google Maps**: OSRM con `alternatives=true` devuelve ruta principal + alternativa (mismas paradas, calles distintas) en **dos colores**; selector "Rutas sugeridas (calles)" en el Planificador (persiste `ruta_elegida`) y toggle en la cabina del conductor.
 - [x] **Actualización PWA visible**: banner "Nueva versión disponible · Actualizar" + indicador de versión `v{APP_VERSION}` en el header + service worker `rutaescolar-v4` (network-first HTML, `SKIP_WAITING`).
+- [x] **Multiusuarios (multi-tenant real)**: entidad `clientes` + `cliente_id` en todas las entidades, login por rol (`superadmin`/`admin`/`conductor` vía Magic Code, backdoor demo solo en dev), aislamiento de datos por cliente, gestor de clientes con activación, planes, respaldo descargable e importador CSV de alumnos. *(Requiere configurar el dashboard de InstantDB para activarlo — Fase 13.)*
 - [x] **Historial de rutas** con snapshot completo y persistencia.
 - [x] **Informe en PDF** de cada ruta (`jspdf` + `jspdf-autotable`): encabezado con colegio/fecha/trayecto, resumen con conductor y tiempos, tabla de paradas (# · Alumno · Ubicación · Hora · Dist. · Estado) con colores por estado — solo texto, sin mapas/imágenes. Botones "Generar PDF" (Historial) y "Descargar PDF" (Ver Recorrido).
 - [x] **Link de revisión solo lectura** (`?view=review&routeId=`).

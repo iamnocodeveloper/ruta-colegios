@@ -2,6 +2,8 @@
 
 > **Auditoría de seguridad estática** + recomendaciones de hardening.
 > **Última actualización:** 24/08/2026 · **Estado:** auditoría completada, no se modificó código.
+>
+> **Nota (v1.4.0):** se aplicó un primer hardening — login real por rol vía InstantDB Magic Code y el backdoor demo `admin@demo.com/123456` queda **solo en desarrollo** (`import.meta.env.DEV`); el dueño resuelve como `superadmin`. Siguen pendientes el resto de la Prioridad 1 (sesión firmada/cookie, helmet, limpieza de PII opcional).
 
 ---
 
@@ -25,7 +27,7 @@
 | # | Hallazgo | Severidad | Detalle |
 |---|---|---|---|
 | 1.1 | `INSTANT_APP_ID` en `src/services/instantDb.ts:28` | ⚪ Info | Público por diseño (cliente). No es secreto. |
-| 1.2 | Credenciales demo `admin@demo.com` / `123456` hardcodeadas (`LoginGateway.tsx:46,88,242`, `InstantAuthModal.tsx`) | 🔴 Alta | Cualquiera obtiene rol admin sin verificación server-side. |
+| 1.2 | Credenciales demo `admin@demo.com` / `123456` hardcodeadas (`LoginGateway.tsx:46,88,242`, `InstantAuthModal.tsx`) | 🔴 Alta → 🟠 Parcial | Backdoor oculto en producción (solo dev); login por Magic Code + rol. Sigue habiendo demo en `InstantAuthModal` (herramienta dev). |
 | 1.3 | Magic tokens estáticos en seed (`mockData.ts:72-100`) | 🟠 Media | Formato predecible `tok-<nombre>-<hex>`. |
 | 1.4 | `GEMINI_API_KEY` placeholder | ⚪ Info | Solo ejemplo; `.env*` está en .gitignore. |
 | 1.5 | `MAPBOX_ACCESS_TOKEN` vacío | ⚪ Info | No usado. |
@@ -65,7 +67,7 @@
 
 | # | Hallazgo | Severidad |
 |---|---|---|
-| 6.1 | Login admin = comparación hardcodeada en cliente + botón 1-click sin contraseña | 🔴 Alta |
+| 6.1 | Login admin = comparación hardcodeada en cliente + botón 1-click sin contraseña | 🔴 Alta → 🟠 Parcial | En v1.4.0 el login es por InstantDB Magic Code con resolución de rol (`usuarios`/`conductores`); el botón 1-click solo en dev. |
 | 6.2 | Sesión en localStorage sin firma, forjable, sin expiración | 🔴 Alta |
 | 6.3 | Rol de sesión no aplica permisos (sin RBAC) | 🟠 Media |
 | 6.4 | Magic tokens baja entropía + en URL + legibles desde InstantDB | 🔴 Alta |

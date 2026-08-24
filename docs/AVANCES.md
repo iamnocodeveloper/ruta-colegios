@@ -32,6 +32,8 @@
 | `15ebe28` | feat: enlace de revisión de ruta sin login — carga desde la nube en cualquier dispositivo | 24/08 |
 | `1e18750` | feat: rutas alternativas estilo Google Maps (OSRM alternatives) en planificador y cabina | 24/08 |
 | `bcaf7e7` | feat: rutas alternativas por tramo (top-3 tramos largos OSRM + cache) — alternativa real en rutas multi-parada | 24/08 |
+| `f289f47` | feat: actualización PWA visible — banner nueva versión, indicador v1.2.0, SW v4 con SKIP_WAITING | 24/08 |
+| `66dbdb2` | feat: multiusuarios (multi-tenant) — clientes, cliente_id, login por rol, filtrado, gestor de clientes + CSV, respaldo; v1.4.0 | 24/08 |
 
 ---
 
@@ -192,6 +194,24 @@
 - **`PWAUpdateBanner`**: banner verde "🚀 Nueva versión disponible · Actualizar ahora" (y "Actualizado · aplicando…" durante la recarga).
 - **Indicador de versión** `v{APP_VERSION}` en el header del staff.
 - **`public/sw.js`**: caché `rutaescolar-v4` + listener de mensaje `SKIP_WAITING`.
+
+---
+
+## Fase 13 — Multiusuarios (multi-tenant real) (commit 66dbdb2)
+
+### ✅ Lo que se logró
+- **Entidad `clientes`** + campo **`cliente_id`** en todas las entidades (colegios, representantes, alumnos, conductores, rutas_diarias, paradas_ruta, tracking_logs, usuarios, eventos_ruta, webhook_logs) — `src/types.ts` (tipos `Cliente`, `RolUsuario`, `Usuario`).
+- **Migración NO destructiva** (`migrateToClientes`): crea el cliente raíz "Mi Instalación" y asigna `cliente_id` a las filas existentes (solo escribe ese campo; no borra nada). **Idempotente** y controlada por flag local.
+- **Interruptor multi-tenant** (`multitenantEnabled`): mientras no se active, los upserts NO envían `cliente_id` → la instalación actual funciona igual (sin romper hasta configurar el dashboard de InstantDB).
+- **Login real por rol** (`LoginGateway` + `App.handleStaffLogin`): el backdoor demo queda **solo en dev** (`import.meta.env.DEV`); el login es por **InstantDB Magic Code** y resuelve rol (`superadmin`/`admin`/`conductor`) + cliente desde `usuarios.email` o `conductores.email`. `admin@demo.com` (dueño) siempre es `superadmin`.
+- **Aislamiento por cliente**: `db.useQuery` con `where: { cliente_id }` (gated); superadmin gestiona un cliente (`manageClienteId`); admin/conductor ven solo su cliente.
+- **`ClientManager`** (solo superadmin, ítem "Clientes"): activar multi-cliente, crear/activar/desactivar clientes (con plan), "Gestionar" (navega a las pantallas del cliente), **respaldo descargable** (`downloadBackup`) e **importador CSV de alumnos** (`parseAlumnosCsv`).
+- `APP_VERSION` → **1.4.0**.
+
+### ⚠️ Paso manual REQUERIDO para activar multi-cliente (dashboard de InstantDB)
+1. Crear entidad `clientes` (nombre, plan, activo, created_at).
+2. Agregar atributo `cliente_id` (texto, opcional) a: colegios, representantes, alumnos, conductores, rutas_diarias, paradas_ruta, tracking_logs, usuarios, eventos_ruta, webhook_logs.
+3. En la app (menu **Clientes** → superadmin) pulsar **"Activar multi-cliente"**.
 
 ---
 

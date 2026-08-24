@@ -67,22 +67,24 @@ El sistema está construido como **SPA + PWA** con **InstantDB** (base de datos 
 ### Tipos principales
 
 ```ts
-interface Colegio { id, nombre, direccion, lat, lng, hora_llegada_limite, contacto_telefono? }
-interface Representante { id, nombre, telefono_whatsapp, magic_token, email? }
+interface Cliente { id, nombre, plan?, activo, created_at? }
+interface Usuario { id, email, nombre, rol: 'superadmin'|'admin'|'conductor', cliente_id?, created_at? }
+interface Colegio { id, nombre, direccion, lat, lng, hora_llegada_limite, contacto_telefono?, cliente_id? }
+interface Representante { id, nombre, telefono_whatsapp, magic_token, email?, cliente_id? }
 interface Conductor { id, nombre, telefono, email?, licencia?, vehiculo_modelo?,
-                       vehiculo_placa?, capacidad_pasajeros?, foto_url?, activo }
+                       vehiculo_placa?, capacidad_pasajeros?, foto_url?, activo, cliente_id? }
 interface Alumno { id, nombre, colegio_id, representante_id, direccion_recogida, lat, lng,
                    grado?, notas_medicas?, tiempo_abordaje_estimado_min?,
-                   modalidad_servicio?, activo_en_rutas?, dias_ruta?, colegio?, representante? }
+                   modalidad_servicio?, activo_en_rutas?, dias_ruta?, cliente_id?, colegio?, representante? }
 interface ParadaRuta { id, ruta_id, alumno_id, orden, hora_estimada, hora_real?,
-                       estado, lat, lng, distancia_desde_anterior_km?, tiempo_desde_anterior_min? }
+                       estado, lat, lng, distancia_desde_anterior_km?, tiempo_desde_anterior_min?, cliente_id? }
 interface RutaDiaria { id, fecha, colegio_id, origen_lat, origen_lng, modo_optimizacion,
                        tipo_trayecto?, dia_semana?, variante?, hora_llegada_objetivo,
                        hora_salida_estimada, hora_salida_real?, hora_llegada_real?,
                        tiempo_manejo_estimado_min, tiempo_abordaje_total_min,
                        tiempo_total_estimado_min, distancia_total_km, estado,
                        tiempo_abordaje_por_alumno_min, colegio?, conductor_id?, conductor?,
-                       paradas, polyline_geometry?, ida?, vuelta?, polyline_alternativas?, ruta_elegida? }
+                       paradas, polyline_geometry?, ida?, vuelta?, polyline_alternativas?, ruta_elegida?, cliente_id? }
 interface RutaTrayecto { tipo_trayecto, estado?, paradas, hora_salida_estimada,
                          hora_llegada_objetivo, hora_salida_real?, hora_llegada_real?,
                          tiempo_manejo_estimado_min, tiempo_abordaje_total_min,
@@ -91,7 +93,7 @@ interface RutaTrayecto { tipo_trayecto, estado?, paradas, hora_salida_estimada,
                          polyline_geometry?, polyline_alternativas?, ruta_elegida? }
 interface RouteAlternative { polyline: [number,number][], distanceKm, durationMin }
 interface RutaLeg { from: {lat,lng}, to: {lat,lng}, main: RouteAlternative, alternatives: RouteAlternative[] }
-interface TrackingLog { id?, ruta_id, lat, lng, velocidad_kmh?, rumbo_grados?, timestamp }
+interface TrackingLog { id?, ruta_id, lat, lng, velocidad_kmh?, rumbo_grados?, cliente_id?, timestamp }
 ```
 
 ### Tipos de estado (enums como uniones)
@@ -130,7 +132,10 @@ type EstadoParada = 'pendiente' | 'recogido' | 'completado' | 'ausente';
 | `saveRutaInstant` | `(ruta) => Promise<string>` | Guarda ruta + todas sus paradas |
 | `updateParadaEstadoInstant` | `(paradaId, estado, horaReal?) => Promise<void>` | Actualiza estado de una parada |
 | `updateRutaEstadoInstant` | `(rutaId, estado, extra?) => Promise<void>` | Actualiza estado de la ruta |
-| `recordTrackingInstant` | `(rutaId, lat, lng, velocidad?, rumbo?) => Promise<string>` | Registra punto GPS |
+| `recordTrackingInstant` | `(rutaId, lat, lng, velocidad?, rumbo?, clienteId?) => Promise<string>` | Registra punto GPS |
+| `upsertClienteInstant` / `deactivateClienteInstant` | `(cliente) => Promise<string>` / `(clienteId)` | CRUD de clientes (baja lógica) |
+| `migrateToClientes` | `(data) => Promise<boolean>` | Migración NO destructiva: crea cliente raíz y asigna `cliente_id` a filas existentes (idempotente, gated por `multitenantEnabled`) |
+| `multitenantEnabled` / `setMultitenantEnabled` | `() => boolean` / `(on)` | Interruptor multi-tenant (localStorage); mientras inactivo los upserts no envían `cliente_id` |
 
 **Exports:** `db` (cliente inicializado), `tx`, `id`.
 
@@ -206,7 +211,19 @@ Dependencias: `jspdf` + `jspdf-autotable`.
 | `computeRutaEstado` | `(ruta) => EstadoRuta` | Estado global derivado de las jornadas |
 | `getAllParadas` | `(ruta) => ParadaRuta[]` | Concatenación de paradas de todas las jornadas |
 
-### 4.6 `src/services/mockData.ts` — Datos demo
+### 4.7 `src/services/clientCsvImport.ts` — Importador CSV de alumnos
+
+| Función | Firma | Qué hace |
+|---|---|---|
+| `parseAlumnosCsv` | `(text) => { ok, rows: CsvAlumnoRow[], error? }` | Parsea CSV (coma o punto y coma, cabecera opcional) a filas de alumno (nombre, dirección, lat/lng, grado, días, modalidad, representante, teléfono, email) |
+
+### 4.8 `src/services/backup.ts` — Respaldo de solo lectura
+
+| Función | Firma | Qué hace |
+|---|---|---|
+| `downloadBackup` | `(data, label?) => void` | Descarga JSON con los datos (InstantDB + resumen localStorage). No modifica ni borra nada |
+
+### 4.9 `src/services/mockData.ts` — Datos demo
 
 - `INITIAL_SCHOOL_ID`, `SECOND_SCHOOL_ID`
 - `INITIAL_CONDUCTORES` (3), `INITIAL_SCHOOL`, `INITIAL_DRIVER_ORIGIN`
@@ -241,6 +258,7 @@ Dependencias: `jspdf` + `jspdf-autotable`.
 | `DriverManager` | `conductores, activeRuta, onSaveConductor, onDeleteConductor, onSelectDriverForCockpit` | CRUD conductores |
 | `RouteHistory` | `history, onReview, onUseToday, onDelete, onBack` | Listado historial con acciones |
 | `RouteReviewView` | `entry, alumnosMap, onBack` | Vista solo lectura (link público) |
+| `ClientManager` | `clientes, counts, multitenantActive, backupData, onSetMultitenant, onSaveCliente, onDeactivateCliente, onManageCliente, onImportAlumnos, onBack` | Gestión de clientes (superadmin): activar multi-cliente, crear/activar/desactivar, gestionar, respaldo, import CSV |
 | `SqlSchemaViewer` | — | Visor de esquemas (oculto del menú) |
 
 ### Auth

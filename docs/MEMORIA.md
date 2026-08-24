@@ -34,6 +34,7 @@
 10. **Informe de ruta en PDF**: descarga directa con jsPDF + autoTable (texto vectorial, sin mapas/imágenes), accesible desde Historial y Ver Recorrido.
 11. **Ruta completa con jornadas (ida + vuelta)**: un solo registro guarda ambos trayectos (`RutaTrayecto` embebido); el planificador guarda cada jornada y el "registro completo"; cabina con selector de jornada.
 12. **Rutas alternativas estilo Google Maps**: OSRM `alternatives=true` devuelve principal + alternativa (calles distintas) en colores distintos; selector en planificador (persiste `ruta_elegida`) y toggle en cabina.
+13. **Multiusuarios (multi-tenant real)**: entidad `clientes` + `cliente_id` en todas las entidades, login por rol (Magic Code), aislamiento por cliente, gestor de clientes + CSV + respaldo. Interruptor `multitenantEnabled` para no romper la instalación actual hasta configurar el dashboard de InstantDB.
 
 ---
 
@@ -56,6 +57,8 @@
 | **Informe de ruta en PDF (jsPDF)** | El usuario pidió un informe imprimible "además del link". Se eligió jsPDF + autoTable (descarga directa, texto vectorial, colores por estado) en vez de print-to-PDF para controlar el archivo y los estilos, y en vez de html2canvas para no rasterizar (requisito: sin imágenes/mapas). | Feature request |
 | **Ruta combinada ida+vuelta** | El usuario pidió guardar ambas jornadas en un mismo registro ("guardar ruta ida y ruta vuelta, luego el registro completo"). Se modeló `RutaTrayecto` embebido en `RutaDiaria` (`ida`/`vuelta`), con `ruta.paradas` = concatenación para compatibilidad de vistas legacy, y helpers centralizados en `routeJourneys.ts`. | Feature request |
 | **Rutas alternativas (estilo Google Maps)** | El usuario pidió marcar una ruta en un color y una alternativa con sentido en otro, para elegir calles. Se usa OSRM `alternatives=true` (1 llamada → 2 rutas) con alternativa en cian punteado; elección persistida en `ruta_elegida`, selector en planificador y toggle en cabina. | Feature request |
+| **Multiusuarios (multi-tenant real)** | El usuario quiere vender a otros conductores/colegios. Se eligió multi-tenant real (campo `cliente_id`) en lugar de instancias por cliente. Por limitaciones del dashboard de InstantDB, se implementó un **interruptor** (`multitenantEnabled`) para que la instalación actual funcione igual hasta que el dueño configure la entidad `clientes` y el atributo `cliente_id` en el dashboard. | Feature request |
+| **Login real (rol por email)** | Eliminar el backdoor demo en producción; login por InstantDB Magic Code que resuelve rol (`superadmin`/`admin`/`conductor`) y cliente desde `usuarios`/`conductores`. El dueño (`admin@demo.com`) siempre es superadmin. | Seguridad (hardening P1) |
 | **Service worker network-first para HTML** | El cache-first servía el index.html viejo → errores MIME text/html en producción tras redesplegar. | Fix de producción |
 | **ErrorBoundary global** | Un error de runtime (ej. `ruta.paradas[0]` con paradas undefined) daba pantalla en blanco total. Ahora muestra fallback con mensaje. | Fix de producción |
 

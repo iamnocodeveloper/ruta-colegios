@@ -94,6 +94,13 @@ rutas-coplegio/
 - Usar los helpers de **`src/services/routeJourneys.ts`** para leer/actualizar jornadas (`getJourneys`, `getJourneyByParadaId`, `updateJourney`, `journeyView`, `computeRutaEstado`).
 - El estado global (`ruta.estado`) se deriva de las jornadas (`computeRutaEstado`): `planificada` → `en_curso` (si alguna arrancó) → `completada` (cuando todas terminan).
 
+### Multi-tenant (clientes)
+- Entidad `clientes` + campo **`cliente_id`** en todas las entidades (`src/types.ts`, schema en `instantDb.ts`).
+- El **interruptor** `multitenantEnabled()` (localStorage `rutaescolar_multitenant_enabled`) controla si los upserts envían `cliente_id` y si las queries filtran por `where: { cliente_id }`. Mientras esté inactivo, todo funciona como single-tenant.
+- **Activación (requiere dashboard de InstantDB):** crear la entidad `clientes` (nombre, plan, activo, created_at) y agregar el atributo `cliente_id` (texto, opcional) a colegios, representantes, alumnos, conductores, rutas_diarias, paradas_ruta, tracking_logs, usuarios, eventos_ruta, webhook_logs. Luego en la app: menu **Clientes** → "Activar multi-cliente".
+- Roles: `superadmin` (dueño, gestiona clientes) · `admin` (colegio, su cliente) · `conductor` (sus rutas). Resolución en `App.handleStaffLogin` desde `usuarios.email` / `conductores.email`.
+- Al agregar una entidad nueva, incluye `cliente_id` en el schema, en el upsert (gated por `multitenantEnabled()`) y en el `where` del query.
+
 ## 6. Cómo añadir una feature (flujo recomendado)
 
 1. **Tipos primero**: extender `src/types.ts` y el schema en `instantDb.ts` si hay nuevos campos.
