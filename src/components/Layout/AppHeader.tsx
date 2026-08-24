@@ -1,6 +1,7 @@
 import React from 'react';
 import { Menu, X, Search, Bell, Settings, LogOut, Home, Compass, Sparkles, Users, School, Truck, History } from 'lucide-react';
 import { InstantSyncBadge } from '../Auth/InstantSyncBadge';
+import { APP_VERSION } from '../../services/appUpdate';
 import type { StaffView } from './AppSidebar';
 
 interface AppHeaderProps {
@@ -66,7 +67,10 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           </button>
           <div className="min-w-0">
             <h2 className="truncate text-base font-extrabold text-ink">{VIEW_TITLES[currentView]}</h2>
-            <p className="hidden sm:block text-[11px] font-semibold text-muted">RutaEscolar · Transporte en tiempo real</p>
+            <p className="hidden sm:block text-[11px] font-semibold text-muted">
+              RutaEscolar · Transporte en tiempo real
+              <span className="ml-1.5 rounded bg-soft-gray border border-line px-1 py-0.5 text-[9px] font-black text-primary">v{APP_VERSION}</span>
+            </p>
           </div>
         </div>
 

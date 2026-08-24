@@ -87,7 +87,7 @@
 | # | Hallazgo | Severidad |
 |---|---|---|
 | 8.1 | Estrategia razonable: network-first HTML, cache-first assets, API nunca cacheada | ⚪ Info |
-| 8.2 | Versión de caché manual (`rutaescolar-v3`) | 🟡 Baja |
+| 8.2 | Versión de caché manual (`rutaescolar-v4`) | 🟡 Baja |
 | 8.3 | Cachea HTML de error si responde 200 | 🟡 Baja |
 
 ### 2.8 Datos sensibles en localStorage

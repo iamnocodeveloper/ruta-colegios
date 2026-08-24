@@ -45,6 +45,7 @@ import { SchoolManager } from './components/Admin/SchoolManager';
 import { DriverManager } from './components/Admin/DriverManager';
 import { SqlSchemaViewer } from './components/Admin/SqlSchemaViewer';
 import { PWAInstallBanner } from './components/PWA/PWAInstallBanner';
+import { PWAUpdateBanner } from './components/PWA/PWAUpdateBanner';
 import { HomeDashboard } from './components/Home/HomeDashboard';
 import { AppSidebar, StaffView } from './components/Layout/AppSidebar';
 import { AppHeader } from './components/Layout/AppHeader';
@@ -1149,6 +1150,7 @@ export default function App() {
     return (
       <div className="flex h-screen w-screen flex-col bg-canvas text-ink antialiased overflow-hidden font-sans">
         <PWAInstallBanner />
+        <PWAUpdateBanner />
 
         {/* Parent Portal Header */}
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-line bg-surface px-3 sm:px-5 z-30">
@@ -1212,6 +1214,7 @@ export default function App() {
 
       <div className="flex flex-1 flex-col min-w-0">
         <PWAInstallBanner />
+        <PWAUpdateBanner />
 
         <AppHeader
           currentView={currentView}

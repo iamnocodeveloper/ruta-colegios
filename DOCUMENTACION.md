@@ -311,6 +311,7 @@ Cada evento de ejecución de ruta dispara automáticamente un **POST JSON silenc
 - [x] **Reorden desde el mapa**: botón "✏️ Editar Orden en Mapa" — toca los marcadores en el nuevo orden (verde + nueva posición, progreso `X/N`, "Aplicar" admite orden parcial, "Cancelar" aborta).
 - [x] **Ruta completa con jornadas**: una sola ruta guarda **ida + vuelta** (tipo `RutaTrayecto`). El planificador guarda cada jornada por separado y luego el "registro completo"; la cabina del conductor tiene selector de jornada, y el historial/revisión/PDF muestran ambas jornadas.
 - [x] **Rutas alternativas estilo Google Maps**: OSRM con `alternatives=true` devuelve ruta principal + alternativa (mismas paradas, calles distintas) en **dos colores**; selector "Rutas sugeridas (calles)" en el Planificador (persiste `ruta_elegida`) y toggle en la cabina del conductor.
+- [x] **Actualización PWA visible**: banner "Nueva versión disponible · Actualizar" + indicador de versión `v{APP_VERSION}` en el header + service worker `rutaescolar-v4` (network-first HTML, `SKIP_WAITING`).
 - [x] **Historial de rutas** con snapshot completo y persistencia.
 - [x] **Informe en PDF** de cada ruta (`jspdf` + `jspdf-autotable`): encabezado con colegio/fecha/trayecto, resumen con conductor y tiempos, tabla de paradas (# · Alumno · Ubicación · Hora · Dist. · Estado) con colores por estado — solo texto, sin mapas/imágenes. Botones "Generar PDF" (Historial) y "Descargar PDF" (Ver Recorrido).
 - [x] **Link de revisión solo lectura** (`?view=review&routeId=`).

@@ -311,11 +311,12 @@ Dependencias: `jspdf` + `jspdf-autotable`.
 ## 8. PWA
 
 - **Manifest:** `public/manifest.json` (`start_url: "/"`, theme `#0f172a`, iconos 192/512).
-- **Service worker:** `public/sw.js` (`rutaescolar-v3`):
+- **Service worker:** `public/sw.js` (`rutaescolar-v4`):
   - Navegación/HTML → **network-first** (fallback caché offline).
   - Assets hasheados (`/assets/index-*.js|css`) → cache-first.
   - API → nunca cacheada.
-  - `skipWaiting` + `clients.claim` (actualización inmediata).
+  - `skipWaiting` + `clients.claim` (actualización inmediata) + listener `SKIP_WAITING` para el botón "Actualizar".
+- **Actualización visible:** banner "Nueva versión disponible · Actualizar" (`PWAUpdateBanner`) que detecta el nuevo SW (`useServiceWorkerUpdate` en `src/services/appUpdate.ts`) y recarga al aplicar; indicador de versión `v{APP_VERSION}` en el header.
 - **Meta:** `mobile-web-app-capable` + `apple-mobile-web-app-capable`.
 - **Offline:** localStorage como capa de datos.
 

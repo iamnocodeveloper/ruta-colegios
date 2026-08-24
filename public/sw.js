@@ -3,7 +3,7 @@
 //  - Navigation / HTML: NETWORK-FIRST (always fetch fresh index.html, fallback to cache offline)
 //  - Hashed assets (immutable, e.g. /assets/index-abc123.js): CACHE-FIRST
 //  - API requests: network only
-const CACHE_NAME = 'rutaescolar-v3';
+const CACHE_NAME = 'rutaescolar-v4';
 const CORE_ASSETS = [
   '/',
   '/index.html',
@@ -36,6 +36,13 @@ self.addEventListener('activate', (event) => {
       );
     }).then(() => self.clients.claim())
   );
+});
+
+// Permite que la app fuerce la activación del SW nuevo (botón "Actualizar")
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 function isNavigationRequest(request) {

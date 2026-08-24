@@ -31,6 +31,7 @@
 | `e01e581` | feat: ruta completa con jornadas de ida y vuelta en un solo registro | 24/08 |
 | `15ebe28` | feat: enlace de revisión de ruta sin login — carga desde la nube en cualquier dispositivo | 24/08 |
 | `1e18750` | feat: rutas alternativas estilo Google Maps (OSRM alternatives) en planificador y cabina | 24/08 |
+| `bcaf7e7` | feat: rutas alternativas por tramo (top-3 tramos largos OSRM + cache) — alternativa real en rutas multi-parada | 24/08 |
 
 ---
 
@@ -181,6 +182,16 @@
 ### 📝 Notas
 - Verificado en prueba real: ruta de 5 paradas en Quito devuelve alternativa (16.9 km vs 15.5 km principal) armada por tramos.
 - Alternativa en **cian `#06B6D4` punteado** (fuera de la paleta de variantes para no confundir).
+
+---
+
+## Fase 12 — Actualización PWA visible (banner + versión + SW v4)
+
+### ✅ Lo que se logró
+- **`src/services/appUpdate.ts`**: constante `APP_VERSION` y hook `useServiceWorkerUpdate()` que detecta un nuevo service worker instalado (`updatefound` / `waiting`) y su activación (`controllerchange`), con `applyUpdate()` que envía `SKIP_WAITING` y recarga.
+- **`PWAUpdateBanner`**: banner verde "🚀 Nueva versión disponible · Actualizar ahora" (y "Actualizado · aplicando…" durante la recarga).
+- **Indicador de versión** `v{APP_VERSION}` en el header del staff.
+- **`public/sw.js`**: caché `rutaescolar-v4` + listener de mensaje `SKIP_WAITING`.
 
 ---
 
