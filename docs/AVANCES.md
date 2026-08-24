@@ -167,18 +167,19 @@
 
 ---
 
-## Fase 11 — Rutas alternativas estilo Google Maps (commit 1e18750)
+## Fase 11 — Rutas alternativas estilo Google Maps (commits 1e18750 → por tramo)
 
 ### ✅ Lo que se logró
-- **`fetchRoadGeometryWithAlternatives`** en `routeCalculator.ts`: una sola llamada OSRM con `alternatives=true` devuelve la ruta principal + **1 ruta alternativa** (mismas paradas, calles distintas), con km y tiempo por ruta. Mismo fallback geométrico si OSRM falla.
-- **Nuevo tipo `RouteAlternative`** (`types.ts`) y campos `alternativas` en `RouteOptimizationResult`; `polyline_alternativas` y `ruta_elegida` (0 principal / 1..n alternativa) en `RutaDiaria` y `RutaTrayecto`.
+- **`fetchRoadGeometryWithAlternatives`** en `routeCalculator.ts`:
+  - Ruta **principal**: una consulta OSRM de todo el recorrido (calles reales, sin degradación).
+  - Ruta **alternativa por tramo**: OSRM público solo devuelve alternativas en consultas A→B (2 puntos), así que se consultan con `alternatives=true` **los 3 tramos más largos** (paralelo + **caché por tramo** para no saturar el rate-limit) y se **reemplazan esos segmentos** en la polyline principal por su alternativa (calles reales). Si un tramo no devuelve alternativa, conserva la principal.
+- **Nuevos tipos** (`types.ts`): `RouteAlternative`, `RutaLeg` (tramo con `main` + `alternatives`), y `alternativas` + `legs` en `RouteOptimizationResult`; `polyline_alternativas` y `ruta_elegida` (0 principal / 1..n alternativa) en `RutaDiaria` y `RutaTrayecto`.
 - **Mapa** (`SchoolRouteMap`): prop `alternativePolylines` — dibuja las alternativas **debajo** (cian punteado) y la elegida encima (sólida), con leyenda de km/min.
 - **Planificador**: card **"Rutas sugeridas (calles)"** con botones Principal / Alternativa (color + km + min); la elección cambia la polyline del mapa y se **persiste** al guardar (`ruta_elegida`).
 - **Cabina del conductor**: toggle Principal / Alternativa sobre el mapa del día (si la ruta guardó alternativas).
 
 ### 📝 Notas
-- El servidor público OSRM devuelve **1 alternativa confiable**; si no la genera, la app muestra solo la principal (sin romper).
-- Cero requests extra: una sola llamada OSRM trae ambas rutas.
+- Verificado en prueba real: ruta de 5 paradas en Quito devuelve alternativa (16.9 km vs 15.5 km principal) armada por tramos.
 - Alternativa en **cian `#06B6D4` punteado** (fuera de la paleta de variantes para no confundir).
 
 ---

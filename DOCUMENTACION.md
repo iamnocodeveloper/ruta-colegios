@@ -196,7 +196,7 @@ Implementado en `src/index.css` con tokens Tailwind v4 `@theme`:
 
 1. **Filtro de alumnos**: según modalidad de servicio (`ida`/`vuelta`) y **excluye alumnos con `activo_en_rutas === false`**.
 2. **Secuencia óptima (TSP)**: Nearest Neighbor + 2-Opt heuristic (máx. 30 iteraciones) entre origen → paradas → colegio (ida) o colegio → paradas → origen (vuelta).
-3. **Geometría real**: consulta a OSRM (`router.project-osrm.org`) con **rutas alternativas** (`alternatives=true` → principal + 1 alternativa, mismas paradas, calles distintas) y fallback geométrico (factor 1.25 urbano + interpolación). La ruta elegida se persiste en `ruta_elegida` (`0` principal / `1..n` alternativa).
+3. **Geometría real**: consulta a OSRM (`router.project-osrm.org`) con **rutas alternativas por tramo** (la ruta principal viene de una consulta de todo el recorrido; la alternativa se arma consultando los 3 tramos más largos A→B con `alternatives=true` + caché, y reemplazando esos segmentos). Fallback geométrico (factor 1.25 urbano + interpolación). La ruta elegida se persiste en `ruta_elegida` (`0` principal / `1..n` alternativa).
 4. **Tiempos**: `T_manejo` (con factor tráfico 1.12 estándar / 1.35 tráfico real) + `T_abordaje = N × minutos_por_alumno`.
 5. **Salida inversa**: `H_salida = H_llegada_limite − T_total` (trayecto ida) o desde hora fija (vuelta).
 6. **ETAs por parada**: acumulación de tiempo de manejo + abordaje por parada.

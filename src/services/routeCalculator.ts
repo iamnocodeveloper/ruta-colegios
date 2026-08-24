@@ -9,7 +9,7 @@
  *   6. Step-by-step intermediate ETAs for each student stop
  */
 
-import { Alumno, Colegio, ModoOptimizacion, RouteAlternative, RouteOptimizationResult, TipoTrayecto } from '../types';
+import { Alumno, Colegio, ModoOptimizacion, RouteAlternative, RouteOptimizationResult, RutaLeg, TipoTrayecto } from '../types';
 
 /**
  * Calculates Haversine distance in kilometers between two geo coordinates
@@ -400,9 +400,110 @@ async function fetchOsrmRoutes(points: Array<{ lat: number; lng: number }>): Pro
   return [];
 }
 
+/** Convierte una ruta OSRM cruda en RouteAlternative (con factor de tráfico). */
+function buildRouteAlternative(route: any, trafficFactor: number): RouteAlternative {
+  const coordinates: [number, number][] = route.geometry.coordinates.map(
+    ([lon, lat]: [number, number]) => [lat, lon]
+  );
+  const distanceKm = route.distance / 1000;
+  const durationMin = (route.duration / 60) * trafficFactor;
+  return {
+    polyline: coordinates,
+    distanceKm: Math.round(distanceKm * 10) / 10,
+    durationMin: Math.round(durationMin * 10) / 10,
+  };
+}
+
+/** Longitud de una polyline en km (suma haversine entre puntos consecutivos). */
+function polylineDistanceKm(polyline: [number, number][]): number {
+  let total = 0;
+  for (let i = 0; i < polyline.length - 1; i++) {
+    total += calculateHaversineDistance(polyline[i][0], polyline[i][1], polyline[i + 1][0], polyline[i + 1][1]);
+  }
+  return Math.round(total * 10) / 10;
+}
+
+/** Índice del punto de la polyline más cercano a una coordenada. */
+function nearestIndex(polyline: [number, number][], coord: { lat: number; lng: number }): number {
+  let best = 0;
+  let bestDist = Infinity;
+  for (let i = 0; i < polyline.length; i++) {
+    const d = calculateHaversineDistance(polyline[i][0], polyline[i][1], coord.lat, coord.lng);
+    if (d < bestDist) {
+      bestDist = d;
+      best = i;
+    }
+  }
+  return best;
+}
+
+/** Recorta la polyline principal entre dos coordenadas (por índice más cercano). */
+function slicePolylineBetween(
+  polyline: [number, number][],
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number }
+): [number, number][] {
+  const iA = nearestIndex(polyline, a);
+  const iB = nearestIndex(polyline, b);
+  const lo = Math.min(iA, iB);
+  const hi = Math.max(iA, iB);
+  return polyline.slice(lo, hi + 1);
+}
+
+// ===========================================================================
+// Caché de alternativas por tramo A→B (evita saturar OSRM en recálculos)
+// ===========================================================================
+const LEG_ALT_CACHE = new Map<string, RouteAlternative[]>();
+
+function legCacheKey(a: { lat: number; lng: number }, b: { lat: number; lng: number }, mode: ModoOptimizacion): string {
+  return `${a.lng.toFixed(6)},${a.lat.toFixed(6)};${b.lng.toFixed(6)},${b.lat.toFixed(6)}:${mode}`;
+}
+
+/**
+ * Obtiene las rutas (principal + alternativas) de UN tramo A→B con caché.
+ * Devuelve array: [main, ...alts]; si falla, fallback geométrico como único elemento.
+ */
+async function fetchLegRoutes(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+  mode: ModoOptimizacion
+): Promise<RouteAlternative[]> {
+  const key = legCacheKey(a, b, mode);
+  const cached = LEG_ALT_CACHE.get(key);
+  if (cached) return cached;
+
+  const trafficFactor = mode === 'trafico_real' ? 1.35 : 1.12;
+  const raw = await fetchOsrmRoutes([a, b]);
+  let routes: RouteAlternative[];
+  if (raw.length > 0) {
+    routes = raw.map((r) => buildRouteAlternative(r, trafficFactor));
+  } else {
+    // Fallback geométrico: solo la línea directa
+    const dist = calculateHaversineDistance(a.lat, a.lng, b.lat, b.lng) * 1.25;
+    const speed = getEstimatedSpeedKmh(mode);
+    const steps = 6;
+    const polyline: [number, number][] = [];
+    for (let s = 0; s <= steps; s++) {
+      const fraction = s / steps;
+      polyline.push([a.lat + (b.lat - a.lat) * fraction, a.lng + (b.lng - a.lng) * fraction]);
+    }
+    routes = [{ polyline, distanceKm: Math.round(dist * 10) / 10, durationMin: Math.round(((dist / speed) * 60 * trafficFactor) * 10) / 10 }];
+  }
+
+  // Cap de caché simple (evitar crecer sin límite)
+  if (LEG_ALT_CACHE.size > 300) LEG_ALT_CACHE.clear();
+  LEG_ALT_CACHE.set(key, routes);
+  return routes;
+}
+
 /**
  * Obtiene geometría real + duración para una secuencia de puntos, con RUTA ALTERNATIVA
- * (estilo Google Maps). Devuelve la ruta principal y hasta 1 alternativa (si OSRM la genera).
+ * (estilo Google Maps) construida POR TRAMO.
+ *
+ * OSRM público solo devuelve alternativas para consultas A→B (2 puntos), así que:
+ *   - La ruta principal viene de una sola consulta de todo el recorrido (calles reales).
+ *   - La alternativa se arma consultando los 3 tramos MÁS LARGOS con alternatives=true
+ *     y reemplazando esos segmentos en la polyline principal por su alternativa.
  */
 export async function fetchRoadGeometryWithAlternatives(
   points: Array<{ lat: number; lng: number }>,
@@ -410,74 +511,113 @@ export async function fetchRoadGeometryWithAlternatives(
 ): Promise<{
   main: { polyline: [number, number][]; realDrivingMinutes: number; totalDistanceKm: number };
   alternatives: RouteAlternative[];
+  legs: RutaLeg[];
 }> {
   if (points.length < 2) {
     return {
       main: { polyline: points.map((p) => [p.lat, p.lng]), realDrivingMinutes: 0, totalDistanceKm: 0 },
       alternatives: [],
+      legs: [],
     };
   }
 
+  const trafficFactor = mode === 'trafico_real' ? 1.35 : 1.12;
   const routes = await fetchOsrmRoutes(points);
 
-  if (routes.length > 0) {
-    const trafficFactor = mode === 'trafico_real' ? 1.35 : 1.12;
-
-    const build = (route: any): RouteAlternative => {
-      const coordinates: [number, number][] = route.geometry.coordinates.map(
-        ([lon, lat]: [number, number]) => [lat, lon]
-      );
-      const distanceKm = route.distance / 1000;
-      const durationMin = (route.duration / 60) * trafficFactor;
-      return {
-        polyline: coordinates,
-        distanceKm: Math.round(distanceKm * 10) / 10,
-        durationMin: Math.round(durationMin * 10) / 10,
-      };
-    };
-
-    const parsed = routes.map(build);
-    const mainAlt = parsed[0];
-    const main = {
-      polyline: mainAlt.polyline,
-      realDrivingMinutes: mainAlt.durationMin,
-      totalDistanceKm: mainAlt.distanceKm,
-    };
-    const alternatives = parsed.slice(1);
-
-    return { main, alternatives };
-  }
-
-  // Geometric fallback (offline / OSRM rate limited): solo ruta principal
-  let fallbackDistance = 0;
-  const polyline: [number, number][] = [];
-  for (let i = 0; i < points.length - 1; i++) {
-    const p1 = points[i];
-    const p2 = points[i + 1];
-    const legDist = calculateHaversineDistance(p1.lat, p1.lng, p2.lat, p2.lng);
-    fallbackDistance += legDist * 1.25; // 1.25 urban street winding factor
-
-    // Intermediate points for smooth visual line
-    const steps = 6;
-    for (let s = 0; s <= steps; s++) {
-      const fraction = s / steps;
-      const lat = p1.lat + (p2.lat - p1.lat) * fraction;
-      const lng = p1.lng + (p2.lng - p1.lng) * fraction;
-      polyline.push([lat, lng]);
+  // Fallback geométrico si OSRM falla para la ruta principal
+  if (routes.length === 0) {
+    let fallbackDistance = 0;
+    const polyline: [number, number][] = [];
+    for (let i = 0; i < points.length - 1; i++) {
+      const p1 = points[i];
+      const p2 = points[i + 1];
+      const legDist = calculateHaversineDistance(p1.lat, p1.lng, p2.lat, p2.lng);
+      fallbackDistance += legDist * 1.25;
+      const steps = 6;
+      for (let s = 0; s <= steps; s++) {
+        const fraction = s / steps;
+        polyline.push([p1.lat + (p2.lat - p1.lat) * fraction, p1.lng + (p2.lng - p1.lng) * fraction]);
+      }
     }
+    const speed = getEstimatedSpeedKmh(mode);
+    const fallbackDurationMin = (fallbackDistance / speed) * 60;
+    return {
+      main: {
+        polyline,
+        realDrivingMinutes: Math.round(fallbackDurationMin * 10) / 10,
+        totalDistanceKm: Math.round(fallbackDistance * 10) / 10,
+      },
+      alternatives: [],
+      legs: [],
+    };
   }
 
-  const speed = getEstimatedSpeedKmh(mode);
-  const fallbackDurationMin = (fallbackDistance / speed) * 60;
-
-  return {
-    main: {
-      polyline,
-      realDrivingMinutes: Math.round(fallbackDurationMin * 10) / 10,
-      totalDistanceKm: Math.round(fallbackDistance * 10) / 10,
-    },
-    alternatives: [],
+  // Ruta principal: consulta OSRM de todo el recorrido
+  const mainParsed = buildRouteAlternative(routes[0], trafficFactor);
+  const main = {
+    polyline: mainParsed.polyline,
+    realDrivingMinutes: mainParsed.durationMin,
+    totalDistanceKm: mainParsed.distanceKm,
   };
+
+  // Tramos entre paradas consecutivas
+  const legPairs = points.slice(1).map((b, i) => ({ a: points[i], b, i }));
+
+  // Elegir los 3 tramos más largos (donde el detour tiene más sentido)
+  const withDist = legPairs.map((lp) => ({
+    ...lp,
+    dist: calculateHaversineDistance(lp.a.lat, lp.a.lng, lp.b.lat, lp.b.lng),
+  }));
+  const longest = [...withDist].sort((x, y) => y.dist - x.dist).slice(0, 3);
+  const queriedIndexes = new Set(longest.map((l) => l.i));
+
+  // Consultar alternativas de los tramos elegidos (paralelo + caché)
+  const legRoutesByIndex = new Map<number, RouteAlternative[]>();
+  await Promise.all(
+    longest.map(async (lp) => {
+      const routesLeg = await fetchLegRoutes(lp.a, lp.b, mode);
+      legRoutesByIndex.set(lp.i, routesLeg);
+    })
+  );
+
+  // Construir legs (con su alternativa por tramo) + polyline alternativa continua
+  const legs: RutaLeg[] = [];
+  const altPolyline: [number, number][] = [];
+  let altDistanceKm = 0;
+  let altDurationMin = 0;
+
+  legPairs.forEach((lp) => {
+    const mainSlice = slicePolylineBetween(main.polyline, lp.a, lp.b);
+    const legRoutes = legRoutesByIndex.get(lp.i) || [];
+    const legMain = legRoutes.length > 0 ? legRoutes[0] : { polyline: mainSlice, distanceKm: polylineDistanceKm(mainSlice), durationMin: (polylineDistanceKm(mainSlice) / getEstimatedSpeedKmh(mode)) * 60 * trafficFactor };
+    const legAlts = legRoutes.slice(1);
+
+    legs.push({
+      from: { lat: lp.a.lat, lng: lp.a.lng },
+      to: { lat: lp.b.lat, lng: lp.b.lng },
+      main: legMain,
+      alternatives: legAlts,
+    });
+
+    // Usar la 1ª alternativa del tramo si existe; si no, el tramo principal
+    const chosen = legAlts.length > 0 ? legAlts[0] : legMain;
+    altPolyline.push(...chosen.polyline);
+    altDistanceKm += chosen.distanceKm;
+    altDurationMin += chosen.durationMin;
+  });
+
+  const alternatives: RouteAlternative[] =
+    altPolyline.length > 0
+      ? [
+          {
+            polyline: altPolyline,
+            distanceKm: Math.round(altDistanceKm * 10) / 10,
+            durationMin: Math.round(altDurationMin * 10) / 10,
+          },
+        ]
+      : [];
+
+  return { main, alternatives, legs };
 }
 
 export async function fetchRoadGeometryAndDuration(
@@ -592,8 +732,8 @@ export async function calculateOptimizedRoute(
     { lat: endPoint.lat, lng: endPoint.lng }
   ];
 
-  // 5. Obtain realistic road geometry and total driving time (+ ruta alternativa)
-  const { main: mainRoute, alternatives } = await fetchRoadGeometryWithAlternatives(
+  // 5. Obtain realistic road geometry and total driving time (+ ruta alternativa por tramo)
+  const { main: mainRoute, alternatives, legs } = await fetchRoadGeometryWithAlternatives(
     fullWaypoints,
     modo
   );
@@ -666,5 +806,6 @@ export async function calculateOptimizedRoute(
     polyline_geometry: polyline,
     traffic_factor: modo === 'trafico_real' ? 1.35 : 1.12,
     alternativas: alternatives,
+    legs: legs,
   };
 }

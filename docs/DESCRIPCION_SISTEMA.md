@@ -90,6 +90,7 @@ interface RutaTrayecto { tipo_trayecto, estado?, paradas, hora_salida_estimada,
                          tiempo_abordaje_por_alumno_min, modo_optimizacion, variante?,
                          polyline_geometry?, polyline_alternativas?, ruta_elegida? }
 interface RouteAlternative { polyline: [number,number][], distanceKm, durationMin }
+interface RutaLeg { from: {lat,lng}, to: {lat,lng}, main: RouteAlternative, alternatives: RouteAlternative[] }
 interface TrackingLog { id?, ruta_id, lat, lng, velocidad_kmh?, rumbo_grados?, timestamp }
 ```
 
@@ -149,7 +150,7 @@ type EstadoParada = 'pendiente' | 'recogido' | 'completado' | 'ausente';
 | `generateRouteVariants` | `(start, end, students) => Variant[]` | 4 variantes: 2opt, nearest, farthest, random |
 | `variantDistance` | `(start, end, studentIds, alumnosMap) => number` | Distancia haversine de una variante |
 | `fetchRoadGeometryAndDuration` | `(points, mode) => Promise<{polyline, realDrivingMinutes, totalDistanceKm}>` | OSRM con fallback geométrico |
-| `fetchRoadGeometryWithAlternatives` | `(points, mode) => Promise<{main, alternatives: RouteAlternative[]}>` | OSRM `alternatives=true`: ruta principal + alternativa (calles distintas), km/min por ruta |
+| `fetchRoadGeometryWithAlternatives` | `(points, mode) => Promise<{main, alternatives: RouteAlternative[], legs: RutaLeg[]}>` | Ruta principal (1 consulta OSRM todo el recorrido) + alternativa armada **por tramo** (top-3 tramos largos con `alternatives=true`, caché por tramo) reemplazando segmentos en la polyline |
 | `calculateOptimizedRoute` | `(origin, school, students, options) => Promise<RouteOptimizationResult>` | Motor principal |
 
 **Fórmulas del algoritmo:**

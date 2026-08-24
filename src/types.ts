@@ -180,6 +180,8 @@ export interface RouteOptimizationResult {
   traffic_factor: number;
   // Rutas alternativas estilo Google Maps (misma secuencia de paradas, calles distintas)
   alternativas?: RouteAlternative[];
+  // Desglose por tramo (para diagnóstico / futura selección por tramo)
+  legs?: RutaLeg[];
 }
 
 /**
@@ -189,4 +191,14 @@ export interface RouteAlternative {
   polyline: [number, number][];
   distanceKm: number;
   durationMin: number;
+}
+
+/**
+ * Un tramo de la ruta entre dos paradas consecutivas, con sus alternativas.
+ */
+export interface RutaLeg {
+  from: { lat: number; lng: number };
+  to: { lat: number; lng: number };
+  main: RouteAlternative;
+  alternatives: RouteAlternative[];
 }
