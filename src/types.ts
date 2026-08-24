@@ -3,6 +3,31 @@
  * Aligned with PostgreSQL / Insforge Schema & PWA Specifications
  */
 
+/** Plan comercial de un cliente. */
+export type PlanCliente = 'basico' | 'pro' | 'premium' | 'escolar';
+
+/** Rol de usuario del sistema (multi-tenant). */
+export type RolUsuario = 'superadmin' | 'admin' | 'conductor';
+
+/** Un cliente del sistema (conductor/colegio). Aísla los datos por tenant. */
+export interface Cliente {
+  id: string;
+  nombre: string;
+  plan?: PlanCliente | string;
+  activo: boolean;
+  created_at?: string;
+}
+
+/** Usuario del sistema (login por email + rol). */
+export interface Usuario {
+  id: string;
+  email: string;
+  nombre: string;
+  rol: RolUsuario | string;
+  cliente_id?: string;
+  created_at?: string;
+}
+
 export interface Colegio {
   id: string;
   nombre: string;
@@ -11,6 +36,7 @@ export interface Colegio {
   lng: number;
   hora_llegada_limite: string; // e.g. "08:00:00"
   contacto_telefono?: string;
+  cliente_id?: string;
   created_at?: string;
 }
 
@@ -20,6 +46,7 @@ export interface Representante {
   telefono_whatsapp: string; // e.g. "+584121234567" or "+34600123456"
   magic_token: string; // unique UUID token for frictionless parent portal access
   email?: string;
+  cliente_id?: string;
   created_at?: string;
 }
 
@@ -37,6 +64,7 @@ export interface Conductor {
   capacidad_pasajeros?: number;
   foto_url?: string;
   activo: boolean;
+  cliente_id?: string;
   created_at?: string;
 }
 
@@ -54,6 +82,7 @@ export interface Alumno {
   modalidad_servicio?: ModalidadTransporte; // 'ida_y_vuelta' | 'solo_ida' | 'solo_vuelta'
   activo_en_rutas?: boolean; // false = excluido de las rutas (no se le asigna parada)
   dias_ruta?: string[]; // días de la semana en que usa la ruta: ['Lun','Mar','Mié','Jue','Vie']
+  cliente_id?: string;
   created_at?: string;
   // Joined fields for UI convenience
   colegio?: Colegio;
@@ -76,6 +105,7 @@ export interface ParadaRuta {
   lng: number;
   distancia_desde_anterior_km?: number;
   tiempo_desde_anterior_min?: number;
+  cliente_id?: string;
   alumno?: Alumno;
 }
 
@@ -129,6 +159,7 @@ export interface RutaDiaria {
   conductor_id?: string;
   conductor?: Conductor;
   paradas: ParadaRuta[];
+  cliente_id?: string;
   polyline_geometry?: [number, number][]; // lat/lng pairs for map route line
   // Rutas alternativas (estilo Google Maps) + ruta elegida (0 principal / 1..n alternativa)
   polyline_alternativas?: RouteAlternative[];
@@ -146,6 +177,7 @@ export interface TrackingLog {
   lng: number;
   velocidad_kmh?: number;
   rumbo_grados?: number;
+  cliente_id?: string;
   timestamp: string; // ISO 8601
 }
 

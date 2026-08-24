@@ -9,3 +9,5 @@ coverage/
 .commandcode/
 
 tsc-output.txt
+
+backups/

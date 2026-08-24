@@ -7,6 +7,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { LogOut } from 'lucide-react';
 import {
   Alumno,
+  Cliente,
   Colegio,
   Conductor,
   ParadaRuta,
@@ -44,6 +45,8 @@ import { StudentManager } from './components/Admin/StudentManager';
 import { SchoolManager } from './components/Admin/SchoolManager';
 import { DriverManager } from './components/Admin/DriverManager';
 import { SqlSchemaViewer } from './components/Admin/SqlSchemaViewer';
+import { ClientManager } from './components/Admin/ClientManager';
+import type { CsvAlumnoRow } from './services/clientCsvImport';
 import { PWAInstallBanner } from './components/PWA/PWAInstallBanner';
 import { PWAUpdateBanner } from './components/PWA/PWAUpdateBanner';
 import { HomeDashboard } from './components/Home/HomeDashboard';
@@ -63,7 +66,13 @@ import {
   saveRutaInstant,
   updateParadaEstadoInstant,
   updateRutaEstadoInstant,
-  ensureUUID
+  ensureUUID,
+  ROOT_CLIENT_ID,
+  multitenantEnabled,
+  setMultitenantEnabled,
+  migrateToClientes,
+  upsertClienteInstant,
+  deactivateClienteInstant
 } from './services/instantDb';
 import {
   notifyRutaIniciada,
@@ -74,12 +83,20 @@ import { InstantAuthModal } from './components/Auth/InstantAuthModal';
 import { InstantSyncBadge } from './components/Auth/InstantSyncBadge';
 import { LoginGateway } from './components/Auth/LoginGateway';
 
+export interface StaffSessionUser {
+  email: string;
+  rol: string;
+  nombre: string;
+  clienteId?: string;
+  conductorId?: string;
+}
+
 export type AuthSession =
-  | { type: 'staff'; user: { email: string; rol: string; nombre: string } }
+  | { type: 'staff'; user: StaffSessionUser }
   | { type: 'parent'; studentId: string }
   | null;
 
-const STAFF_VIEWS: StaffView[] = ['home', 'driver', 'parent', 'planner', 'students', 'schools', 'drivers', 'sql', 'history', 'review'];
+const STAFF_VIEWS: StaffView[] = ['home', 'driver', 'parent', 'planner', 'students', 'schools', 'drivers', 'sql', 'history', 'review', 'clientes'];
 
 /** Normaliza el resultado de db.useQuery a un array (puede venir como objeto keyed por id). */
 function toList(raw: any): any[] {
@@ -295,17 +312,47 @@ export default function App() {
     }
   });
 
-  // 1. InstantDB Live Real-Time Query
-  const { data: instantData, isLoading: instantLoading } = db.useQuery({
-    colegios: {},
-    representantes: {},
-    alumnos: {},
-    conductores: {},
-    rutas_diarias: {},
-    paradas_ruta: {},
-    tracking_logs: {},
-    usuarios: {}
-  });
+  // Cliente que el superadmin está gestionando (multi-tenant)
+  const [manageClienteId, setManageClienteId] = useState<string>(ROOT_CLIENT_ID);
+
+  // Alcance por cliente: superadmin gestiona `manageClienteId`; admin/conductor solo el suyo.
+  const sessionRol = authSession?.type === 'staff' ? authSession.user.rol : '';
+  const isSuperadmin = sessionRol === 'superadmin';
+  const scopeClienteId =
+    multitenantEnabled() && authSession?.type === 'staff'
+      ? isSuperadmin
+        ? manageClienteId
+        : authSession.user.clienteId
+      : undefined;
+
+  // 1. InstantDB Live Real-Time Query (filtrada por cliente cuando multi-tenant está activo)
+  const query = useMemo(() => {
+    const ent = (withScope: boolean) => (withScope ? { $: { where: { cliente_id: scopeClienteId } } } : {});
+    const hasScope = !!scopeClienteId;
+    const q: any = {
+      colegios: ent(hasScope),
+      representantes: ent(hasScope),
+      alumnos: ent(hasScope),
+      conductores: ent(hasScope),
+      rutas_diarias: ent(hasScope),
+      paradas_ruta: ent(hasScope),
+      tracking_logs: ent(hasScope),
+      usuarios: {}, // globales (resolución de login / superadmin)
+    };
+    if (multitenantEnabled()) q.clientes = {};
+    return q;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scopeClienteId]);
+  const { data: instantData, isLoading: instantLoading } = (db as any).useQuery(query);
+
+  // Migración a multi-tenant (solo escribe cliente_id; idempotente)
+  useEffect(() => {
+    if (multitenantEnabled() && !instantLoading && instantData) {
+      migrateToClientes(instantData).then((ok) => {
+        if (ok) console.log('[multi-tenant] Migración a clientes aplicada.');
+      });
+    }
+  }, [instantLoading, instantData]);
 
   // Automatically seed or migrate InstantDB & LocalStorage to Quito, Ecuador
   useEffect(() => {
@@ -369,6 +416,7 @@ export default function App() {
         lng: Number(col.lng) || -78.4975,
         hora_llegada_limite: col.hora_llegada_limite || '07:45:00',
         contacto_telefono: col.contacto_telefono || '',
+        cliente_id: col.cliente_id || undefined,
         created_at: col.created_at
       }));
     }
@@ -401,6 +449,7 @@ export default function App() {
         telefono_whatsapp: rep.telefono_whatsapp || '',
         magic_token: rep.magic_token || `tok-${rep.id}`,
         email: rep.email || '',
+        cliente_id: rep.cliente_id || undefined,
         created_at: rep.created_at
       }));
     }
@@ -458,6 +507,7 @@ export default function App() {
           modalidad_servicio: override?.modalidad_servicio || alu.modalidad_servicio || 'ida_y_vuelta',
           activo_en_rutas: override?.activo_en_rutas ?? alu.activo_en_rutas !== false,
           dias_ruta: override?.dias_ruta || normalizeDays(alu.dias_ruta),
+          cliente_id: alu.cliente_id || undefined,
           created_at: alu.created_at,
           colegio: colegiosMap.get(colId) || selectedColegio,
           representante: repsMap.get(repId)
@@ -514,6 +564,7 @@ export default function App() {
         capacidad_pasajeros: Number(cond.capacidad_pasajeros || 16),
         activo: cond.activo !== false,
         foto_url: cond.foto_url || '',
+        cliente_id: cond.cliente_id || undefined,
         created_at: cond.created_at
       }));
     }
@@ -1063,13 +1114,115 @@ export default function App() {
     : null;
 
   // Handlers for authentication
-  const handleStaffLogin = (user: { email: string; rol: string; nombre: string }) => {
+  const handleStaffLogin = (email: string) => {
+    const clean = email.trim().toLowerCase();
+    const usuario = toList(instantData?.usuarios).find(
+      (u) => String(u.email || '').toLowerCase() === clean
+    );
+    const conductor = toList(instantData?.conductores).find(
+      (c) => String(c.email || '').toLowerCase() === clean
+    );
+
+    // Resolver rol / cliente / conductor
+    let rol = 'admin';
+    let nombre = clean.split('@')[0];
+    let clienteId: string | undefined;
+    let conductorId: string | undefined;
+
+    if (usuario) {
+      rol = usuario.rol || 'admin';
+      nombre = usuario.nombre || nombre;
+      clienteId = usuario.cliente_id || undefined;
+    } else if (conductor) {
+      rol = 'conductor';
+      nombre = conductor.nombre || nombre;
+      clienteId = conductor.cliente_id || undefined;
+      conductorId = conductor.id;
+    } else {
+      // Sin registro en usuarios/conductores: solo se permite admin demo en desarrollo
+      if (clean === 'admin@demo.com' && import.meta.env.DEV) {
+        rol = 'superadmin';
+      } else {
+        setAuthSession(null);
+        console.warn('Acceso denegado: correo sin usuario registrado.');
+        return;
+      }
+    }
+
+    // El dueño (admin@demo.com) siempre es superadmin → gestiona clientes y activación
+    if (clean === 'admin@demo.com') {
+      rol = 'superadmin';
+    }
+
+    const user: StaffSessionUser = { email: clean, rol, nombre, clienteId, conductorId };
     setAuthSession({ type: 'staff', user });
-    setDemoUser(user);
+    setDemoUser({ email: clean, rol, nombre });
     localStorage.setItem('rutaescolar_staff_session', JSON.stringify(user));
-    localStorage.setItem('rutaescolar_demo_user', JSON.stringify(user));
+    localStorage.setItem('rutaescolar_demo_user', JSON.stringify({ email: clean, rol, nombre }));
     localStorage.removeItem('rutaescolar_parent_student_id');
+
+    if (conductorId) {
+      setCurrentDriverId(conductorId);
+      setCurrentView('driver');
+    } else {
+      setCurrentView('home');
+    }
+  };
+
+  // ===== CLIENTES (multi-tenant, solo superadmin) =====
+  const handleSaveCliente = async (cliente: Cliente) => {
+    try {
+      await upsertClienteInstant(cliente);
+    } catch (e) {
+      console.warn('InstantDB cliente sync fallback:', e);
+    }
+  };
+
+  const handleDeactivateCliente = async (clienteId: string) => {
+    try {
+      await deactivateClienteInstant(clienteId);
+    } catch (e) {
+      console.warn('InstantDB cliente deactivate fallback:', e);
+    }
+  };
+
+  const handleManageCliente = (clienteId: string) => {
+    setManageClienteId(clienteId);
     setCurrentView('home');
+  };
+
+  // Importar alumnos (CSV) bajo un cliente
+  const handleImportAlumnosCsv = async (clienteId: string, rows: CsvAlumnoRow[]) => {
+    for (const row of rows) {
+      try {
+        const repId = ensureUUID();
+        const rep: Representante = {
+          id: repId,
+          nombre: row.representante || 'Representante',
+          telefono_whatsapp: row.telefono || '',
+          magic_token: `tok-${repId}`,
+          email: row.email || '',
+          cliente_id: clienteId,
+        };
+        const alumno: Alumno = {
+          id: ensureUUID(),
+          nombre: row.nombre,
+          colegio_id: selectedColegio.id,
+          representante_id: repId,
+          direccion_recogida: row.direccion || '',
+          lat: row.lat,
+          lng: row.lng,
+          grado: row.grado || '',
+          modalidad_servicio: (row.modalidad as any) || 'ida_y_vuelta',
+          activo_en_rutas: true,
+          dias_ruta: row.dias ? row.dias.split(/[,\s]+/).filter(Boolean) : ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'],
+          cliente_id: clienteId,
+        };
+        await upsertAlumnoInstant(alumno, rep);
+      } catch (e) {
+        console.warn('Error importando alumno CSV:', e);
+      }
+    }
   };
 
   const handleParentLogin = (studentId: string) => {
@@ -1210,7 +1363,7 @@ export default function App() {
   // STAFF VIEW: Sidebar + Header + Main Content
   return (
     <div className="flex h-screen w-screen bg-canvas text-ink font-sans overflow-hidden">
-      <AppSidebar currentView={currentView} onNavigate={setCurrentView} />
+      <AppSidebar currentView={currentView} onNavigate={setCurrentView} showClientes={isSuperadmin} />
 
       <div className="flex flex-1 flex-col min-w-0">
         <PWAInstallBanner />
@@ -1338,6 +1491,33 @@ export default function App() {
           )}
 
           {currentView === 'sql' && <SqlSchemaViewer />}
+
+          {currentView === 'clientes' && (
+            <ClientManager
+              clientes={(toList(instantData?.clientes) as any[]).map((c) => ({
+                id: ensureUUID(c.id),
+                nombre: c.nombre || 'Cliente',
+                plan: c.plan || 'basico',
+                activo: c.activo !== false,
+                created_at: c.created_at,
+              }))}
+              colegiosCount={colegios.length}
+              alumnosCount={alumnos.length}
+              conductoresCount={conductores.length}
+              multitenantActive={multitenantEnabled()}
+              backupData={instantData || {}}
+              onSetMultitenant={async (on) => {
+                setMultitenantEnabled(on);
+                if (on) await migrateToClientes(instantData);
+                window.location.reload();
+              }}
+              onSaveCliente={handleSaveCliente}
+              onDeactivateCliente={handleDeactivateCliente}
+              onManageCliente={handleManageCliente}
+              onImportAlumnos={handleImportAlumnosCsv}
+              onBack={() => setCurrentView('home')}
+            />
+          )}
         </main>
       </div>
 

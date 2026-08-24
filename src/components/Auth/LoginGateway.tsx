@@ -30,7 +30,7 @@ import { db, INSTANT_APP_ID, seedInstantDatabase } from '../../services/instantD
 
 interface LoginGatewayProps {
   allStudents: Alumno[];
-  onStaffLogin: (user: { email: string; rol: string; nombre: string }) => void;
+  onStaffLogin: (email: string) => void;
   onParentLogin: (studentId: string) => void;
 }
 
@@ -57,22 +57,18 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
   const [isSeeding, setIsSeeding] = useState(false);
   const [seedSuccess, setSeedSuccess] = useState(false);
 
-  // 1. Quick 1-Click Demo Admin Login
+  // 1. Quick 1-Click Demo Admin Login (SOLO en desarrollo)
   const handleQuickAdminLogin = () => {
+    if (!import.meta.env.DEV) return;
     setIsSubmitting(true);
     setStaffError(null);
-    const demoStaffUser = {
-      email: 'admin@demo.com',
-      rol: 'admin',
-      nombre: 'Administrador Demo'
-    };
-    setStaffSuccess('¡Sesión de Administrador iniciada con credenciales demo!');
+    setStaffSuccess('¡Sesión de Administrador iniciada con credenciales demo (dev)!');
     setTimeout(() => {
-      onStaffLogin(demoStaffUser);
+      onStaffLogin('admin@demo.com');
     }, 400);
   };
 
-  // 2. Staff Form Submit (InstantDB Magic Code or Demo verify)
+  // 2. Staff Form Submit (InstantDB Magic Code)
   const handleStaffFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) return;
@@ -84,21 +80,7 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
     const cleanEmail = email.trim().toLowerCase();
     const cleanPass = passwordOrCode.trim();
 
-    // Check if logging in with temporary admin credentials
-    if (cleanEmail === 'admin@demo.com' && (cleanPass === '123456' || cleanPass === 'admin')) {
-      const demoStaffUser = {
-        email: 'admin@demo.com',
-        rol: 'admin',
-        nombre: 'Administrador Demo'
-      };
-      setStaffSuccess('¡Credenciales verificadas! Accediendo al sistema...');
-      setTimeout(() => {
-        onStaffLogin(demoStaffUser);
-      }, 400);
-      return;
-    }
-
-    // Otherwise, use InstantDB Auth Magic Code
+    // Acceso por InstantDB Magic Code (código de 6 dígitos enviado al correo)
     try {
       if (!codeSent) {
         await db.auth.sendMagicCode({ email: cleanEmail });
@@ -106,17 +88,13 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
         setStaffSuccess(`Código de 6 dígitos enviado a ${cleanEmail}. Ingrésalo a continuación.`);
       } else {
         await db.auth.signInWithMagicCode({ email: cleanEmail, code: cleanPass });
-        setStaffSuccess('¡Autenticado con éxito en InstantDB!');
+        setStaffSuccess('¡Autenticado con éxito! Verificando acceso...');
         setTimeout(() => {
-          onStaffLogin({
-            email: cleanEmail,
-            rol: 'admin',
-            nombre: cleanEmail.split('@')[0]
-          });
+          onStaffLogin(cleanEmail);
         }, 500);
       }
     } catch (err: any) {
-      setStaffError(err?.message || 'Error en la autenticación. Verifica los datos.');
+      setStaffError(err?.message || 'Error en la autenticación. Verifica el código o el correo.');
     } finally {
       setIsSubmitting(false);
     }
@@ -231,37 +209,39 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
           {/* TAB 1: STAFF / ADMIN / DRIVER LOGIN */}
           {activeTab === 'staff' && (
             <div className="space-y-4">
-              {/* Quick 1-Click Demo Login Banner */}
-              <div className="rounded-xl border border-primary/25 bg-primary/10 p-3.5 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-black uppercase tracking-wider text-primary flex items-center gap-1.5">
-                    <Sparkles className="h-3.5 w-3.5" />
-                    Acceso Rápido Administrador Demo
-                  </span>
-                  <span className="text-[10px] font-mono text-primary bg-primary/10 px-2 py-0.5 rounded border border-primary/25">
-                    admin@demo.com / 123456
-                  </span>
+              {/* Quick 1-Click Demo Login Banner (SOLO desarrollo) */}
+              {import.meta.env.DEV && (
+                <div className="rounded-xl border border-primary/25 bg-primary/10 p-3.5 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-primary flex items-center gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5" />
+                      Acceso Rápido Administrador Demo
+                    </span>
+                    <span className="text-[10px] font-mono text-primary bg-primary/10 px-2 py-0.5 rounded border border-primary/25">
+                      admin@demo.com / 123456
+                    </span>
+                  </div>
+                  <p className="text-xs text-ink leading-relaxed">
+                    Ingresa con un solo clic con las credenciales de administrador para gestionar rutas, escuelas y alumnos.
+                  </p>
+                  <button
+                    id="btn-quick-admin-login-main"
+                    type="button"
+                    onClick={handleQuickAdminLogin}
+                    disabled={isSubmitting}
+                    className="w-full flex items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-xs font-black text-white hover:bg-primary active:scale-95 transition-all shadow-md cursor-pointer"
+                  >
+                    <Zap className="h-4 w-4" />
+                    <span>Ingresar como Admin Demo (1-Click)</span>
+                    <ArrowRight className="h-4 w-4 ml-1" />
+                  </button>
                 </div>
-                <p className="text-xs text-ink leading-relaxed">
-                  Ingresa con un solo clic con las credenciales de administrador para gestionar rutas, escuelas y alumnos.
-                </p>
-                <button
-                  id="btn-quick-admin-login-main"
-                  type="button"
-                  onClick={handleQuickAdminLogin}
-                  disabled={isSubmitting}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-xs font-black text-white hover:bg-primary active:scale-95 transition-all shadow-md cursor-pointer"
-                >
-                  <Zap className="h-4 w-4" />
-                  <span>Ingresar como Admin Demo (1-Click)</span>
-                  <ArrowRight className="h-4 w-4 ml-1" />
-                </button>
-              </div>
+              )}
 
               <div className="relative flex py-1 items-center">
                 <div className="flex-grow border-t border-line"></div>
                 <span className="flex-shrink mx-2 text-[10px] uppercase font-bold text-muted">
-                  O inicia con tus datos
+                  O inicia con tu correo y código
                 </span>
                 <div className="flex-grow border-t border-line"></div>
               </div>
@@ -302,7 +282,7 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
 
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-ink mb-1">
-                    Contraseña / Código InstantDB
+                    Código de 6 dígitos (InstantDB)
                   </label>
                   <div className="relative">
                     <Lock className="absolute left-3.5 top-3 h-4 w-4 text-muted" />
@@ -311,7 +291,7 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
                       required
                       value={passwordOrCode}
                       onChange={(e) => setPasswordOrCode(e.target.value)}
-                      placeholder="123456"
+                      placeholder="••••••"
                       className="w-full rounded-xl bg-canvas border border-line pl-10 pr-4 py-2.5 text-xs text-ink placeholder:text-muted focus:border-primary focus:outline-none transition-all shadow-inner"
                     />
                   </div>

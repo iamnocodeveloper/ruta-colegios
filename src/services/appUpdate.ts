@@ -9,7 +9,7 @@
  */
 import { useEffect, useState } from 'react';
 
-export const APP_VERSION = '1.2.0';
+export const APP_VERSION = '1.4.0';
 
 export interface ServiceWorkerUpdateState {
   /** Hay un nuevo service worker instalado esperando (nueva versión lista). */

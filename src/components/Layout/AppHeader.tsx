@@ -25,6 +25,7 @@ const VIEW_TITLES: Record<StaffView, string> = {
   sql: 'Esquema SQL',
   history: 'Historial de Rutas',
   review: 'Revisión de Ruta',
+  clientes: 'Clientes',
 };
 
 const MOBILE_ITEMS: { id: string; view: StaffView; label: string; icon: React.ElementType }[] = [

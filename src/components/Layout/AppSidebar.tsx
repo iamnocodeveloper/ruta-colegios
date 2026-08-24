@@ -1,11 +1,12 @@
 import React from 'react';
-import { Home, Compass, Sparkles, Users, School, Truck, History, ArrowRight } from 'lucide-react';
+import { Home, Compass, Sparkles, Users, School, Truck, History, Building2, ArrowRight } from 'lucide-react';
 
-export type StaffView = 'home' | 'driver' | 'parent' | 'planner' | 'students' | 'schools' | 'drivers' | 'sql' | 'history' | 'review';
+export type StaffView = 'home' | 'driver' | 'parent' | 'planner' | 'students' | 'schools' | 'drivers' | 'sql' | 'history' | 'review' | 'clientes';
 
 interface AppSidebarProps {
   currentView: StaffView;
   onNavigate: (view: StaffView) => void;
+  showClientes?: boolean;
 }
 
 interface NavItem {
@@ -25,7 +26,11 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'nav-history', view: 'history', label: 'Historial', icon: History },
 ];
 
-export const AppSidebar: React.FC<AppSidebarProps> = ({ currentView, onNavigate }) => {
+export const AppSidebar: React.FC<AppSidebarProps> = ({ currentView, onNavigate, showClientes = false }) => {
+  const items = showClientes
+    ? [...NAV_ITEMS, { id: 'nav-clientes', view: 'clientes' as StaffView, label: 'Clientes', icon: Building2 }]
+    : NAV_ITEMS;
+
   return (
     <aside className="hidden lg:flex w-[264px] shrink-0 flex-col bg-canvas border-r border-line px-4 py-5">
       {/* Brand */}
@@ -41,7 +46,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ currentView, onNavigate 
 
       {/* Main Menu */}
       <nav className="flex flex-col gap-1.5">
-        {NAV_ITEMS.map((item) => {
+        {items.map((item) => {
           const Icon = item.icon;
           const isActive = currentView === item.view;
           return (

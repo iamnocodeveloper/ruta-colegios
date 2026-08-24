@@ -9,6 +9,7 @@
 import { init, i, id, tx } from '@instantdb/react';
 import {
   Alumno,
+  Cliente,
   Colegio,
   Conductor,
   ParadaRuta,
@@ -30,6 +31,12 @@ export const INSTANT_APP_ID = '9bfbca9b-1445-4948-98f4-70bfcf2164a2';
 // Schema Definition for InstantDB
 const _schema = i.schema({
   entities: {
+    clientes: i.entity({
+      nombre: i.string(),
+      plan: i.string().optional(),   // basico | pro | premium | escolar_*
+      activo: i.boolean(),
+      created_at: i.string().optional(),
+    }),
     colegios: i.entity({
       nombre: i.string(),
       direccion: i.string(),
@@ -37,6 +44,7 @@ const _schema = i.schema({
       lng: i.number(),
       hora_llegada_limite: i.string(),
       contacto_telefono: i.string().optional(),
+      cliente_id: i.string().optional(),
       created_at: i.string().optional(),
     }),
     representantes: i.entity({
@@ -44,6 +52,7 @@ const _schema = i.schema({
       telefono_whatsapp: i.string(),
       magic_token: i.string(),
       email: i.string().optional(),
+      cliente_id: i.string().optional(),
       created_at: i.string().optional(),
     }),
     alumnos: i.entity({
@@ -59,6 +68,7 @@ const _schema = i.schema({
       modalidad_servicio: i.string().optional(),
       activo_en_rutas: i.boolean().optional(),
       dias_ruta: i.json().optional(),
+      cliente_id: i.string().optional(),
       created_at: i.string().optional(),
     }),
     conductores: i.entity({
@@ -71,6 +81,7 @@ const _schema = i.schema({
       capacidad_pasajeros: i.number().optional(),
       foto_url: i.string().optional(),
       activo: i.boolean(),
+      cliente_id: i.string().optional(),
       created_at: i.string().optional(),
     }),
     rutas_diarias: i.entity({
@@ -94,6 +105,7 @@ const _schema = i.schema({
       distancia_total_km: i.number(),
       estado: i.string(),
       tiempo_abordaje_por_alumno_min: i.number(),
+      cliente_id: i.string().optional(),
       created_at: i.string().optional(),
       polyline_json: i.string().optional(),
     }),
@@ -108,6 +120,7 @@ const _schema = i.schema({
       tiempo_desde_anterior_min: i.number().optional(),
       lat: i.number(),
       lng: i.number(),
+      cliente_id: i.string().optional(),
       created_at: i.string().optional(),
     }),
     tracking_logs: i.entity({
@@ -116,12 +129,14 @@ const _schema = i.schema({
       lng: i.number(),
       velocidad_kmh: i.number().optional(),
       rumbo_grados: i.number().optional(),
+      cliente_id: i.string().optional(),
       timestamp: i.string(),
     }),
     usuarios: i.entity({
       email: i.string(),
       nombre: i.string(),
-      rol: i.string(),
+      rol: i.string(),             // superadmin | admin | conductor
+      cliente_id: i.string().optional(),
       created_at: i.string().optional(),
     }),
     // ===== AUDITORÍA (write-only, NO se consultan desde la app) =====
@@ -141,6 +156,7 @@ const _schema = i.schema({
       estado_nuevo: i.string().optional(),
       hora_evento: i.string(),           // ISO 8601 del evento
       detalle_json: i.json().optional(), // payload completo enviado al webhook
+      cliente_id: i.string().optional(),
       created_at: i.string().optional(),
     }),
     webhook_logs: i.entity({
@@ -152,6 +168,7 @@ const _schema = i.schema({
       http_status: i.number().optional(),
       duracion_ms: i.number().optional(),
       error_mensaje: i.string().optional(),
+      cliente_id: i.string().optional(),
       timestamp: i.string(),             // ISO 8601
       created_at: i.string().optional(),
     }),
@@ -344,6 +361,7 @@ export async function upsertColegioInstant(colegio: Colegio) {
       lng: Number(colegio.lng),
       hora_llegada_limite: colegio.hora_llegada_limite,
       contacto_telefono: colegio.contacto_telefono || '',
+      ...(multitenantEnabled() ? { cliente_id: colegio.cliente_id || '' } : {}),
       created_at: colegio.created_at || new Date().toISOString(),
     }),
   ]);
@@ -369,6 +387,7 @@ export async function upsertRepresentanteInstant(rep: Representante) {
       telefono_whatsapp: rep.telefono_whatsapp,
       magic_token: rep.magic_token || `tok-${id()}`,
       email: rep.email || '',
+      ...(multitenantEnabled() ? { cliente_id: rep.cliente_id || '' } : {}),
       created_at: rep.created_at || new Date().toISOString(),
     }),
   ]);
@@ -390,6 +409,7 @@ export async function upsertAlumnoInstant(alumno: Alumno, rep?: Representante) {
         telefono_whatsapp: rep.telefono_whatsapp,
         magic_token: rep.magic_token || `tok-${id()}`,
         email: rep.email || '',
+        ...(multitenantEnabled() ? { cliente_id: rep.cliente_id || '' } : {}),
         created_at: rep.created_at || new Date().toISOString(),
       })
     );
@@ -412,6 +432,7 @@ export async function upsertAlumnoInstant(alumno: Alumno, rep?: Representante) {
       modalidad_servicio: alumno.modalidad_servicio || 'ida_y_vuelta',
       activo_en_rutas: alumno.activo_en_rutas !== false,
       dias_ruta: alumno.dias_ruta || ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'],
+      ...(multitenantEnabled() ? { cliente_id: alumno.cliente_id || '' } : {}),
       created_at: alumno.created_at || new Date().toISOString(),
     })
   );
@@ -456,6 +477,7 @@ export async function upsertConductorInstant(conductor: Conductor) {
       capacidad_pasajeros: Number(conductor.capacidad_pasajeros || 16),
       foto_url: conductor.foto_url || '',
       activo: conductor.activo ?? true,
+      ...(multitenantEnabled() ? { cliente_id: conductor.cliente_id || '' } : {}),
       created_at: conductor.created_at || new Date().toISOString(),
     }),
   ]);
@@ -468,6 +490,149 @@ export async function upsertConductorInstant(conductor: Conductor) {
 export async function deleteConductorInstant(conductorId: string) {
   const safeId = ensureUUID(conductorId);
   await db.transact([tx.conductores[safeId].delete()]);
+}
+
+// ===========================================================================
+// MULTI-TENANT: CLIENTES
+// ===========================================================================
+
+/** Cliente raíz: agrupa los datos de la instalación actual (migración v2). */
+export const ROOT_CLIENT_ID = 'c0000000-0000-4000-8000-000000000001';
+const MIGRATION_KEY = 'rutaescolar_migrated_v2';
+const MULTITENANT_KEY = 'rutaescolar_multitenant_enabled';
+
+/**
+ * Multi-tenant activado (solo tras configurar el dashboard de InstantDB y
+ * habilitarlo). Mientras esté desactivado, los upserts NO envían `cliente_id`,
+ * por lo que la instalación actual funciona igual.
+ */
+export function multitenantEnabled(): boolean {
+  if (typeof localStorage === 'undefined') return false;
+  return localStorage.getItem(MULTITENANT_KEY) === '1';
+}
+export function setMultitenantEnabled(on: boolean) {
+  if (typeof localStorage === 'undefined') return;
+  localStorage.setItem(MULTITENANT_KEY, on ? '1' : '0');
+}
+export function isMigrationDone(): boolean {
+  if (typeof localStorage === 'undefined') return false;
+  return localStorage.getItem(MIGRATION_KEY) === 'done';
+}
+
+/**
+ * Upsert de un cliente (tenant). No borra datos; solo crea/actualiza la fila.
+ */
+export async function upsertClienteInstant(cliente: Cliente) {
+  const cid = ensureUUID(cliente.id);
+  await db.transact([
+    tx.clientes[cid].update({
+      nombre: cliente.nombre,
+      plan: cliente.plan || 'basico',
+      activo: cliente.activo !== false,
+      created_at: cliente.created_at || new Date().toISOString(),
+    }),
+  ]);
+  return cid;
+}
+
+/**
+ * Baja lógica de un cliente (activo = false). No elimina sus datos.
+ */
+export async function deactivateClienteInstant(clienteId: string) {
+  const cid = ensureUUID(clienteId);
+  await db.transact([tx.clientes[cid].update({ activo: false })]);
+}
+
+/**
+ * Migración NO destructiva a multi-tenant:
+ *  - Crea el cliente raíz "Mi Instalación" si no existe.
+ *  - Asigna `cliente_id` = raíz a todas las filas existentes que no lo tengan.
+ *  - Sube el rol del usuario admin demo a `superadmin`.
+ * Solo escribe `cliente_id`/`rol`; no borra ni re-crea ninguna fila.
+ * Idempotente (controlada por flag local).
+ */
+export async function migrateToClientes(data: any): Promise<boolean> {
+  try {
+    if (!multitenantEnabled()) return false;
+    if (typeof localStorage !== 'undefined' && localStorage.getItem(MIGRATION_KEY) === 'done') {
+      return true;
+    }
+    const toList = (raw: any): any[] =>
+      !raw ? [] : Array.isArray(raw) ? raw : Object.values(raw);
+
+    const transactions: any[] = [];
+    const root = ROOT_CLIENT_ID;
+
+    // 1. Asegurar cliente raíz
+    const clientes = toList(data?.clientes);
+    if (clientes.length === 0) {
+      transactions.push(
+        tx.clientes[root].update({
+          nombre: 'Mi Instalación',
+          plan: 'premium',
+          activo: true,
+          created_at: new Date().toISOString(),
+        })
+      );
+    } else {
+      // Si ya hay clientes, el raíz es el primero que exista
+      // (no re-crear; solo asegurar que las filas sin cliente van al primero).
+    }
+
+    // 2. Asignar cliente_id raíz a filas existentes sin cliente
+    const ENTITIES = [
+      'colegios',
+      'representantes',
+      'alumnos',
+      'conductores',
+      'rutas_diarias',
+      'paradas_ruta',
+      'tracking_logs',
+      'usuarios',
+      'eventos_ruta',
+      'webhook_logs',
+    ] as const;
+
+    for (const entity of ENTITIES) {
+      const rows = toList(data?.[entity]);
+      for (const row of rows) {
+        const rowId = ensureUUID(row.id);
+        if (!row.cliente_id) {
+          (transactions as any[]).push(
+            (tx as any)[entity][rowId].update({ cliente_id: root })
+          );
+        }
+      }
+    }
+
+    // 3. El usuario admin demo pasa a superadmin
+    const adminRow = toList(data?.usuarios).find(
+      (u: any) => String(u.email || '').toLowerCase() === 'admin@demo.com'
+    );
+    if (adminRow) {
+      const adminId = ensureUUID(adminRow.id);
+      if (adminRow.rol !== 'superadmin' || !adminRow.cliente_id) {
+        transactions.push(
+          tx.usuarios[adminId].update({
+            rol: 'superadmin',
+            cliente_id: adminRow.cliente_id || root,
+          })
+        );
+      }
+    }
+
+    if (transactions.length > 0) {
+      await db.transact(transactions);
+    }
+
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(MIGRATION_KEY, 'done');
+    }
+    return true;
+  } catch (err) {
+    console.warn('[instantDb] Migración a clientes no completada (se reintentará):', err);
+    return false;
+  }
 }
 
 /**
@@ -500,6 +665,7 @@ export async function saveRutaInstant(ruta: RutaDiaria) {
       distancia_total_km: Number(ruta.distancia_total_km || 0),
       estado: ruta.estado,
       tiempo_abordaje_por_alumno_min: Number(ruta.tiempo_abordaje_por_alumno_min || 2.5),
+      ...(multitenantEnabled() ? { cliente_id: ruta.cliente_id || '' } : {}),
       created_at: ruta.created_at || new Date().toISOString(),
       polyline_json: JSON.stringify(ruta.polyline_geometry || []),
     })
@@ -521,6 +687,7 @@ export async function saveRutaInstant(ruta: RutaDiaria) {
           tiempo_desde_anterior_min: Number(p.tiempo_desde_anterior_min || 0),
           lat: Number(p.lat),
           lng: Number(p.lng),
+          ...(multitenantEnabled() ? { cliente_id: ruta.cliente_id || '' } : {}),
           created_at: new Date().toISOString(),
         })
       );
@@ -571,7 +738,8 @@ export async function recordTrackingInstant(
   lat: number,
   lng: number,
   velocidad?: number,
-  rumbo?: number
+  rumbo?: number,
+  clienteId?: string
 ) {
   const logId = id();
   const safeRutaId = ensureUUID(rutaId);
@@ -582,6 +750,7 @@ export async function recordTrackingInstant(
       lng: Number(lng),
       velocidad_kmh: velocidad !== undefined ? Number(velocidad) : 0,
       rumbo_grados: rumbo !== undefined ? Number(rumbo) : 0,
+      ...(multitenantEnabled() ? { cliente_id: clienteId || '' } : {}),
       timestamp: new Date().toISOString(),
     }),
   ]);
@@ -610,6 +779,7 @@ export interface EventoRutaRegistro {
   estado_nuevo?: string;
   hora_evento: string; // ISO 8601
   detalle_json?: any;  // payload completo enviado al webhook
+  cliente_id?: string;
 }
 
 /**
@@ -635,6 +805,7 @@ export async function logEventoRutaInstant(registro: EventoRutaRegistro) {
       estado_nuevo: registro.estado_nuevo || '',
       hora_evento: registro.hora_evento,
       detalle_json: registro.detalle_json ?? {},
+      ...(multitenantEnabled() ? { cliente_id: registro.cliente_id || '' } : {}),
       created_at: new Date().toISOString(),
     }),
   ]);
@@ -649,6 +820,7 @@ export async function createWebhookLogInstant(registro: {
   evento: string;
   url_destino: string;
   payload_json?: string;
+  cliente_id?: string;
 }) {
   const logId = id();
   await db.transact([
@@ -658,6 +830,7 @@ export async function createWebhookLogInstant(registro: {
       payload_json: registro.payload_json || '',
       estado_envio: 'pendiente',
       intentos: 0,
+      ...(multitenantEnabled() ? { cliente_id: registro.cliente_id || '' } : {}),
       timestamp: new Date().toISOString(),
       created_at: new Date().toISOString(),
     }),
