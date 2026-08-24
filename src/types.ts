@@ -99,6 +99,8 @@ export interface RutaTrayecto {
   modo_optimizacion: ModoOptimizacion;
   variante?: string;
   polyline_geometry?: [number, number][];
+  polyline_alternativas?: RouteAlternative[];
+  ruta_elegida?: number;
 }
 
 export interface RutaDiaria {
@@ -128,6 +130,9 @@ export interface RutaDiaria {
   conductor?: Conductor;
   paradas: ParadaRuta[];
   polyline_geometry?: [number, number][]; // lat/lng pairs for map route line
+  // Rutas alternativas (estilo Google Maps) + ruta elegida (0 principal / 1..n alternativa)
+  polyline_alternativas?: RouteAlternative[];
+  ruta_elegida?: number;
   // Ruta combinada: cuando se planifican AMBAS jornadas, cada trayecto conserva sus
   // propias paradas y métricas. `ruta.paradas` es la concatenación (ida + vuelta).
   ida?: RutaTrayecto;
@@ -173,4 +178,15 @@ export interface RouteOptimizationResult {
   }>;
   polyline_geometry: [number, number][];
   traffic_factor: number;
+  // Rutas alternativas estilo Google Maps (misma secuencia de paradas, calles distintas)
+  alternativas?: RouteAlternative[];
+}
+
+/**
+ * Ruta de conducción alternativa (mismas paradas, calles distintas).
+ */
+export interface RouteAlternative {
+  polyline: [number, number][];
+  distanceKm: number;
+  durationMin: number;
 }

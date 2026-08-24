@@ -65,6 +65,10 @@ export const ROUTE_VARIANT_COLORS: Record<string, { color: string; dash: string;
   manual: { color: '#EF4444', dash: '4, 4', label: 'Manual' },
 };
 
+// Ruta alternativa (estilo Google Maps): cian punteado, fuera de la paleta de variantes
+export const ROUTE_ALT_COLOR = '#06B6D4';
+export const ROUTE_ALT_DASH = '6, 4';
+
 interface StopRowProps {
   studentId: string;
   index: number;
@@ -83,6 +87,7 @@ interface JourneyPlan {
   variantId: string;
   isManual: boolean;
   horaLlegada: string;
+  rutaElegida: number; // 0 = principal, 1..n = alternativa
 }
 
 const StopRow: React.FC<StopRowProps> = ({
@@ -267,6 +272,9 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
   const [idaPlan, setIdaPlan] = useState<JourneyPlan | null>(null);
   const [vueltaPlan, setVueltaPlan] = useState<JourneyPlan | null>(null);
 
+  // Ruta de conducción elegida (estilo Google Maps): 0 = principal, 1..n = alternativa
+  const [rutaElegida, setRutaElegida] = useState<number>(0);
+
   const prevColegioIdRef = useRef<string>(selectedColegio.id);
   const prevTipoTrayectoRef = useRef<TipoTrayecto>(tipoTrayecto);
 
@@ -363,6 +371,65 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedColegio, origen, selectedStudentIds, modo, tiempoAbordajeMin, horaLlegada, tipoTrayecto]);
 
+  // Cada nuevo cálculo vuelve a la ruta de conducción principal
+  useEffect(() => {
+    setRutaElegida(0);
+  }, [optimizationResult]);
+
+  // ===== Rutas alternativas (estilo Google Maps): derivados para el mapa =====
+  const alternativasRuta = optimizationResult?.alternativas || [];
+  const varianteMeta = ROUTE_VARIANT_COLORS[activeVariantId] || ROUTE_VARIANT_COLORS['2opt'];
+  const altElegida = rutaElegida > 0 ? alternativasRuta[rutaElegida - 1] : undefined;
+
+  const mapPolyline = altElegida ? altElegida.polyline : optimizationResult?.polyline_geometry;
+  const mapPolylineColor = altElegida ? ROUTE_ALT_COLOR : varianteMeta.color;
+  const mapPolylineDash = altElegida ? ROUTE_ALT_DASH : varianteMeta.dash;
+
+  const mapAlternativePolylines: {
+    geometry: [number, number][];
+    color: string;
+    dash: string;
+    label: string;
+    distanceKm?: number;
+    durationMin?: number;
+  }[] = [];
+  if (alternativasRuta.length > 0) {
+    if (!altElegida) {
+      alternativasRuta.forEach((a, i) => {
+        mapAlternativePolylines.push({
+          geometry: a.polyline,
+          color: ROUTE_ALT_COLOR,
+          dash: ROUTE_ALT_DASH,
+          label: `Alternativa ${i + 1}`,
+          distanceKm: a.distanceKm,
+          durationMin: a.durationMin,
+        });
+      });
+    } else {
+      if (optimizationResult?.polyline_geometry) {
+        mapAlternativePolylines.push({
+          geometry: optimizationResult.polyline_geometry,
+          color: varianteMeta.color,
+          dash: varianteMeta.dash,
+          label: 'Principal',
+          distanceKm: optimizationResult.distancia_total_km,
+          durationMin: optimizationResult.tiempo_manejo_min,
+        });
+      }
+      alternativasRuta.forEach((a, i) => {
+        if (i + 1 === rutaElegida) return;
+        mapAlternativePolylines.push({
+          geometry: a.polyline,
+          color: ROUTE_ALT_COLOR,
+          dash: ROUTE_ALT_DASH,
+          label: `Alternativa ${i + 1}`,
+          distanceKm: a.distanceKm,
+          durationMin: a.durationMin,
+        });
+      });
+    }
+  }
+
   // Manual reordering handlers
   const applyManualOrder = (newOrder: string[]) => {
     if (newOrder.length === 0) return;
@@ -457,6 +524,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
       variantId: activeVariantId,
       isManual: isManualOrder,
       horaLlegada,
+      rutaElegida,
     };
     if (tipo === 'ida') {
       setIdaPlan(plan);
@@ -481,6 +549,9 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
       alumno: alumnosMap.get(p.alumno_id)
     }));
 
+    // Polyline según la ruta de conducción elegida (principal / alternativa)
+    const altElegida = (plan.result.alternativas || [])[plan.rutaElegida - 1];
+
     return {
       tipo_trayecto: plan.tipo_trayecto,
       paradas,
@@ -493,7 +564,9 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
       tiempo_abordaje_por_alumno_min: tiempoAbordajeMin,
       modo_optimizacion: modo,
       variante: plan.variantId,
-      polyline_geometry: plan.result.polyline_geometry,
+      polyline_geometry: altElegida ? altElegida.polyline : plan.result.polyline_geometry,
+      polyline_alternativas: plan.result.alternativas || [],
+      ruta_elegida: plan.rutaElegida,
     };
   };
 
@@ -537,6 +610,8 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
       // Concatenación ida + vuelta para vistas legacy (Home/Padres)
       paradas: [...(idaT ? idaT.paradas : []), ...(vueltaT ? vueltaT.paradas : [])],
       polyline_geometry: primary.polyline_geometry,
+      polyline_alternativas: primary.polyline_alternativas,
+      ruta_elegida: primary.ruta_elegida,
       ida: idaT,
       vuelta: vueltaT,
     };
@@ -1228,6 +1303,80 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
           </div>
         )}
 
+        {/* Rutas alternativas de conducción (estilo Google Maps) */}
+        {alternativasRuta.length > 0 && optimizationResult && (
+          <div className="rounded-xl border border-line bg-surface p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-bold text-ink flex items-center gap-2">
+                  <Route className="h-4 w-4 text-primary" />
+                  Rutas sugeridas (calles)
+                </h4>
+                <p className="text-[11px] text-muted">
+                  Elige la ruta de conducción; ambas se dibujan en el mapa con su color.
+                </p>
+              </div>
+              <span className="text-[10px] font-bold text-muted">{alternativasRuta.length + 1} opciones</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setRutaElegida(0)}
+                className={`rounded-xl border p-2.5 text-left transition-all cursor-pointer ${
+                  rutaElegida === 0
+                    ? 'border-primary bg-primary/5 shadow-md ring-1 ring-primary/30'
+                    : 'border-line bg-soft-gray hover:border-primary/40'
+                }`}
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className="inline-block h-2 w-5 rounded-full" style={{ backgroundColor: varianteMeta.color }} />
+                  <span className={`text-[11px] font-black ${rutaElegida === 0 ? 'text-primary' : 'text-ink'}`}>
+                    Ruta Principal
+                  </span>
+                  {rutaElegida === 0 && (
+                    <span className="ml-auto rounded-full bg-primary/10 text-primary border border-primary/25 px-1.5 py-0.5 text-[8px] font-black">
+                      ELEGIDA
+                    </span>
+                  )}
+                </div>
+                <p className="text-[10px] text-muted mt-0.5">
+                  {optimizationResult.distancia_total_km} km · {optimizationResult.tiempo_manejo_min} min
+                </p>
+              </button>
+
+              {alternativasRuta.map((a, i) => {
+                const isSel = rutaElegida === i + 1;
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setRutaElegida(i + 1)}
+                    className={`rounded-xl border p-2.5 text-left transition-all cursor-pointer ${
+                      isSel
+                        ? 'border-cyan-500 bg-cyan-50 shadow-md ring-1 ring-cyan-400/30'
+                        : 'border-line bg-soft-gray hover:border-cyan-400/40'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span className="inline-block h-2 w-5 rounded-full" style={{ backgroundColor: ROUTE_ALT_COLOR }} />
+                      <span className={`text-[11px] font-black ${isSel ? 'text-cyan-600' : 'text-ink'}`}>
+                        Alternativa {i + 1}
+                      </span>
+                      {isSel && (
+                        <span className="ml-auto rounded-full bg-cyan-500/15 text-cyan-600 border border-cyan-400/30 px-1.5 py-0.5 text-[8px] font-black">
+                          ELEGIDA
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-muted mt-0.5">{a.distanceKm} km · {a.durationMin} min</p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Map Preview Stage */}
         <div className={`relative w-full rounded-xl overflow-hidden border border-line ${isItineraryOpen ? 'h-[340px] sm:h-[380px]' : 'h-[calc(100vh-320px)] min-h-[420px]'}`}>
           <SchoolRouteMap
@@ -1255,9 +1404,10 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
                 : []
             }
             alumnosMap={alumnosMap}
-            polylineGeometry={optimizationResult?.polyline_geometry}
-            polylineColor={(ROUTE_VARIANT_COLORS[activeVariantId] || ROUTE_VARIANT_COLORS['2opt']).color}
-            polylineDash={(ROUTE_VARIANT_COLORS[activeVariantId] || ROUTE_VARIANT_COLORS['2opt']).dash}
+            polylineGeometry={mapPolyline}
+            polylineColor={mapPolylineColor}
+            polylineDash={mapPolylineDash}
+            alternativePolylines={mapAlternativePolylines}
             onMarkerClick={handleMarkerClick}
             reorderProgress={mapReorderMode ? { sequence: mapReorderSequence, total: totalStops } : null}
           />

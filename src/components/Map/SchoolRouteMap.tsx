@@ -28,6 +28,15 @@ interface SchoolRouteMapProps {
   polylineColor?: string; // Custom route line color (for variant selection)
   polylineDash?: string; // Custom dash array (e.g. '8, 8' or '0')
   reorderProgress?: { sequence: string[]; total: number } | null; // Map reorder mode feedback
+  // Rutas alternativas (estilo Google Maps): se dibujan debajo de la principal
+  alternativePolylines?: {
+    geometry: [number, number][];
+    color: string;
+    dash: string;
+    label: string;
+    distanceKm?: number;
+    durationMin?: number;
+  }[];
   className?: string;
 }
 
@@ -47,6 +56,7 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
   polylineColor = '#f59e0b',
   polylineDash = '8, 8',
   reorderProgress = null,
+  alternativePolylines = [],
   className = 'h-full w-full'
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -145,6 +155,27 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
 
     markersLayer.clearLayers();
     polylineLayer.clearLayers();
+
+    // 0. Draw alternative routes (Google Maps style) UNDER the main one
+    (alternativePolylines || []).forEach((alt) => {
+      if (!alt.geometry || alt.geometry.length === 0) return;
+      L.polyline(alt.geometry, {
+        color: alt.color,
+        weight: 4,
+        opacity: 0.7,
+        dashArray: alt.dash,
+        lineCap: 'round',
+        lineJoin: 'round'
+      }).addTo(polylineLayer);
+      L.polyline(alt.geometry, {
+        color: alt.color,
+        weight: 2,
+        opacity: 0.9,
+        dashArray: alt.dash,
+        lineCap: 'round',
+        lineJoin: 'round'
+      }).addTo(polylineLayer);
+    });
 
     // 1. Draw Route Polyline
     if (polylineGeometry && polylineGeometry.length > 0) {
@@ -357,7 +388,7 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
       const bounds = L.latLngBounds(allCoords);
       map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
     }
-  }, [colegio, origen, paradas, polylineGeometry, activeStopIndex, highlightStudentId, onOriginChange, targetArrivalTime, tipoTrayecto, polylineColor, polylineDash, reorderProgress]);
+  }, [colegio, origen, paradas, polylineGeometry, activeStopIndex, highlightStudentId, onOriginChange, targetArrivalTime, tipoTrayecto, polylineColor, polylineDash, reorderProgress, alternativePolylines]);
 
   // Handle Real-Time School Van Marker
   useEffect(() => {
@@ -447,6 +478,26 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
         <div className="absolute top-3 left-3 z-[400] rounded-lg bg-sky-950/90 border border-sky-500/60 px-3 py-1.5 text-xs font-bold text-sky-200 shadow-xl flex items-center gap-2 animate-bounce">
           <span>👆</span>
           <span>Haz clic en el mapa donde quieras ubicar el Punto de Salida</span>
+        </div>
+      )}
+
+      {/* Route alternatives legend (Google Maps style) */}
+      {alternativePolylines && alternativePolylines.length > 0 && (
+        <div className="absolute bottom-11 left-3 z-[400] hidden sm:flex flex-wrap items-center gap-2.5 rounded-lg bg-surface px-3 py-1.5 text-[11px] font-medium text-ink backdrop-blur border border-line shadow-lg">
+          {alternativePolylines.map((alt, i) => (
+            <div key={i} className="flex items-center gap-1">
+              <span
+                className="inline-block h-[3px] w-5 rounded-full"
+                style={{ backgroundColor: alt.color }}
+              />
+              <span>
+                {alt.label}
+                {alt.distanceKm != null && alt.durationMin != null
+                  ? ` (${alt.distanceKm} km · ${alt.durationMin} min)`
+                  : ''}
+              </span>
+            </div>
+          ))}
         </div>
       )}
 

@@ -101,6 +101,7 @@ export const DriverPanelSimple: React.FC<DriverPanelSimpleProps> = ({
   const [expandedRouteId, setExpandedRouteId] = useState<string | null>(null);
   const [showMap, setShowMap] = useState(false);
   const [activeJourney, setActiveJourney] = useState<JourneyKey>('ida');
+  const [driverRutaAlt, setDriverRutaAlt] = useState<number>(0);
 
   const isCombined = isCombinedRuta(ruta);
   const journeys = useMemo(() => getJourneys(ruta), [ruta]);
@@ -108,6 +109,7 @@ export const DriverPanelSimple: React.FC<DriverPanelSimpleProps> = ({
   // Reset journey selector when the active route changes
   React.useEffect(() => {
     setActiveJourney('ida');
+    setDriverRutaAlt(0);
   }, [ruta.id]);
 
   const journeyKeys = journeys.map((j) => j.tipo_trayecto);
@@ -120,6 +122,32 @@ export const DriverPanelSimple: React.FC<DriverPanelSimpleProps> = ({
   const paradas = isCombined && activeJourneyObj ? activeJourneyObj.paradas || [] : ruta.paradas || [];
   const meta = isCombined && activeJourneyObj ? activeJourneyObj : ruta;
   const routeState = isCombined ? activeJourneyObj?.estado || 'planificada' : ruta.estado;
+
+  // Ruta de conducción elegida en cabina (principal / alternativa estilo Google Maps)
+  const altList = meta.polyline_alternativas || [];
+  const altElegidaDriver = driverRutaAlt > 0 ? altList[driverRutaAlt - 1] : undefined;
+  const driverPolyline = altElegidaDriver ? altElegidaDriver.polyline : meta.polyline_geometry;
+  const driverPolylineColor = altElegidaDriver ? '#06B6D4' : '#0084FF';
+  const driverPolylineDash = altElegidaDriver ? '6, 4' : '0';
+  const driverAltPolylines = (() => {
+    const list: { geometry: [number, number][]; color: string; dash: string; label: string; distanceKm?: number; durationMin?: number }[] = [];
+    if (altList.length === 0) return list;
+    if (!altElegidaDriver) {
+      altList.forEach((a, i) =>
+        list.push({ geometry: a.polyline, color: '#06B6D4', dash: '6, 4', label: `Alternativa ${i + 1}`, distanceKm: a.distanceKm, durationMin: a.durationMin })
+      );
+    } else {
+      if (meta.polyline_geometry) {
+        list.push({ geometry: meta.polyline_geometry, color: '#0084FF', dash: '0', label: 'Principal', distanceKm: meta.distancia_total_km, durationMin: meta.tiempo_manejo_estimado_min });
+      }
+      altList.forEach((a, i) => {
+        if (i + 1 !== driverRutaAlt) {
+          list.push({ geometry: a.polyline, color: '#06B6D4', dash: '6, 4', label: `Alternativa ${i + 1}`, distanceKm: a.distanceKm, durationMin: a.durationMin });
+        }
+      });
+    }
+    return list;
+  })();
 
   const totalParadas = paradas.length;
   const recogidos = paradas.filter((p) => p.estado === 'recogido').length;
@@ -459,13 +487,48 @@ export const DriverPanelSimple: React.FC<DriverPanelSimpleProps> = ({
             )}
             {showMap && totalParadas > 0 && (
               <div className="rounded-card bg-surface border border-line p-3 shadow-soft">
+                {/* Selector de ruta de conducción (principal / alternativa) */}
+                {altList.length > 0 && (
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase text-muted">Ruta:</span>
+                    <button
+                      onClick={() => setDriverRutaAlt(0)}
+                      className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-extrabold border transition-colors cursor-pointer ${
+                        driverRutaAlt === 0
+                          ? 'bg-primary text-white border-primary'
+                          : 'bg-surface text-ink border-line hover:bg-soft-gray'
+                      }`}
+                    >
+                      <span className="inline-block h-2 w-4 rounded-full" style={{ backgroundColor: '#0084FF' }} />
+                      Principal
+                    </button>
+                    {altList.map((a, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setDriverRutaAlt(i + 1)}
+                        className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-extrabold border transition-colors cursor-pointer ${
+                          driverRutaAlt === i + 1
+                            ? 'bg-cyan-500 text-white border-cyan-500'
+                            : 'bg-surface text-ink border-line hover:bg-soft-gray'
+                        }`}
+                      >
+                        <span className="inline-block h-2 w-4 rounded-full" style={{ backgroundColor: '#06B6D4' }} />
+                        Alt {i + 1} ({a.distanceKm} km)
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 <div className="h-[400px] rounded-2xl overflow-hidden">
                   <SchoolRouteMap
                     colegio={colegio}
                     origen={{ lat: ruta.origen_lat, lng: ruta.origen_lng, direccion: ruta.origen_direccion }}
                     paradas={paradas}
                     alumnosMap={alumnosMap}
-                    polylineGeometry={meta.polyline_geometry}
+                    polylineGeometry={driverPolyline}
+                    polylineColor={driverPolylineColor}
+                    polylineDash={driverPolylineDash}
+                    alternativePolylines={driverAltPolylines}
                     targetArrivalTime={meta.hora_llegada_objetivo}
                     tipoTrayecto={meta.tipo_trayecto || 'ida'}
                     onOriginChange={undefined}

@@ -9,7 +9,7 @@
  *   6. Step-by-step intermediate ETAs for each student stop
  */
 
-import { Alumno, Colegio, ModoOptimizacion, RouteOptimizationResult, TipoTrayecto } from '../types';
+import { Alumno, Colegio, ModoOptimizacion, RouteAlternative, RouteOptimizationResult, TipoTrayecto } from '../types';
 
 /**
  * Calculates Haversine distance in kilometers between two geo coordinates
@@ -376,6 +376,110 @@ export function variantDistance(
   return Math.round(total * 10) / 10;
 }
 
+/**
+ * Consulta OSRM con rutas alternativas (alternatives=true → ruta principal + alternativas).
+ * Devuelve las rutas crudas ordenadas (main primero). Vacío si falla.
+ */
+async function fetchOsrmRoutes(points: Array<{ lat: number; lng: number }>): Promise<any[]> {
+  if (points.length < 2) return [];
+  try {
+    // Format coordinate string for OSRM: lon,lat;lon,lat...
+    const coordString = points.map((p) => `${p.lng.toFixed(6)},${p.lat.toFixed(6)}`).join(';');
+    const url = `https://router.project-osrm.org/route/v1/driving/${coordString}?overview=full&geometries=geojson&alternatives=true`;
+
+    const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.routes && data.routes.length > 0) {
+        return data.routes;
+      }
+    }
+  } catch {
+    // Fallback gracefully below
+  }
+  return [];
+}
+
+/**
+ * Obtiene geometría real + duración para una secuencia de puntos, con RUTA ALTERNATIVA
+ * (estilo Google Maps). Devuelve la ruta principal y hasta 1 alternativa (si OSRM la genera).
+ */
+export async function fetchRoadGeometryWithAlternatives(
+  points: Array<{ lat: number; lng: number }>,
+  mode: ModoOptimizacion
+): Promise<{
+  main: { polyline: [number, number][]; realDrivingMinutes: number; totalDistanceKm: number };
+  alternatives: RouteAlternative[];
+}> {
+  if (points.length < 2) {
+    return {
+      main: { polyline: points.map((p) => [p.lat, p.lng]), realDrivingMinutes: 0, totalDistanceKm: 0 },
+      alternatives: [],
+    };
+  }
+
+  const routes = await fetchOsrmRoutes(points);
+
+  if (routes.length > 0) {
+    const trafficFactor = mode === 'trafico_real' ? 1.35 : 1.12;
+
+    const build = (route: any): RouteAlternative => {
+      const coordinates: [number, number][] = route.geometry.coordinates.map(
+        ([lon, lat]: [number, number]) => [lat, lon]
+      );
+      const distanceKm = route.distance / 1000;
+      const durationMin = (route.duration / 60) * trafficFactor;
+      return {
+        polyline: coordinates,
+        distanceKm: Math.round(distanceKm * 10) / 10,
+        durationMin: Math.round(durationMin * 10) / 10,
+      };
+    };
+
+    const parsed = routes.map(build);
+    const mainAlt = parsed[0];
+    const main = {
+      polyline: mainAlt.polyline,
+      realDrivingMinutes: mainAlt.durationMin,
+      totalDistanceKm: mainAlt.distanceKm,
+    };
+    const alternatives = parsed.slice(1);
+
+    return { main, alternatives };
+  }
+
+  // Geometric fallback (offline / OSRM rate limited): solo ruta principal
+  let fallbackDistance = 0;
+  const polyline: [number, number][] = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const legDist = calculateHaversineDistance(p1.lat, p1.lng, p2.lat, p2.lng);
+    fallbackDistance += legDist * 1.25; // 1.25 urban street winding factor
+
+    // Intermediate points for smooth visual line
+    const steps = 6;
+    for (let s = 0; s <= steps; s++) {
+      const fraction = s / steps;
+      const lat = p1.lat + (p2.lat - p1.lat) * fraction;
+      const lng = p1.lng + (p2.lng - p1.lng) * fraction;
+      polyline.push([lat, lng]);
+    }
+  }
+
+  const speed = getEstimatedSpeedKmh(mode);
+  const fallbackDurationMin = (fallbackDistance / speed) * 60;
+
+  return {
+    main: {
+      polyline,
+      realDrivingMinutes: Math.round(fallbackDurationMin * 10) / 10,
+      totalDistanceKm: Math.round(fallbackDistance * 10) / 10,
+    },
+    alternatives: [],
+  };
+}
+
 export async function fetchRoadGeometryAndDuration(
   points: Array<{ lat: number; lng: number }>,
   mode: ModoOptimizacion
@@ -488,11 +592,12 @@ export async function calculateOptimizedRoute(
     { lat: endPoint.lat, lng: endPoint.lng }
   ];
 
-  // 5. Obtain realistic road geometry and total driving time
-  const { polyline, realDrivingMinutes, totalDistanceKm } = await fetchRoadGeometryAndDuration(
+  // 5. Obtain realistic road geometry and total driving time (+ ruta alternativa)
+  const { main: mainRoute, alternatives } = await fetchRoadGeometryWithAlternatives(
     fullWaypoints,
     modo
   );
+  const { polyline, realDrivingMinutes, totalDistanceKm } = mainRoute;
 
   // 6. Calculate boarding/drop-off time
   const N = orderedStudents.length;
@@ -559,6 +664,7 @@ export async function calculateOptimizedRoute(
     tipo_trayecto: tipoTrayecto,
     paradas_ordenadas: paradasOrdenadas,
     polyline_geometry: polyline,
-    traffic_factor: modo === 'trafico_real' ? 1.35 : 1.12
+    traffic_factor: modo === 'trafico_real' ? 1.35 : 1.12,
+    alternativas: alternatives,
   };
 }
