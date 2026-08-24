@@ -32,6 +32,7 @@
 8. **Webhook n8n + auditoría**: cada evento de ejecución de ruta se envía a n8n y se audita en InstantDB (`eventos_ruta`, `webhook_logs`).
 9. **Itinerario desplegable + reorden por arrastre y desde el mapa**: acordeón cerrado por defecto (mapa más grande), drag & drop con `motion` Reorder y modo "Editar Orden en Mapa".
 10. **Informe de ruta en PDF**: descarga directa con jsPDF + autoTable (texto vectorial, sin mapas/imágenes), accesible desde Historial y Ver Recorrido.
+11. **Ruta completa con jornadas (ida + vuelta)**: un solo registro guarda ambos trayectos (`RutaTrayecto` embebido); el planificador guarda cada jornada y el "registro completo"; cabina con selector de jornada.
 
 ---
 
@@ -52,6 +53,7 @@
 | **Reorden desde el mapa** | El usuario pidió poder reordenar también tocando los marcadores. Se implementó el modo "Editar Orden en Mapa" (progreso X/N, aplicar/cancelar, orden parcial) vía `onMarkerClick` + `reorderProgress` en `SchoolRouteMap`. | Feature request |
 | **`applyManualOrder` centralizado** | Flechas, drag & drop y reorden en mapa recalcular con el mismo camino: `setOrderedStudentIds` + `ordenManual` + variante "Manual". Evita lógica duplicada. | Refactor |
 | **Informe de ruta en PDF (jsPDF)** | El usuario pidió un informe imprimible "además del link". Se eligió jsPDF + autoTable (descarga directa, texto vectorial, colores por estado) en vez de print-to-PDF para controlar el archivo y los estilos, y en vez de html2canvas para no rasterizar (requisito: sin imágenes/mapas). | Feature request |
+| **Ruta combinada ida+vuelta** | El usuario pidió guardar ambas jornadas en un mismo registro ("guardar ruta ida y ruta vuelta, luego el registro completo"). Se modeló `RutaTrayecto` embebido en `RutaDiaria` (`ida`/`vuelta`), con `ruta.paradas` = concatenación para compatibilidad de vistas legacy, y helpers centralizados en `routeJourneys.ts`. | Feature request |
 | **Service worker network-first para HTML** | El cache-first servía el index.html viejo → errores MIME text/html en producción tras redesplegar. | Fix de producción |
 | **ErrorBoundary global** | Un error de runtime (ej. `ruta.paradas[0]` con paradas undefined) daba pantalla en blanco total. Ahora muestra fallback con mensaje. | Fix de producción |
 

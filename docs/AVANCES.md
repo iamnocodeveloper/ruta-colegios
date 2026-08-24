@@ -28,6 +28,7 @@
 | `9363a57` | feat: webhook n8n para eventos de ruta + auditoría en InstantDB | 23/08 |
 | `a03dd2a` | feat: itinerario desplegable + reordenar paradas por arrastre y desde el mapa | 24/08 |
 | `76b24ea` | feat: informe de ruta en PDF (jsPDF + autoTable) desde Historial y Ver Recorrido | 24/08 |
+| `e01e581` | feat: ruta completa con jornadas de ida y vuelta en un solo registro | 24/08 |
 
 ---
 
@@ -134,6 +135,24 @@
   - Nombre de archivo: `Informe_Ruta_<colegio>_<YYYY-MM-DD>.pdf` (slug sanitizado).
 - **Botones**: "Generar PDF" en cada tarjeta del **Historial de Rutas** y "Descargar PDF" en **Ver Recorrido** (`RouteReviewView`).
 - Dependencias nuevas: `jspdf ^4.2.1` + `jspdf-autotable ^5.0.8`.
+
+---
+
+## Fase 9 — Ruta completa con jornadas de IDA y VUELTA (commit e01e581)
+
+### ✅ Lo que se logró
+- **Una sola `RutaDiaria` guarda ambas jornadas**: nuevo tipo `RutaTrayecto` con sus propias paradas y métricas, y campos opcionales `ruta.ida` / `ruta.vuelta` (`src/types.ts`).
+- **Planificador por jornadas**: el usuario configura y presiona **"Guardar Plan IDA"** y **"Guardar Plan VUELTA"** (cada uno con su variante/orden), y luego **"GUARDAR REGISTRO COMPLETO"** persiste un único registro con ambos trayectos (o uno solo si solo guardó una jornada, comportamiento legacy).
+- **`ruta.paradas` = concatenación ida + vuelta** para que las vistas legacy (Home/Padres) sigan funcionando; cada jornada conserva su propio orden, horarios, polyline y variante.
+- **Cabina del conductor con selector de jornada** (🌅 IDA / 🌇 VUELTA): inicia/finaliza cada jornada por separado y marca paradas de la jornada correcta (estado derivado `computeRutaEstado`).
+- **Historial y Ver Recorrido** muestran ambas jornadas agrupadas (chips "Ida N · Vuelta M", secciones por trayecto con su mapa).
+- **PDF del informe** incluye una tabla por jornada ("Recorrido IDA", "Recorrido VUELTA") y contadores totales.
+- **Helpers `src/services/routeJourneys.ts`**: `getJourneys`, `getJourneyByParadaId`, `journeyView`, `updateJourney`, `computeRutaEstado`, `getAllParadas`.
+- Webhooks n8n envían la **vista de la jornada** en curso (`journeyView`).
+
+### 📝 Notas
+- El `activeRuta` ahora se persiste también en localStorage al guardar (sobrevive a recargas).
+- `saveRutaInstant` guarda la concatenación de paradas en la nube; la integridad de jornadas vive en el snapshot local del historial.
 
 ---
 

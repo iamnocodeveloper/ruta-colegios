@@ -82,7 +82,13 @@ interface RutaDiaria { id, fecha, colegio_id, origen_lat, origen_lng, modo_optim
                        tiempo_manejo_estimado_min, tiempo_abordaje_total_min,
                        tiempo_total_estimado_min, distancia_total_km, estado,
                        tiempo_abordaje_por_alumno_min, colegio?, conductor_id?, conductor?,
-                       paradas, polyline_geometry? }
+                       paradas, polyline_geometry?, ida?, vuelta? }
+interface RutaTrayecto { tipo_trayecto, estado?, paradas, hora_salida_estimada,
+                         hora_llegada_objetivo, hora_salida_real?, hora_llegada_real?,
+                         tiempo_manejo_estimado_min, tiempo_abordaje_total_min,
+                         tiempo_total_estimado_min, distancia_total_km,
+                         tiempo_abordaje_por_alumno_min, modo_optimizacion, variante?,
+                         polyline_geometry? }
 interface TrackingLog { id?, ruta_id, lat, lng, velocidad_kmh?, rumbo_grados?, timestamp }
 ```
 
@@ -184,7 +190,20 @@ type EstadoParada = 'pendiente' | 'recogido' | 'completado' | 'ausente';
 
 Dependencias: `jspdf` + `jspdf-autotable`.
 
-### 4.5 `src/services/mockData.ts` — Datos demo
+### 4.5 `src/services/routeJourneys.ts` — Jornadas de ruta combinada
+
+| Función | Firma | Qué hace |
+|---|---|---|
+| `hasJourney` / `isCombinedRuta` | `(ruta) => boolean` | Detección de ruta con jornadas / combinada (ida + vuelta) |
+| `getJourneys` | `(ruta) => RutaTrayecto[]` | Jornadas en orden canónico (ida → vuelta) |
+| `getJourney` | `(ruta, key) => RutaTrayecto \| undefined` | Jornada por clave |
+| `getJourneyByParadaId` | `(ruta, paradaId) => 'ida' \| 'vuelta' \| null` | Localiza la jornada que contiene una parada |
+| `journeyView` | `(ruta, key?) => RutaDiaria` | Vista de un solo trayecto (webhooks/consumidores de `ruta.paradas`) |
+| `updateJourney` | `(ruta, key, patch) => RutaDiaria` | Aplica cambios a una jornada y reconstruye paradas/estado derivados |
+| `computeRutaEstado` | `(ruta) => EstadoRuta` | Estado global derivado de las jornadas |
+| `getAllParadas` | `(ruta) => ParadaRuta[]` | Concatenación de paradas de todas las jornadas |
+
+### 4.6 `src/services/mockData.ts` — Datos demo
 
 - `INITIAL_SCHOOL_ID`, `SECOND_SCHOOL_ID`
 - `INITIAL_CONDUCTORES` (3), `INITIAL_SCHOOL`, `INITIAL_DRIVER_ORIGIN`

@@ -96,7 +96,7 @@ public/                          # Manifest PWA, iconos, service worker
 | `representantes` | nombre, telefono_whatsapp, magic_token, email |
 | `alumnos` | nombre, colegio_id, representante_id, direccion_recogida, lat, lng, grado, notas_medicas, tiempo_abordaje_estimado_min, modalidad_servicio, **activo_en_rutas**, **dias_ruta** |
 | `conductores` | nombre, telefono, licencia, vehiculo_modelo, vehiculo_placa, capacidad_pasajeros, activo |
-| `rutas_diarias` | fecha, colegio_id, conductor_id, origen_lat/lng, modo_optimizacion, tipo_trayecto, hora_llegada_objetivo, hora_salida_estimada, tiempos, distancia_total_km, estado, polyline_json |
+| `rutas_diarias` | fecha, colegio_id, conductor_id, origen_lat/lng, modo_optimizacion, tipo_trayecto, hora_llegada_objetivo, hora_salida_estimada, tiempos, distancia_total_km, estado, polyline_json, **ida/vuelta** (jornadas embebidas) |
 | `paradas_ruta` | ruta_id, alumno_id, orden, hora_estimada, hora_real, estado, lat, lng, distancias |
 | `tracking_logs` | ruta_id, lat, lng, velocidad_kmh, rumbo_grados, timestamp |
 | `usuarios` | email, nombre, rol |
@@ -111,6 +111,10 @@ public/                          # Manifest PWA, iconos, service worker
 - **Parada:** `pendiente` → `recogido` | `ausente`
 - **Modalidad de servicio:** `ida_y_vuelta` | `solo_ida` | `solo_vuelta`
 - **Tipo de trayecto:** `ida` (mañana) | `vuelta` (tarde)
+
+### Ruta combinada (ida + vuelta)
+
+Un solo registro `RutaDiaria` puede contener **ambas jornadas**: los campos opcionales `ida` y `vuelta` (tipo `RutaTrayecto`) guardan cada trayecto con sus propias paradas, horarios, distancia, polyline y variante. `ruta.paradas` es la concatenación de ambas jornadas para que las vistas legacy (Inicio/Padres) sigan funcionando. Ver `src/services/routeJourneys.ts` (`getJourneys`, `journeyView`, `updateJourney`, `computeRutaEstado`).
 
 ---
 
@@ -168,8 +172,8 @@ Implementado en `src/index.css` con tokens Tailwind v4 `@theme`:
 
 ### 👨‍💼 Staff / Administrador
 - **Inicio (Dashboard Bento):** ruta de hoy con salida/llegada/distancia/paradas, KPIs de recogidos y matrícula, gauge de progreso, timeline de paradas, feed de actividad.
-- **Cabina del Conductor (simplificada):** selección de conductor, ruta de hoy con botón EMPEZAR, próximas paradas con RECOGIDO/AUSENTE/PENDIENTE, mapa de la ruta, lista de mis rutas.
-- **Planificador:** cálculo de ruta (IDA/VUELTA), selección de colegio, conductor, origen, modo (estándar/tráfico real), tiempo de abordaje, itinerario con ETA **desplegable**, y **reorden de paradas** por arrastre (drag & drop) o tocando los **marcadores del mapa**.
+- **Cabina del Conductor (simplificada):** selección de conductor, ruta de hoy con botón EMPEZAR (y **selector de jornada IDA/VUELTA** en rutas combinadas), próximas paradas con RECOGIDO/AUSENTE/PENDIENTE, mapa de la ruta, lista de mis rutas.
+- **Planificador:** cálculo de ruta (IDA/VUELTA), selección de colegio, conductor, origen, modo (estándar/tráfico real), tiempo de abordaje, itinerario con ETA **desplegable**, reorden de paradas por arrastre o desde el mapa, y **guardado por jornadas** ("Guardar Plan IDA" / "Guardar Plan VUELTA" → "Guardar Registro Completo" con ambos trayectos en un solo registro).
 - **Gestión de Alumnos:** CRUD completo + **toggle Activo en Rutas** (alumno desactivado no entra en el cálculo de paradas) + copiar Magic Link + ver portal.
 - **Gestión de Colegios:** CRUD con hora límite de llegada y GPS.
 - **Gestión de Conductores:** CRUD con vehículo, placa, capacidad, estado activo.
@@ -305,6 +309,7 @@ Cada evento de ejecución de ruta dispara automáticamente un **POST JSON silenc
 - [x] **Itinerario desplegable** (acordeón, cerrado por defecto): al colapsarlo el mapa crece a `calc(100vh-320px)` para planificar con más contexto.
 - [x] **Reorden por arrastre (drag & drop)** en el itinerario (motion `Reorder`): asa ⋮⋮ por fila; al soltar se renumera todo (mover la #1 al final hace que #2 pase a ser la #1) y se recalcula la ruta.
 - [x] **Reorden desde el mapa**: botón "✏️ Editar Orden en Mapa" — toca los marcadores en el nuevo orden (verde + nueva posición, progreso `X/N`, "Aplicar" admite orden parcial, "Cancelar" aborta).
+- [x] **Ruta completa con jornadas**: una sola ruta guarda **ida + vuelta** (tipo `RutaTrayecto`). El planificador guarda cada jornada por separado y luego el "registro completo"; la cabina del conductor tiene selector de jornada, y el historial/revisión/PDF muestran ambas jornadas.
 - [x] **Historial de rutas** con snapshot completo y persistencia.
 - [x] **Informe en PDF** de cada ruta (`jspdf` + `jspdf-autotable`): encabezado con colegio/fecha/trayecto, resumen con conductor y tiempos, tabla de paradas (# · Alumno · Ubicación · Hora · Dist. · Estado) con colores por estado — solo texto, sin mapas/imágenes. Botones "Generar PDF" (Historial) y "Descargar PDF" (Ver Recorrido).
 - [x] **Link de revisión solo lectura** (`?view=review&routeId=`).

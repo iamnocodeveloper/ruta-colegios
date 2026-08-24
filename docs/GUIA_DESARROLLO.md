@@ -55,7 +55,7 @@ rutas-coplegio/
 │   ├── App.tsx             # Estado global, auth, vistas, handlers
 │   ├── types.ts            # Modelo de datos
 │   ├── index.css           # Design system (@theme) + estilos Leaflet
-│   ├── services/           # instantDb, routeCalculator, routeHistory, pdfReport, mockData
+│   ├── services/           # instantDb, routeCalculator, routeHistory, routeJourneys, pdfReport, mockData
 │   └── components/
 │       ├── Layout/  Home/  Driver/  Admin/  Parent/
 │       ├── Auth/    Map/   PWA/
@@ -88,6 +88,11 @@ rutas-coplegio/
 - Para que solo arrastre un asa: `dragListener={false}` + `useDragControls` y disparar `controls.start(e)` en el `onPointerDown` del handle (`GripVertical`).
 - ⚠️ **No llamar hooks (ej. `useDragControls`) dentro de un `.map()`** — extraer un componente por fila (ver `StopRow` en `RoutePlanner.tsx`).
 - Todo reorden de paradas recalcula con el helper centralizado **`applyManualOrder(newOrder)`** (variante "Manual").
+
+### Rutas combinadas (ida + vuelta)
+- Un solo registro `RutaDiaria` puede contener ambas jornadas vía **`ruta.ida` / `ruta.vuelta`** (tipo `RutaTrayecto`); `ruta.paradas` es la concatenación de ambas (vistas legacy siguen funcionando).
+- Usar los helpers de **`src/services/routeJourneys.ts`** para leer/actualizar jornadas (`getJourneys`, `getJourneyByParadaId`, `updateJourney`, `journeyView`, `computeRutaEstado`).
+- El estado global (`ruta.estado`) se deriva de las jornadas (`computeRutaEstado`): `planificada` → `en_curso` (si alguna arrancó) → `completada` (cuando todas terminan).
 
 ## 6. Cómo añadir una feature (flujo recomendado)
 
