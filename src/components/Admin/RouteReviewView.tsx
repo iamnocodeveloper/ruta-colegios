@@ -18,11 +18,13 @@ import {
   Copy,
   Check,
   Phone,
-  MessageCircle
+  MessageCircle,
+  FileText
 } from 'lucide-react';
 import { RouteHistoryEntry } from '../../services/routeHistory';
 import { SchoolRouteMap } from '../Map/SchoolRouteMap';
 import { formatFriendlyTime } from '../../services/routeCalculator';
+import { generateRoutePdf } from '../../services/pdfReport';
 
 interface RouteReviewViewProps {
   entry: RouteHistoryEntry;
@@ -90,6 +92,13 @@ export const RouteReviewView: React.FC<RouteReviewViewProps> = ({ entry, alumnos
           >
             {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
             {copied ? '¡Link Copiado!' : 'Copiar Link de Revisión'}
+          </button>
+          <button
+            onClick={() => generateRoutePdf(entry)}
+            className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-white hover:bg-blue-600 transition-colors cursor-pointer"
+            title="Descargar informe en PDF con el detalle de la ruta"
+          >
+            <FileText className="h-3.5 w-3.5" /> Descargar PDF
           </button>
         </div>
 

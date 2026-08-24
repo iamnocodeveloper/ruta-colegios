@@ -20,10 +20,12 @@ import {
   CheckCircle2,
   AlertTriangle,
   Hourglass,
-  School
+  School,
+  FileText
 } from 'lucide-react';
 import { RouteHistoryEntry, buildRouteReviewLink, deleteRouteHistory } from '../../services/routeHistory';
 import { formatFriendlyTime } from '../../services/routeCalculator';
+import { generateRoutePdf } from '../../services/pdfReport';
 
 interface RouteHistoryProps {
   history: RouteHistoryEntry[];
@@ -180,6 +182,14 @@ export const RouteHistory: React.FC<RouteHistoryProps> = ({
                   >
                     {copiedId === entry.id ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
                     {copiedId === entry.id ? '¡Link Copiado!' : 'Copiar Link de Revisión'}
+                  </button>
+                  <button
+                    id={`btn-history-pdf-${entry.id}`}
+                    onClick={() => generateRoutePdf(entry)}
+                    className="flex items-center gap-1.5 rounded-lg bg-surface border border-primary/30 px-3 py-1.5 text-[11px] font-bold text-primary hover:bg-primary/5 transition-colors cursor-pointer"
+                    title="Descargar informe en PDF con el detalle de la ruta"
+                  >
+                    <FileText className="h-3.5 w-3.5" /> Generar PDF
                   </button>
                   <button
                     id={`btn-history-reuse-${entry.id}`}
