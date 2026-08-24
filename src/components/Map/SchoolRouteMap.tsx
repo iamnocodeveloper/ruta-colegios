@@ -27,6 +27,7 @@ interface SchoolRouteMapProps {
   onMarkerClick?: (parada: ParadaRuta) => void;
   polylineColor?: string; // Custom route line color (for variant selection)
   polylineDash?: string; // Custom dash array (e.g. '8, 8' or '0')
+  reorderProgress?: { sequence: string[]; total: number } | null; // Map reorder mode feedback
   className?: string;
 }
 
@@ -45,6 +46,7 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
   onMarkerClick,
   polylineColor = '#f59e0b',
   polylineDash = '8, 8',
+  reorderProgress = null,
   className = 'h-full w-full'
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -258,6 +260,16 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
       const isCurrentActive = activeStopIndex !== undefined && activeStopIndex === idx;
       const isParentStudent = highlightStudentId && parada.alumno_id === highlightStudentId;
 
+      const isReorderActive = !!reorderProgress;
+      const reorderSeq = reorderProgress?.sequence || [];
+      const reorderIdx = reorderSeq.indexOf(parada.alumno_id);
+      const isPickedInReorder = isReorderActive && reorderIdx >= 0;
+      const displayOrder = isPickedInReorder ? reorderIdx + 1 : parada.orden;
+      const firstUnpickedIdx = isReorderActive
+        ? paradas.findIndex((p) => !reorderSeq.includes(p.alumno_id))
+        : -1;
+      const isNextHint = isReorderActive && idx === firstUnpickedIdx;
+
       let bgColor = 'bg-slate-800 border-primary/40 text-primary';
       let statusBadge = 'Pendiente';
 
@@ -276,15 +288,24 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
         bgColor = 'bg-emerald-500 border-4 border-emerald-200 text-slate-950 font-black scale-125';
       }
 
+      if (isPickedInReorder) {
+        bgColor = 'bg-emerald-500 border-2 border-white text-white scale-110';
+        statusBadge = `Nuevo #${reorderIdx + 1}`;
+      } else if (isReorderActive) {
+        bgColor = 'bg-slate-800/50 border-primary/20 text-muted';
+      }
+
       const markerHtml = `
         <div class="relative flex items-center justify-center group cursor-pointer">
           ${isCurrentActive ? '<div class="absolute w-12 h-12 rounded-full bg-primary/40 animate-ping"></div>' : ''}
           ${isParentStudent ? '<div class="absolute w-14 h-14 rounded-full bg-emerald-400/30 animate-pulse"></div>' : ''}
+          ${isNextHint ? '<div class="absolute w-10 h-10 rounded-full bg-sky-400/40 animate-ping"></div>' : ''}
+          ${isPickedInReorder ? '<div class="absolute w-10 h-10 rounded-full bg-emerald-400/30 animate-pulse"></div>' : ''}
           <div class="w-8 h-8 ${bgColor} rounded-full border-2 shadow-md flex items-center justify-center font-bold text-xs transition-transform duration-200">
-            ${parada.orden}
+            ${displayOrder}
           </div>
           <span class="absolute -bottom-5 bg-surface/90 text-ink text-[9px] font-semibold px-1.5 py-0.5 rounded shadow border border-line whitespace-nowrap">
-            ${student ? student.nombre.split(' ')[0] : `Parada #${parada.orden}`} (${parada.hora_estimada.substring(0, 5)})
+            ${student ? student.nombre.split(' ')[0] : `Parada #${parada.orden}`} (${parada.hora_estimada.substring(0, 5)})${isPickedInReorder ? ' ✓' : ''}
           </span>
         </div>
       `;
@@ -300,14 +321,18 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
         .bindPopup(`
           <div class="p-1 font-sans text-slate-800 min-w-[180px]">
             <div class="flex items-center justify-between">
-              <span class="text-[10px] font-bold text-amber-600 uppercase">Parada #${parada.orden}</span>
+              <span class="text-[10px] font-bold text-amber-600 uppercase">Parada #${displayOrder}${isPickedInReorder ? ' → Nuevo orden' : ''}</span>
               <span class="text-[9px] px-1.5 py-0.2 rounded font-semibold ${
+                isPickedInReorder ? 'bg-emerald-100 text-emerald-800' :
                 parada.estado === 'recogido' ? 'bg-emerald-100 text-emerald-800' :
                 parada.estado === 'ausente' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'
               }">${statusBadge}</span>
             </div>
             <p class="font-bold text-sm text-slate-900 mt-1">${student?.nombre || 'Alumno'}</p>
             <p class="text-[11px] text-slate-600 mt-0.5">${student?.direccion_recogida || 'Dirección de recogida'}</p>
+            ${isReorderActive ? `<div class="mt-1 ${isPickedInReorder ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-sky-50 border-sky-200 text-sky-800'} border text-[10px] px-1.5 py-0.5 rounded font-medium">
+              ${isPickedInReorder ? `Tocado como nueva posición #${reorderIdx + 1}` : 'Tócalo para asignarlo a la siguiente posición'}
+            </div>` : ''}
             <div class="mt-2 text-[10px] text-muted border-t pt-1 flex justify-between">
               <span>Hora estimada:</span>
               <b class="text-slate-800">${parada.hora_estimada}</b>
@@ -332,7 +357,7 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
       const bounds = L.latLngBounds(allCoords);
       map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
     }
-  }, [colegio, origen, paradas, polylineGeometry, activeStopIndex, highlightStudentId, onOriginChange, targetArrivalTime, tipoTrayecto, polylineColor, polylineDash]);
+  }, [colegio, origen, paradas, polylineGeometry, activeStopIndex, highlightStudentId, onOriginChange, targetArrivalTime, tipoTrayecto, polylineColor, polylineDash, reorderProgress]);
 
   // Handle Real-Time School Van Marker
   useEffect(() => {

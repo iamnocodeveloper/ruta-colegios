@@ -35,9 +35,12 @@ import {
   ShieldCheck,
   Route,
   Palette,
-  CalendarDays
+  CalendarDays,
+  GripVertical,
+  ListOrdered
 } from 'lucide-react';
-import { Alumno, Colegio, Conductor, ModoOptimizacion, RouteOptimizationResult, RutaDiaria, TipoTrayecto } from '../../types';
+import { Reorder, useDragControls } from 'motion/react';
+import { Alumno, Colegio, Conductor, ModoOptimizacion, ParadaRuta, RouteOptimizationResult, RutaDiaria, TipoTrayecto } from '../../types';
 import {
   calculateOptimizedRoute,
   formatFriendlyTime,
@@ -59,6 +62,103 @@ export const ROUTE_VARIANT_COLORS: Record<string, { color: string; dash: string;
   farthest: { color: '#F59E0B', dash: '2, 6', label: 'Extremos Primero' },
   random: { color: '#8B5CF6', dash: '10, 4', label: 'Aleatoria' },
   manual: { color: '#EF4444', dash: '4, 4', label: 'Manual' },
+};
+
+interface StopRowProps {
+  studentId: string;
+  index: number;
+  total: number;
+  student?: Alumno;
+  stopMeta?: ParadaRuta;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+}
+
+const StopRow: React.FC<StopRowProps> = ({
+  studentId,
+  index,
+  total,
+  student,
+  stopMeta,
+  onMoveUp,
+  onMoveDown
+}) => {
+  const controls = useDragControls();
+
+  return (
+    <Reorder.Item
+      value={studentId}
+      dragListener={false}
+      dragControls={controls}
+      className="flex items-center justify-between gap-3 rounded-lg bg-soft-gray p-2.5 border border-line hover:border-line transition-all text-xs"
+    >
+      <div className="flex items-center gap-3">
+        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-white font-black text-xs">
+          #{index + 1}
+        </span>
+        <div>
+          <div className="flex items-center gap-1.5">
+            <span className="font-bold text-ink text-sm">{student?.nombre}</span>
+            {student?.modalidad_servicio === 'solo_ida' && (
+              <span className="text-[9px] text-primary font-bold bg-sky-950/80 px-1.5 rounded">Solo Ida</span>
+            )}
+            {student?.modalidad_servicio === 'solo_vuelta' && (
+              <span className="text-[9px] text-purple-400 font-bold bg-purple-950/80 px-1.5 rounded">Solo Vuelta</span>
+            )}
+          </div>
+          <p className="text-[11px] text-muted truncate max-w-[280px]">
+            {student?.direccion_recogida}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <div className="text-right">
+          <span className="font-bold text-primary text-xs block">
+            {stopMeta?.hora_estimada.substring(0, 5) || '--:--'}
+          </span>
+          <span className="text-[10px] text-muted">
+            {stopMeta?.distancia_desde_anterior_km || 0} km ({stopMeta?.tiempo_desde_anterior_min || 0} min)
+          </span>
+        </div>
+
+        {/* Move Up/Down Controls */}
+        <div className="flex flex-col gap-0.5">
+          <button
+            type="button"
+            disabled={index === 0}
+            onClick={onMoveUp}
+            title="Subir parada"
+            className="p-1 text-muted hover:text-primary disabled:opacity-20 cursor-pointer"
+          >
+            <MoveUp className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            disabled={index === total - 1}
+            onClick={onMoveDown}
+            title="Bajar parada"
+            className="p-1 text-muted hover:text-primary disabled:opacity-20 cursor-pointer"
+          >
+            <MoveDown className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        {/* Drag handle */}
+        <div className="flex flex-col items-center gap-0.5 pl-1 border-l border-line">
+          <button
+            type="button"
+            onPointerDown={(e) => controls.start(e)}
+            title="Arrastrar para reordenar"
+            className="p-1 text-muted hover:text-primary cursor-grab active:cursor-grabbing"
+          >
+            <GripVertical className="h-4 w-4" />
+          </button>
+          <span className="text-[8px] text-muted leading-none">mover</span>
+        </div>
+      </div>
+    </Reorder.Item>
+  );
 };
 
 interface RoutePlannerProps {
@@ -146,6 +246,11 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
   const [isCalculating, setIsCalculating] = useState<boolean>(false);
   const [optimizationResult, setOptimizationResult] = useState<RouteOptimizationResult | null>(null);
   const [isOriginPickerOpen, setIsOriginPickerOpen] = useState<boolean>(false);
+
+  // Collapsible itinerary + reorder-from-map mode
+  const [isItineraryOpen, setIsItineraryOpen] = useState<boolean>(false);
+  const [mapReorderMode, setMapReorderMode] = useState<boolean>(false);
+  const [mapReorderSequence, setMapReorderSequence] = useState<string[]>([]);
 
   const prevColegioIdRef = useRef<string>(selectedColegio.id);
   const prevTipoTrayectoRef = useRef<TipoTrayecto>(tipoTrayecto);
@@ -244,6 +349,23 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
   }, [selectedColegio, origen, selectedStudentIds, modo, tiempoAbordajeMin, horaLlegada, tipoTrayecto]);
 
   // Manual reordering handlers
+  const applyManualOrder = (newOrder: string[]) => {
+    if (newOrder.length === 0) return;
+    setOrderedStudentIds(newOrder);
+    setIsManualOrder(true);
+    setActiveVariantId('manual');
+
+    // Recalculate with this manual order
+    const studentsToRoute = newOrder.map((id) => alumnosMap.get(id)!).filter(Boolean) as Alumno[];
+    calculateOptimizedRoute(origen, selectedColegio, studentsToRoute, {
+      modo,
+      tipoTrayecto,
+      tiempoAbordajeMin,
+      horaLlegadaLimite: horaLlegada,
+      ordenManual: newOrder
+    }).then((res) => setOptimizationResult(res));
+  };
+
   const moveStudent = (index: number, direction: 'up' | 'down') => {
     const newIdx = direction === 'up' ? index - 1 : index + 1;
     if (newIdx < 0 || newIdx >= orderedStudentIds.length) return;
@@ -252,19 +374,50 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
     const [moved] = newOrder.splice(index, 1);
     newOrder.splice(newIdx, 0, moved);
 
-    setOrderedStudentIds(newOrder);
-    setIsManualOrder(true);
-    setActiveVariantId('manual');
+    applyManualOrder(newOrder);
+  };
 
-    // Recalculate with this manual order
-    const studentsToRoute = newOrder.map((id) => alumnosMap.get(id)!).filter(Boolean);
-    calculateOptimizedRoute(origen, selectedColegio, studentsToRoute, {
-      modo,
-      tipoTrayecto,
-      tiempoAbordajeMin,
-      horaLlegadaLimite: horaLlegada,
-      ordenManual: newOrder
-    }).then((res) => setOptimizationResult(res));
+  // Drag & drop reorder (motion Reorder)
+  const handleReorder = (newOrder: string[]) => {
+    applyManualOrder(newOrder);
+  };
+
+  // Reorder from map markers: tap stops in the desired new order
+  const totalStops = orderedStudentIds.length;
+  const buildFullOrder = (seq: string[]) => {
+    if (seq.length >= totalStops) return seq;
+    const rest = orderedStudentIds.filter((id) => !seq.includes(id));
+    return [...seq, ...rest];
+  };
+
+  const startMapReorder = () => {
+    setMapReorderSequence([]);
+    setMapReorderMode(true);
+  };
+
+  const cancelMapReorder = () => {
+    setMapReorderMode(false);
+    setMapReorderSequence([]);
+  };
+
+  const applyMapReorder = (seq: string[]) => {
+    applyManualOrder(buildFullOrder(seq));
+    setMapReorderMode(false);
+    setMapReorderSequence([]);
+  };
+
+  const handleMarkerClick = (parada: ParadaRuta) => {
+    if (!mapReorderMode) return;
+    const studentId = parada.alumno_id;
+    if (mapReorderSequence.includes(studentId)) return;
+
+    const next = [...mapReorderSequence, studentId];
+    setMapReorderSequence(next);
+
+    // When all stops are tapped, apply the new order automatically
+    if (next.length >= totalStops && totalStops > 0) {
+      applyMapReorder(next);
+    }
   };
 
   // Toggle student selection
@@ -942,7 +1095,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
         )}
 
         {/* Map Preview Stage */}
-        <div className="h-[340px] sm:h-[380px] w-full rounded-xl overflow-hidden border border-line">
+        <div className={`relative w-full rounded-xl overflow-hidden border border-line ${isItineraryOpen ? 'h-[340px] sm:h-[380px]' : 'h-[calc(100vh-320px)] min-h-[420px]'}`}>
           <SchoolRouteMap
             colegio={{
               ...selectedColegio,
@@ -971,98 +1124,119 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
             polylineGeometry={optimizationResult?.polyline_geometry}
             polylineColor={(ROUTE_VARIANT_COLORS[activeVariantId] || ROUTE_VARIANT_COLORS['2opt']).color}
             polylineDash={(ROUTE_VARIANT_COLORS[activeVariantId] || ROUTE_VARIANT_COLORS['2opt']).dash}
+            onMarkerClick={handleMarkerClick}
+            reorderProgress={mapReorderMode ? { sequence: mapReorderSequence, total: totalStops } : null}
           />
+
+          {/* Floating controls: reorder from map */}
+          {!mapReorderMode ? (
+            <button
+              type="button"
+              onClick={startMapReorder}
+              disabled={totalStops < 2}
+              title="Toca los marcadores en el orden deseado"
+              className="absolute top-3 left-3 z-[400] flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold shadow-lg backdrop-blur transition-all border cursor-pointer bg-surface/90 text-primary border-primary/40 hover:bg-line hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <ListOrdered className="h-3.5 w-3.5" />
+              <span>Editar Orden en Mapa</span>
+            </button>
+          ) : (
+            <div className="absolute top-3 left-3 right-3 z-[400] rounded-lg bg-sky-950/95 border border-sky-500/60 px-3 py-2 text-xs font-bold text-sky-100 shadow-xl flex flex-wrap items-center gap-2 sm:gap-3">
+              <span className="flex-1 min-w-[180px]">
+                ✏️ Toca los marcadores en el nuevo orden. Progreso:{' '}
+                <span className="text-white">{mapReorderSequence.length}/{totalStops}</span>
+              </span>
+              {mapReorderSequence.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => applyMapReorder(mapReorderSequence)}
+                  className="rounded-md bg-emerald-500 text-slate-950 px-2.5 py-1 text-[10px] font-black hover:bg-emerald-400 cursor-pointer"
+                >
+                  Aplicar ({mapReorderSequence.length})
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={cancelMapReorder}
+                className="rounded-md bg-white/10 border border-white/30 px-2.5 py-1 text-[10px] font-bold hover:bg-white/20 cursor-pointer"
+              >
+                Cancelar
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Reordering & Intermediate Stops Table */}
-        <div className="rounded-xl border border-line bg-surface/70 p-4 space-y-3">
-          <div className="flex items-center justify-between">
+        <div className="rounded-xl border border-line bg-surface/70 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setIsItineraryOpen(!isItineraryOpen)}
+            className="w-full flex items-center justify-between gap-3 p-4 text-left hover:bg-soft-gray/60 transition-colors cursor-pointer"
+          >
             <div>
-              <h4 className="text-sm font-bold text-ink">
+              <h4 className="text-sm font-bold text-ink flex items-center gap-2">
+                <ListOrdered className="h-4 w-4 text-primary" />
                 Itinerario de {tipoTrayecto === 'ida' ? 'Recogida (Hogares ➔ Colegio)' : 'Entrega (Colegio ➔ Hogares)'}
               </h4>
-              <p className="text-[11px] text-muted">
+              <p className="text-[11px] text-muted mt-0.5">
                 {isManualOrder
-                  ? 'Orden personalizado manualmente. Puedes restaurar la sugerencia algorítmica.'
+                  ? 'Orden personalizado manualmente. Arrastra las filas o toca los marcadores del mapa para reordenar.'
                   : 'Orden óptimo calculado mediante Algoritmo TSP 2-Opt (mínima distancia y tiempo).'}
               </p>
             </div>
 
-            {isManualOrder && (
-              <button
-                onClick={() => runRouteCalculation(false)}
-                className="flex items-center gap-1 text-xs text-primary font-bold hover:underline cursor-pointer"
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-                <span>Restaurar Orden 2-Opt</span>
-              </button>
-            )}
-          </div>
-
-          <div className="space-y-2 max-h-60 overflow-y-auto">
-            {orderedStudentIds.map((studentId, idx) => {
-              const student = alumnosMap.get(studentId);
-              const stopMeta = optimizationResult?.paradas_ordenadas.find((p) => p.alumno_id === studentId);
-
-              return (
-                <div
-                  key={studentId}
-                  className="flex items-center justify-between gap-3 rounded-lg bg-soft-gray p-2.5 border border-line hover:border-line transition-all text-xs"
+            <div className="flex items-center gap-3 shrink-0">
+              {isManualOrder && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    runRouteCalculation(false);
+                  }}
+                  className="flex items-center gap-1 text-xs text-primary font-bold hover:underline cursor-pointer"
                 >
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-white font-black text-xs">
-                      #{idx + 1}
-                    </span>
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-ink text-sm">{student?.nombre}</span>
-                        {student?.modalidad_servicio === 'solo_ida' && (
-                          <span className="text-[9px] text-primary font-bold bg-sky-950/80 px-1.5 rounded">Solo Ida</span>
-                        )}
-                        {student?.modalidad_servicio === 'solo_vuelta' && (
-                          <span className="text-[9px] text-purple-400 font-bold bg-purple-950/80 px-1.5 rounded">Solo Vuelta</span>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-muted truncate max-w-[280px]">
-                        {student?.direccion_recogida}
-                      </p>
-                    </div>
-                  </div>
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  <span>Restaurar Orden 2-Opt</span>
+                </button>
+              )}
+              {isItineraryOpen ? <ChevronUp className="h-4 w-4 text-muted" /> : <ChevronDown className="h-4 w-4 text-muted" />}
+            </div>
+          </button>
 
-                  <div className="flex items-center gap-3">
-                    <div className="text-right">
-                      <span className="font-bold text-primary text-xs block">
-                        {stopMeta?.hora_estimada.substring(0, 5) || '--:--'}
-                      </span>
-                      <span className="text-[10px] text-muted">
-                        {stopMeta?.distancia_desde_anterior_km || 0} km ({stopMeta?.tiempo_desde_anterior_min || 0} min)
-                      </span>
-                    </div>
+          {isItineraryOpen && (
+            <div className="px-4 pb-4">
+              <p className="text-[10px] text-muted mb-2 flex items-center gap-1.5">
+                <GripVertical className="h-3 w-3" />
+                Arrastra cada fila con el asa ⋮⋮ para cambiar el orden, o usa los marcadores del mapa
+                (botón "Editar Orden en Mapa").
+              </p>
 
-                    {/* Move Up/Down Controls */}
-                    <div className="flex flex-col gap-0.5">
-                      <button
-                        disabled={idx === 0}
-                        onClick={() => moveStudent(idx, 'up')}
-                        title="Subir parada"
-                        className="p-1 text-muted hover:text-primary disabled:opacity-20 cursor-pointer"
-                      >
-                        <MoveUp className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        disabled={idx === orderedStudentIds.length - 1}
-                        onClick={() => moveStudent(idx, 'down')}
-                        title="Bajar parada"
-                        className="p-1 text-muted hover:text-primary disabled:opacity-20 cursor-pointer"
-                      >
-                        <MoveDown className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+              <Reorder.Group
+                values={orderedStudentIds}
+                onReorder={handleReorder}
+                axis="y"
+                className="space-y-2 max-h-60 overflow-y-auto pr-1 list-none"
+              >
+                {orderedStudentIds.map((studentId, idx) => {
+                  const student = alumnosMap.get(studentId);
+                  const stopMeta = optimizationResult?.paradas_ordenadas.find((p) => p.alumno_id === studentId);
+
+                  return (
+                    <StopRow
+                      key={studentId}
+                      studentId={studentId}
+                      index={idx}
+                      total={orderedStudentIds.length}
+                      student={student}
+                      stopMeta={stopMeta}
+                      onMoveUp={() => moveStudent(idx, 'up')}
+                      onMoveDown={() => moveStudent(idx, 'down')}
+                    />
+                  );
+                })}
+              </Reorder.Group>
+            </div>
+          )}
         </div>
       </div>
     </div>
