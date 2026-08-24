@@ -37,10 +37,11 @@ import {
   Palette,
   CalendarDays,
   GripVertical,
-  ListOrdered
+  ListOrdered,
+  Save
 } from 'lucide-react';
 import { Reorder, useDragControls } from 'motion/react';
-import { Alumno, Colegio, Conductor, ModoOptimizacion, ParadaRuta, RouteOptimizationResult, RutaDiaria, TipoTrayecto } from '../../types';
+import { Alumno, Colegio, Conductor, ModoOptimizacion, ParadaRuta, RouteOptimizationResult, RutaDiaria, RutaTrayecto, TipoTrayecto } from '../../types';
 import {
   calculateOptimizedRoute,
   formatFriendlyTime,
@@ -72,6 +73,16 @@ interface StopRowProps {
   stopMeta?: ParadaRuta;
   onMoveUp: () => void;
   onMoveDown: () => void;
+}
+
+/** Plan guardado de una jornada (ida o vuelta) para el registro completo. */
+interface JourneyPlan {
+  tipo_trayecto: TipoTrayecto;
+  result: RouteOptimizationResult;
+  studentIds: string[];
+  variantId: string;
+  isManual: boolean;
+  horaLlegada: string;
 }
 
 const StopRow: React.FC<StopRowProps> = ({
@@ -252,6 +263,10 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
   const [mapReorderMode, setMapReorderMode] = useState<boolean>(false);
   const [mapReorderSequence, setMapReorderSequence] = useState<string[]>([]);
 
+  // Staged journeys for a combined route (ida + vuelta)
+  const [idaPlan, setIdaPlan] = useState<JourneyPlan | null>(null);
+  const [vueltaPlan, setVueltaPlan] = useState<JourneyPlan | null>(null);
+
   const prevColegioIdRef = useRef<string>(selectedColegio.id);
   const prevTipoTrayectoRef = useRef<TipoTrayecto>(tipoTrayecto);
 
@@ -427,11 +442,32 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
     );
   };
 
-  // Apply to Active Daily Route
-  const handleSaveAndActivate = () => {
-    if (!optimizationResult) return;
+  // ===== Combined journey staging (ida + vuelta en un solo registro) =====
 
-    const newParadas = optimizationResult.paradas_ordenadas.map((p) => ({
+  // Guarda el plan actual del trayecto visible (ida o vuelta) para el registro completo
+  const saveJourneyPlan = (tipo: TipoTrayecto) => {
+    if (!optimizationResult) return;
+    const plan: JourneyPlan = {
+      tipo_trayecto: tipo,
+      result: optimizationResult,
+      studentIds:
+        orderedStudentIds.length > 0
+          ? orderedStudentIds
+          : optimizationResult.paradas_ordenadas.map((p) => p.alumno_id),
+      variantId: activeVariantId,
+      isManual: isManualOrder,
+      horaLlegada,
+    };
+    if (tipo === 'ida') {
+      setIdaPlan(plan);
+    } else {
+      setVueltaPlan(plan);
+    }
+  };
+
+  // Construye el RutaTrayecto (jornada) a partir de un plan guardado
+  const buildTrayecto = (plan: JourneyPlan): RutaTrayecto => {
+    const paradas: ParadaRuta[] = plan.result.paradas_ordenadas.map((p) => ({
       id: ensureUUID(),
       ruta_id: ensureUUID(activeRuta.id),
       alumno_id: p.alumno_id,
@@ -445,6 +481,30 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
       alumno: alumnosMap.get(p.alumno_id)
     }));
 
+    return {
+      tipo_trayecto: plan.tipo_trayecto,
+      paradas,
+      hora_salida_estimada: plan.result.hora_salida_estimada,
+      hora_llegada_objetivo: plan.horaLlegada,
+      tiempo_manejo_estimado_min: plan.result.tiempo_manejo_min,
+      tiempo_abordaje_total_min: plan.result.tiempo_abordaje_total_min,
+      tiempo_total_estimado_min: plan.result.tiempo_total_min,
+      distancia_total_km: plan.result.distancia_total_km,
+      tiempo_abordaje_por_alumno_min: tiempoAbordajeMin,
+      modo_optimizacion: modo,
+      variante: plan.variantId,
+      polyline_geometry: plan.result.polyline_geometry,
+    };
+  };
+
+  // Guarda el registro completo de la ruta con las jornadas elegidas (ida y/o vuelta)
+  const handleSaveCompleteRoute = () => {
+    const idaT = idaPlan ? buildTrayecto(idaPlan) : undefined;
+    const vueltaT = vueltaPlan ? buildTrayecto(vueltaPlan) : undefined;
+    if (!idaT && !vueltaT) return;
+
+    // Trayecto principal para los campos top-level (legacy / primario)
+    const primary = idaT || vueltaT!;
     const assignedConductor =
       conductores.find((c) => c.id === selectedConductorId) || activeRuta.conductor;
 
@@ -461,19 +521,24 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
       origen_lng: origen.lng,
       origen_direccion: origen.direccion,
       modo_optimizacion: modo,
-      tipo_trayecto: tipoTrayecto,
+      tipo_trayecto: primary.tipo_trayecto,
       dia_semana: selectedDay,
-      variante: activeVariantId,
-      hora_llegada_objetivo: horaLlegada,
-      hora_salida_estimada: optimizationResult.hora_salida_estimada,
-      tiempo_manejo_estimado_min: optimizationResult.tiempo_manejo_min,
-      tiempo_abordaje_total_min: optimizationResult.tiempo_abordaje_total_min,
-      tiempo_total_estimado_min: optimizationResult.tiempo_total_min,
-      distancia_total_km: optimizationResult.distancia_total_km,
+      variante: primary.variante || activeVariantId,
+      hora_llegada_objetivo: primary.hora_llegada_objetivo,
+      hora_salida_estimada: primary.hora_salida_estimada,
+      tiempo_manejo_estimado_min: primary.tiempo_manejo_estimado_min,
+      tiempo_abordaje_total_min: primary.tiempo_abordaje_total_min,
+      tiempo_total_estimado_min: primary.tiempo_total_estimado_min,
+      distancia_total_km: primary.distancia_total_km,
       tiempo_abordaje_por_alumno_min: tiempoAbordajeMin,
       estado: 'planificada',
-      paradas: newParadas,
-      polyline_geometry: optimizationResult.polyline_geometry
+      hora_salida_real: undefined,
+      hora_llegada_real: undefined,
+      // Concatenación ida + vuelta para vistas legacy (Home/Padres)
+      paradas: [...(idaT ? idaT.paradas : []), ...(vueltaT ? vueltaT.paradas : [])],
+      polyline_geometry: primary.polyline_geometry,
+      ida: idaT,
+      vuelta: vueltaT,
     };
 
     onSaveRoute(updatedRuta);
@@ -967,16 +1032,85 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
           </div>
         </div>
 
-        {/* Action button */}
-        <button
-          id="btn-apply-plan"
-          onClick={handleSaveAndActivate}
-          disabled={isCalculating || selectedStudentIds.length === 0}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 px-4 text-sm font-black text-ink shadow-lg shadow-primary/20 hover:bg-primary active:scale-[0.98] transition-all disabled:opacity-50 cursor-pointer"
-        >
-          <Play className="h-4 w-4 fill-current" />
-          <span>GUARDAR Y ASIGNAR RUTA AL CONDUCTOR</span>
-        </button>
+        {/* Journey staging & complete save */}
+        <div className="rounded-xl border-2 border-primary/30 bg-canvas p-3 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <label className="text-[11px] font-black text-primary uppercase tracking-wider flex items-center gap-1.5">
+              <Save className="h-3.5 w-3.5 text-primary" />
+              <span>Jornadas a guardar</span>
+            </label>
+            <span className="text-[10px] font-bold text-muted">
+              {[idaPlan ? 1 : 0, vueltaPlan ? 1 : 0].filter(Boolean).length}/2 listas
+            </span>
+          </div>
+          <p className="text-[10px] text-muted">
+            Configura y guarda cada trayecto (ida y vuelta). Al final guarda el registro completo con ambos.
+          </p>
+
+          <div className="space-y-2">
+            {/* IDA plan */}
+            <div className={`rounded-lg border p-2.5 space-y-1.5 ${idaPlan ? 'border-emerald-300 bg-emerald-50/50' : 'border-line bg-surface'}`}>
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 text-xs font-black text-ink">
+                  <Sun className="h-3.5 w-3.5 text-primary" /> Ruta de IDA
+                </span>
+                <span className={`text-[10px] font-extrabold ${idaPlan ? 'text-emerald-600' : 'text-muted'}`}>
+                  {idaPlan ? `✓ ${idaPlan.result.paradas_ordenadas.length} paradas` : 'Pendiente'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => saveJourneyPlan('ida')}
+                disabled={isCalculating || !optimizationResult || tipoTrayecto !== 'ida'}
+                className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-primary/10 border border-primary/25 px-3 py-1.5 text-[11px] font-extrabold text-primary hover:bg-primary/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                title={tipoTrayecto !== 'ida' ? 'Cambia a la pestaña de Ruta de IDA para guardarla' : 'Guardar el plan de la mañana'}
+              >
+                <Save className="h-3 w-3" />
+                {tipoTrayecto !== 'ida' ? 'Guardar Plan IDA (cambia a la pestaña IDA)' : 'Guardar Plan IDA'}
+              </button>
+            </div>
+
+            {/* VUELTA plan */}
+            <div className={`rounded-lg border p-2.5 space-y-1.5 ${vueltaPlan ? 'border-emerald-300 bg-emerald-50/50' : 'border-line bg-surface'}`}>
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 text-xs font-black text-ink">
+                  <Sunset className="h-3.5 w-3.5 text-purple-500" /> Ruta de VUELTA
+                </span>
+                <span className={`text-[10px] font-extrabold ${vueltaPlan ? 'text-emerald-600' : 'text-muted'}`}>
+                  {vueltaPlan ? `✓ ${vueltaPlan.result.paradas_ordenadas.length} paradas` : 'Pendiente'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => saveJourneyPlan('vuelta')}
+                disabled={isCalculating || !optimizationResult || tipoTrayecto !== 'vuelta'}
+                className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-purple-600/10 border border-purple-300/40 px-3 py-1.5 text-[11px] font-extrabold text-purple-600 hover:bg-purple-600/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                title={tipoTrayecto !== 'vuelta' ? 'Cambia a la pestaña de Ruta de VUELTA para guardarla' : 'Guardar el plan de la tarde'}
+              >
+                <Save className="h-3 w-3" />
+                {tipoTrayecto !== 'vuelta' ? 'Guardar Plan VUELTA (cambia a la pestaña VUELTA)' : 'Guardar Plan VUELTA'}
+              </button>
+            </div>
+          </div>
+
+          <button
+            id="btn-apply-plan"
+            onClick={handleSaveCompleteRoute}
+            disabled={isCalculating || (!idaPlan && !vueltaPlan)}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 px-4 text-sm font-black text-ink shadow-lg shadow-primary/20 hover:bg-primary active:scale-[0.98] transition-all disabled:opacity-50 cursor-pointer"
+          >
+            <Play className="h-4 w-4 fill-current" />
+            <span>
+              {idaPlan && vueltaPlan
+                ? `GUARDAR RUTA COMPLETA (IDA + VUELTA · ${idaPlan.result.paradas_ordenadas.length + vueltaPlan.result.paradas_ordenadas.length} paradas)`
+                : idaPlan
+                ? 'GUARDAR RUTA DE IDA'
+                : vueltaPlan
+                ? 'GUARDAR RUTA DE VUELTA'
+                : 'GUARDAR REGISTRO COMPLETO DE RUTA'}
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* Right Content Area: Results Formula & Map Preview & Stop Reorder Table */}

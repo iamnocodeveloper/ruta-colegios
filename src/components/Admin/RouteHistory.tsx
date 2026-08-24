@@ -26,6 +26,7 @@ import {
 import { RouteHistoryEntry, buildRouteReviewLink, deleteRouteHistory } from '../../services/routeHistory';
 import { formatFriendlyTime } from '../../services/routeCalculator';
 import { generateRoutePdf } from '../../services/pdfReport';
+import { getJourneys } from '../../services/routeJourneys';
 
 interface RouteHistoryProps {
   history: RouteHistoryEntry[];
@@ -150,6 +151,11 @@ export const RouteHistory: React.FC<RouteHistoryProps> = ({
                       <span className="flex items-center gap-1"><Clock className="h-3 w-3" />Salida {formatFriendlyTime(entry.hora_salida_estimada)}</span>
                       <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{entry.distancia_total_km} km</span>
                       <span className="flex items-center gap-1"><Users className="h-3 w-3" />{entry.total_paradas} paradas</span>
+                      {entry.tiene_ida && entry.tiene_vuelta && (
+                        <span className="rounded bg-emerald-50 text-emerald-600 border border-emerald-200 px-1.5 py-0.5 text-[10px] font-extrabold">
+                          🌀 Ida {entry.paradas_ida ?? '—'} · Vuelta {entry.paradas_vuelta ?? '—'}
+                        </span>
+                      )}
                       <span className="flex items-center gap-1"><Truck className="h-3 w-3" />{entry.conductor_nombre}</span>
                       {entry.variante && (
                         <span className="rounded bg-soft-blue text-primary border border-primary/25 px-1.5 py-0.5 text-[10px] font-extrabold">
@@ -260,40 +266,59 @@ export const RouteHistory: React.FC<RouteHistoryProps> = ({
                     {/* Stops list */}
                     <div>
                       <p className="text-[11px] font-black uppercase tracking-wide text-muted mb-2">Paradas ({entry.total_paradas})</p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                        {(entry.ruta.paradas || []).map((p, idx) => (
-                          <div key={p.id || idx} className="rounded-lg bg-soft-gray px-2.5 py-1.5 text-[11px]">
-                            <div className="flex items-center gap-2">
-                              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-surface border border-line text-[9px] font-black text-primary shrink-0">
-                                {p.orden}
-                              </span>
-                              <span className="truncate font-bold text-ink flex-1">{p.alumno?.nombre || 'Alumno'}</span>
-                              <span className="text-muted font-mono">{formatFriendlyTime(p.hora_estimada)}</span>
-                              {stopStateIcon(p.estado)}
-                            </div>
-                            <div className="mt-1 flex items-center gap-1 pl-7">
-                              <a
-                                href={`https://waze.com/ul?ll=${p.lat},${p.lng}&navigate=yes`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="rounded bg-surface border border-line px-1.5 py-0.5 text-[8px] font-extrabold text-ink hover:border-primary/40 hover:text-primary transition-colors"
-                                title="Abrir en Waze"
-                              >
-                                🚗 Waze
-                              </a>
-                              <a
-                                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${p.lat},${p.lng}`)}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="rounded bg-surface border border-line px-1.5 py-0.5 text-[8px] font-extrabold text-ink hover:border-primary/40 hover:text-primary transition-colors"
-                                title="Abrir en Google Maps"
-                              >
-                                📍 Maps
-                              </a>
-                            </div>
+                      {(() => {
+                        const journeys = getJourneys(entry.ruta);
+                        const groups = journeys.length > 0
+                          ? journeys.map((jj) => ({ label: jj.tipo_trayecto === 'ida' ? '🌅 IDA (Mañana)' : '🌇 VUELTA (Tarde)', stops: jj.paradas || [] }))
+                          : [{ label: null, stops: entry.ruta.paradas || [] }];
+                        return (
+                          <div className="space-y-3">
+                            {groups.map((g) => (
+                              <div key={g.label || 'legacy'}>
+                                {g.label && (
+                                  <p className="text-[10px] font-black uppercase tracking-wide text-primary mb-1.5">
+                                    {g.label} ({g.stops.length})
+                                  </p>
+                                )}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                  {g.stops.map((p, idx) => (
+                                    <div key={p.id || idx} className="rounded-lg bg-soft-gray px-2.5 py-1.5 text-[11px]">
+                                      <div className="flex items-center gap-2">
+                                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-surface border border-line text-[9px] font-black text-primary shrink-0">
+                                          {p.orden}
+                                        </span>
+                                        <span className="truncate font-bold text-ink flex-1">{p.alumno?.nombre || 'Alumno'}</span>
+                                        <span className="text-muted font-mono">{formatFriendlyTime(p.hora_estimada)}</span>
+                                        {stopStateIcon(p.estado)}
+                                      </div>
+                                      <div className="mt-1 flex items-center gap-1 pl-7">
+                                        <a
+                                          href={`https://waze.com/ul?ll=${p.lat},${p.lng}&navigate=yes`}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="rounded bg-surface border border-line px-1.5 py-0.5 text-[8px] font-extrabold text-ink hover:border-primary/40 hover:text-primary transition-colors"
+                                          title="Abrir en Waze"
+                                        >
+                                          🚗 Waze
+                                        </a>
+                                        <a
+                                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${p.lat},${p.lng}`)}`}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="rounded bg-surface border border-line px-1.5 py-0.5 text-[8px] font-extrabold text-ink hover:border-primary/40 hover:text-primary transition-colors"
+                                          title="Abrir en Google Maps"
+                                        >
+                                          📍 Maps
+                                        </a>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 )}

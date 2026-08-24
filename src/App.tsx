@@ -31,6 +31,13 @@ import {
   getRouteHistoryById,
   RouteHistoryEntry
 } from './services/routeHistory';
+import {
+  getJourney,
+  getJourneyByParadaId,
+  hasJourney,
+  journeyView,
+  updateJourney
+} from './services/routeJourneys';
 import { ParentPortal } from './components/Parent/ParentPortal';
 import { RoutePlanner } from './components/Admin/RoutePlanner';
 import { StudentManager } from './components/Admin/StudentManager';
@@ -414,6 +421,8 @@ export default function App() {
 
   // Helper to re-sync active route with all real registered students
   const handleSyncAllStudentsToRoute = async (targetStudentsList?: Alumno[]) => {
+    // Rutas combinadas (ida + vuelta) ya tienen sus jornadas definidas: no recalcular
+    if (hasJourney(activeRuta)) return;
     const listToUse = targetStudentsList || schoolAlumnos;
     if (listToUse.length === 0) return;
 
@@ -470,6 +479,8 @@ export default function App() {
 
   // Sync InstantDB Paradas / Rutas into activeRuta state in real time
   useEffect(() => {
+    // Rutas combinadas conservan sus jornadas localmente (integridad de ida/vuelta)
+    if (hasJourney(activeRuta)) return;
     if (instantData?.paradas_ruta && Object.keys(instantData.paradas_ruta).length > 0) {
       const matchingParadas = Object.entries(instantData.paradas_ruta)
         .filter(([_, p]: [string, any]) => p && p.ruta_id === activeRuta.id)
@@ -662,6 +673,9 @@ export default function App() {
   const handleSaveRoute = async (updatedRuta: RutaDiaria) => {
     setActiveRuta(updatedRuta);
     try {
+      localStorage.setItem('rutaescolar_active_ruta', JSON.stringify(updatedRuta));
+    } catch {}
+    try {
       await saveRutaInstant(updatedRuta);
       // Persist to route history (full snapshot)
       await saveRouteToHistory(updatedRuta);
@@ -698,24 +712,66 @@ export default function App() {
     }
   };
 
-  // Start today's route (en_curso)
-  const handleStartRoute = () => {
-    const updated: RutaDiaria = {
-      ...activeRuta,
-      estado: 'en_curso',
-      hora_salida_real: new Date().toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-    };
+  // Start today's route (en_curso) — optionally for a specific journey (ida/vuelta)
+  const handleStartRoute = (journey?: 'ida' | 'vuelta') => {
+    const horaSalida = new Date().toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+    let updated: RutaDiaria;
+    if (journey && getJourney(activeRuta, journey)) {
+      updated = updateJourney(activeRuta, journey, { estado: 'en_curso', hora_salida_real: horaSalida });
+    } else {
+      updated = { ...activeRuta, estado: 'en_curso', hora_salida_real: horaSalida };
+    }
+
     handleSaveRoute(updated);
-    // Webhook n8n: ruta_iniciada
-    notifyRutaIniciada(updated);
+    // Webhook n8n: ruta_iniciada (vista de la jornada si aplica)
+    notifyRutaIniciada(journeyView(updated, journey));
   };
 
-  // Mark a stop as recogido / ausente / pendiente (+ webhook + auto-completar ruta)
+  // Mark a stop as recogido / ausente / pendiente (+ webhook + auto-completar)
   const handleUpdateParada = (paradaId: string, estado: 'pendiente' | 'recogido' | 'ausente') => {
-    const prevParada = activeRuta.paradas.find((p) => p.id === paradaId);
-    if (!prevParada || prevParada.estado === estado) return; // sin cambio real
-
     const horaReal = new Date().toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' });
+    const journeyKey = getJourneyByParadaId(activeRuta, paradaId);
+
+    if (journeyKey) {
+      // ---- Ruta combinada: actualizar la jornada que contiene la parada ----
+      const journey = getJourney(activeRuta, journeyKey)!;
+      const prevParada = journey.paradas.find((p) => p.id === paradaId);
+      if (!prevParada || prevParada.estado === estado) return;
+
+      const updatedParadas = journey.paradas.map((p) =>
+        p.id === paradaId
+          ? { ...p, estado: estado as any, hora_real: estado === 'pendiente' ? undefined : horaReal }
+          : p
+      );
+      const journeyTerminada =
+        journey.estado === 'en_curso' &&
+        updatedParadas.length > 0 &&
+        updatedParadas.every((p) => p.estado === 'recogido' || p.estado === 'ausente');
+
+      const patch: any = { paradas: updatedParadas };
+      if (journeyTerminada) {
+        patch.estado = 'completada';
+        patch.hora_llegada_real = horaReal;
+      }
+
+      const updated = updateJourney(activeRuta, journeyKey, patch);
+      const updatedParada = updatedParadas.find((p) => p.id === paradaId)!;
+      handleSaveRoute(updated);
+      updateParadaEstadoInstant(paradaId, estado as any).catch(() => {});
+
+      if (journeyTerminada) {
+        notifyRutaCompletada(journeyView(updated, journeyKey));
+      } else {
+        notifyParadaActualizada(journeyView(updated, journeyKey), updatedParada, estado, prevParada.estado);
+      }
+      return;
+    }
+
+    // ---- Ruta simple (legacy) ----
+    const prevParada = activeRuta.paradas.find((p) => p.id === paradaId);
+    if (!prevParada || prevParada.estado === estado) return;
+
     const paradaActualizada = {
       ...prevParada,
       estado: estado as any,
@@ -754,18 +810,21 @@ export default function App() {
   };
 
   // Finalizar manualmente la ruta en curso (aunque queden paradas pendientes)
-  const handleCompleteRoute = () => {
+  const handleCompleteRoute = (journey?: 'ida' | 'vuelta') => {
     if (activeRuta.estado !== 'en_curso') return;
     const horaLlegada = new Date().toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    const updated: RutaDiaria = {
-      ...activeRuta,
-      estado: 'completada',
-      hora_llegada_real: horaLlegada,
-    };
+
+    let updated: RutaDiaria;
+    if (journey && getJourney(activeRuta, journey)) {
+      updated = updateJourney(activeRuta, journey, { estado: 'completada', hora_llegada_real: horaLlegada });
+    } else {
+      updated = { ...activeRuta, estado: 'completada', hora_llegada_real: horaLlegada };
+    }
+
     handleSaveRoute(updated);
     updateRutaEstadoInstant(activeRuta.id, 'completada', { hora_llegada_real: horaLlegada }).catch(() => {});
     // Webhook n8n: ruta_completada
-    notifyRutaCompletada(updated);
+    notifyRutaCompletada(journeyView(updated, journey));
   };
 
   // Reuse a history route as today's route
@@ -778,6 +837,24 @@ export default function App() {
       hora_salida_real: undefined,
       hora_llegada_real: undefined,
       paradas: (entry.ruta.paradas || []).map((p) => ({ ...p, estado: 'pendiente' as const, hora_real: undefined })),
+      ida: entry.ruta.ida
+        ? {
+            ...entry.ruta.ida,
+            estado: 'planificada',
+            hora_salida_real: undefined,
+            hora_llegada_real: undefined,
+            paradas: (entry.ruta.ida.paradas || []).map((p) => ({ ...p, estado: 'pendiente' as const, hora_real: undefined })),
+          }
+        : entry.ruta.ida,
+      vuelta: entry.ruta.vuelta
+        ? {
+            ...entry.ruta.vuelta,
+            estado: 'planificada',
+            hora_salida_real: undefined,
+            hora_llegada_real: undefined,
+            paradas: (entry.ruta.vuelta.paradas || []).map((p) => ({ ...p, estado: 'pendiente' as const, hora_real: undefined })),
+          }
+        : entry.ruta.vuelta,
     };
     await handleSaveRoute(snapshot);
     setCurrentView('driver');

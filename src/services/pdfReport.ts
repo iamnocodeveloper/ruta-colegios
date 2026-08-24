@@ -10,6 +10,8 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { RouteHistoryEntry } from './routeHistory';
 import { formatFriendlyTime } from './routeCalculator';
+import { getJourneys } from './routeJourneys';
+import { ParadaRuta } from '../types';
 
 // Design-system colors (Soft UI)
 const PRIMARY: [number, number, number] = [0, 132, 255];   // #0084FF
@@ -108,10 +110,19 @@ export function generateRoutePdf(entry: RouteHistoryEntry): void {
   const margin = 14;
 
   const ruta = entry.ruta || ({} as RouteHistoryEntry['ruta']);
-  const paradas = (ruta.paradas || []).slice().sort((a, b) => a.orden - b.orden);
+  const journeys = getJourneys(ruta);
+  const paradas = (journeys.length > 0 ? journeys.flatMap((j) => j.paradas || []) : ruta.paradas || [])
+    .slice()
+    .sort((a, b) => a.orden - b.orden);
   const recogidos = paradas.filter((p) => p.estado === 'recogido' || p.estado === 'completado').length;
   const ausentes = paradas.filter((p) => p.estado === 'ausente').length;
   const pendientes = paradas.length - recogidos - ausentes;
+  const trayectoLabel =
+    journeys.length > 0
+      ? `Ida + Vuelta (${journeys.length} jornada${journeys.length > 1 ? 's' : ''})`
+      : entry.tipo_trayecto === 'ida'
+      ? 'Ida (Mañana)'
+      : 'Vuelta (Tarde)';
   const generatedAt = new Date().toLocaleString('es-EC');
 
   // ===== Header bar =====
@@ -145,7 +156,7 @@ export function generateRoutePdf(entry: RouteHistoryEntry): void {
   drawField(doc, 'Fecha de la ruta', formatFecha(entry.fecha), margin, y);
   drawField(doc, 'Día de la ruta', entry.dia_semana || '—', colX2, y);
   y += 11;
-  drawField(doc, 'Trayecto', entry.tipo_trayecto === 'ida' ? 'Ida (Mañana)' : 'Vuelta (Tarde)', margin, y);
+  drawField(doc, 'Trayecto', trayectoLabel, margin, y);
   drawField(doc, 'Variante', VARIANT_LABELS[entry.variante || ''] || entry.variante || '—', colX2, y);
   y += 11;
   drawField(doc, 'Estado', ESTADO_RUTA_LABELS[entry.estado] || entry.estado, margin, y);
@@ -229,72 +240,93 @@ export function generateRoutePdf(entry: RouteHistoryEntry): void {
 
   y += boxH + 8;
 
-  // ===== Stops table =====
-  const body = paradas.map((p) => {
-    const meta = estadoParada(p.estado);
-    return [
-      String(p.orden),
-      p.alumno?.nombre || 'Alumno',
-      p.alumno?.direccion_recogida || 'Dirección no registrada',
-      formatFriendlyTime(p.hora_estimada),
-      `${p.distancia_desde_anterior_km ?? 0} km`,
-      meta,
-    ] as (string | EstadoMeta)[];
-  });
+  // ===== Stops table(s): una por trayecto (ida / vuelta) =====
+  const drawStopsTable = (label: string, stops: ParadaRuta[], startY: number): number => {
+    if (label) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(...PRIMARY);
+      doc.text(label, margin, startY);
+      startY += 5;
+    }
 
-  autoTable(doc, {
-    startY: y,
-    head: [['#', 'Alumno', 'Ubicación', 'Hora est.', 'Dist. ant.', 'Estado']],
-    body: body as any[],
-    margin: { left: margin, right: margin, bottom: 18 },
-    theme: 'grid',
-    styles: {
-      font: 'helvetica',
-      fontSize: 9,
-      textColor: INK,
-      cellPadding: 2.5,
-      lineColor: LINE,
-      lineWidth: 0.15,
-    },
-    headStyles: {
-      fillColor: PRIMARY,
-      textColor: [255, 255, 255],
-      fontStyle: 'bold',
-      fontSize: 9,
-      halign: 'center',
-    },
-    columnStyles: {
-      0: { cellWidth: 10, halign: 'center' },
-      1: { cellWidth: 46 },
-      2: { cellWidth: 62 },
-      3: { cellWidth: 22, halign: 'center' },
-      4: { cellWidth: 20, halign: 'center' },
-      5: { cellWidth: 22, halign: 'center', fontStyle: 'bold' },
-    },
-    didParseCell: (data) => {
-      if (data.section !== 'body') return;
-      const raw = data.row.raw as (string | EstadoMeta)[];
-      const meta = raw?.[5] as EstadoMeta | undefined;
-      if (meta) {
-        data.cell.styles.fillColor = meta.fill;
-        if (data.column.index === 5) {
-          data.cell.styles.textColor = meta.color;
-          data.cell.styles.fontStyle = 'bold';
+    const body = stops.map((p) => {
+      const meta = estadoParada(p.estado);
+      return [
+        String(p.orden),
+        p.alumno?.nombre || 'Alumno',
+        p.alumno?.direccion_recogida || 'Dirección no registrada',
+        formatFriendlyTime(p.hora_estimada),
+        `${p.distancia_desde_anterior_km ?? 0} km`,
+        meta,
+      ] as (string | EstadoMeta)[];
+    });
+
+    autoTable(doc, {
+      startY,
+      head: [['#', 'Alumno', 'Ubicación', 'Hora est.', 'Dist. ant.', 'Estado']],
+      body: body as any[],
+      margin: { left: margin, right: margin, bottom: 18 },
+      theme: 'grid',
+      styles: {
+        font: 'helvetica',
+        fontSize: 9,
+        textColor: INK,
+        cellPadding: 2.5,
+        lineColor: LINE,
+        lineWidth: 0.15,
+      },
+      headStyles: {
+        fillColor: PRIMARY,
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        fontSize: 9,
+        halign: 'center',
+      },
+      columnStyles: {
+        0: { cellWidth: 10, halign: 'center' },
+        1: { cellWidth: 46 },
+        2: { cellWidth: 62 },
+        3: { cellWidth: 22, halign: 'center' },
+        4: { cellWidth: 20, halign: 'center' },
+        5: { cellWidth: 22, halign: 'center', fontStyle: 'bold' },
+      },
+      didParseCell: (data) => {
+        if (data.section !== 'body') return;
+        const raw = data.row.raw as (string | EstadoMeta)[];
+        const meta = raw?.[5] as EstadoMeta | undefined;
+        if (meta) {
+          data.cell.styles.fillColor = meta.fill;
+          if (data.column.index === 5) {
+            data.cell.styles.textColor = meta.color;
+            data.cell.styles.fontStyle = 'bold';
+          }
         }
-      }
-    },
-    didDrawPage: () => {
-      const pages = doc.getNumberOfPages();
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7.5);
-      doc.setTextColor(...MUTED);
-      doc.text(`Generado por RutaEscolar · ${generatedAt}`, margin, pageH - 8);
-      doc.text(`Página ${pages}`, pageW - margin, pageH - 8, { align: 'right' });
-    },
-  });
+      },
+      didDrawPage: () => {
+        const pages = doc.getNumberOfPages();
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(...MUTED);
+        doc.text(`Generado por RutaEscolar · ${generatedAt}`, margin, pageH - 8);
+        doc.text(`Página ${pages}`, pageW - margin, pageH - 8, { align: 'right' });
+      },
+    });
+
+    return (doc as any).lastAutoTable?.finalY ?? startY;
+  };
+
+  let finalY = y;
+  if (journeys.length > 0) {
+    for (const j of journeys) {
+      const label = j.tipo_trayecto === 'ida' ? 'Recorrido IDA (Hogares ➔ Colegio)' : 'Recorrido VUELTA (Colegio ➔ Hogares)';
+      finalY = drawStopsTable(label, j.paradas || [], finalY + 4);
+    }
+  } else {
+    finalY = drawStopsTable('Itinerario de Paradas', paradas, y);
+  }
 
   // ===== Footer totals =====
-  const finalY = (doc as any).lastAutoTable?.finalY || y;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
   doc.setTextColor(...INK);

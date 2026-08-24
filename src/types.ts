@@ -79,6 +79,28 @@ export interface ParadaRuta {
   alumno?: Alumno;
 }
 
+/**
+ * Un trayecto de una ruta (ida o vuelta) con sus propias paradas y métricas.
+ * Permite guardar una sola RutaDiaria que contiene AMBAS jornadas.
+ */
+export interface RutaTrayecto {
+  tipo_trayecto: TipoTrayecto;
+  estado?: EstadoRuta; // estado de ejecución de ESTE trayecto
+  paradas: ParadaRuta[];
+  hora_salida_estimada: string;
+  hora_llegada_objetivo: string; // ida: llegada límite al colegio · vuelta: hora de salida del colegio
+  hora_salida_real?: string;
+  hora_llegada_real?: string;
+  tiempo_manejo_estimado_min: number; // T_manejo
+  tiempo_abordaje_total_min: number; // N * T_abordaje
+  tiempo_total_estimado_min: number; // T_total
+  distancia_total_km: number;
+  tiempo_abordaje_por_alumno_min: number;
+  modo_optimizacion: ModoOptimizacion;
+  variante?: string;
+  polyline_geometry?: [number, number][];
+}
+
 export interface RutaDiaria {
   id: string;
   fecha: string; // YYYY-MM-DD
@@ -106,6 +128,10 @@ export interface RutaDiaria {
   conductor?: Conductor;
   paradas: ParadaRuta[];
   polyline_geometry?: [number, number][]; // lat/lng pairs for map route line
+  // Ruta combinada: cuando se planifican AMBAS jornadas, cada trayecto conserva sus
+  // propias paradas y métricas. `ruta.paradas` es la concatenación (ida + vuelta).
+  ida?: RutaTrayecto;
+  vuelta?: RutaTrayecto;
 }
 
 export interface TrackingLog {

@@ -23,12 +23,52 @@ import {
   Phone,
   MessageCircle
 } from 'lucide-react';
-import { Alumno, Colegio, RutaDiaria, ParadaRuta, Conductor } from '../../types';
+import { Alumno, Colegio, RutaDiaria, ParadaRuta, Conductor, RutaTrayecto } from '../../types';
 import { RouteHistoryEntry } from '../../services/routeHistory';
 import { formatFriendlyTime } from '../../services/routeCalculator';
 import { SchoolRouteMap } from '../Map/SchoolRouteMap';
+import { getJourneys, isCombinedRuta, JourneyKey } from '../../services/routeJourneys';
 
 export type ParadaEstado = 'pendiente' | 'recogido' | 'ausente';
+
+const StopLine: React.FC<{ p: ParadaRuta; idx: number }> = ({ p, idx }) => {
+  return (
+    <div className="rounded-lg bg-soft-gray px-3 py-2 text-xs">
+      <div className="flex items-center gap-2.5">
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-surface border border-line text-[9px] font-black text-primary shrink-0">
+          {p.orden}
+        </span>
+        <span className="truncate font-bold text-ink flex-1">{p.alumno?.nombre || 'Alumno'}</span>
+        <span className="text-muted font-mono">{formatFriendlyTime(p.hora_estimada)}</span>
+        <span className={`text-[10px] font-extrabold ${
+          p.estado === 'recogido' ? 'text-emerald-600' : p.estado === 'ausente' ? 'text-alert' : 'text-muted'
+        }`}>
+          {p.estado === 'recogido' ? '✓' : p.estado === 'ausente' ? '✗' : '⏳'}
+        </span>
+      </div>
+      <div className="mt-1.5 flex items-center gap-1.5 pl-8">
+        <a
+          href={`https://waze.com/ul?ll=${p.lat},${p.lng}&navigate=yes`}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-1 rounded bg-surface border border-line px-2 py-1 text-[9px] font-extrabold text-ink hover:border-primary/40 hover:text-primary transition-colors"
+          title="Abrir en Waze"
+        >
+          🚗 Waze
+        </a>
+        <a
+          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${p.lat},${p.lng}`)}`}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-1 rounded bg-surface border border-line px-2 py-1 text-[9px] font-extrabold text-ink hover:border-primary/40 hover:text-primary transition-colors"
+          title="Abrir en Google Maps"
+        >
+          📍 Maps
+        </a>
+      </div>
+    </div>
+  );
+}
 
 interface DriverPanelSimpleProps {
   ruta: RutaDiaria;                          // today's active route
@@ -40,8 +80,8 @@ interface DriverPanelSimpleProps {
   onSelectDriver: (driverId: string) => void;
   onUpdateRuta: (ruta: RutaDiaria) => void;  // persist route (saves to history too)
   onUpdateParada: (paradaId: string, estado: ParadaEstado) => void;
-  onStartRoute: () => void;
-  onCompleteRoute?: () => void;
+  onStartRoute: (journey?: 'ida' | 'vuelta') => void;
+  onCompleteRoute?: (journey?: 'ida' | 'vuelta') => void;
 }
 
 export const DriverPanelSimple: React.FC<DriverPanelSimpleProps> = ({
@@ -60,6 +100,47 @@ export const DriverPanelSimple: React.FC<DriverPanelSimpleProps> = ({
   const [activeTab, setActiveTab] = useState<'hoy' | 'rutas'>('hoy');
   const [expandedRouteId, setExpandedRouteId] = useState<string | null>(null);
   const [showMap, setShowMap] = useState(false);
+  const [activeJourney, setActiveJourney] = useState<JourneyKey>('ida');
+
+  const isCombined = isCombinedRuta(ruta);
+  const journeys = useMemo(() => getJourneys(ruta), [ruta]);
+
+  // Reset journey selector when the active route changes
+  React.useEffect(() => {
+    setActiveJourney('ida');
+  }, [ruta.id]);
+
+  const journeyKeys = journeys.map((j) => j.tipo_trayecto);
+  const effJourney = (journeyKeys.includes(activeJourney) ? activeJourney : journeyKeys[0]) as JourneyKey | undefined;
+  const activeJourneyObj: RutaTrayecto | undefined = effJourney
+    ? journeys.find((j) => j.tipo_trayecto === effJourney)
+    : undefined;
+
+  // Paradas del trayecto visible (o de la ruta simple)
+  const paradas = isCombined && activeJourneyObj ? activeJourneyObj.paradas || [] : ruta.paradas || [];
+  const meta = isCombined && activeJourneyObj ? activeJourneyObj : ruta;
+  const routeState = isCombined ? activeJourneyObj?.estado || 'planificada' : ruta.estado;
+
+  const totalParadas = paradas.length;
+  const recogidos = paradas.filter((p) => p.estado === 'recogido').length;
+  const ausentes = paradas.filter((p) => p.estado === 'ausente').length;
+  const pendientes = paradas.filter((p) => p.estado === 'pendiente').length;
+  const progreso = totalParadas > 0 ? Math.round((recogidos / totalParadas) * 100) : 0;
+
+  const handleParadaClick = (parada: ParadaRuta, nuevo: ParadaEstado) => {
+    if (parada.estado === nuevo) return;
+    if (isCombined) {
+      // En rutas combinadas App actualiza la jornada correcta automáticamente
+      onUpdateParada(parada.id, nuevo);
+    } else {
+      const updated = {
+        ...ruta,
+        paradas: paradas.map((p) => (p.id === parada.id ? { ...p, estado: nuevo } : p)),
+      };
+      onUpdateRuta(updated);
+      onUpdateParada(parada.id, nuevo);
+    }
+  };
 
   const conductor = useMemo(
     () => conductores.find((c) => c.id === currentDriverId) || conductores[0],
@@ -74,23 +155,6 @@ export const DriverPanelSimple: React.FC<DriverPanelSimpleProps> = ({
     const rest = routes.filter((r) => r.id !== ruta.id);
     return todayEntry ? [todayEntry, ...rest] : rest;
   }, [history, currentDriverId, conductor, ruta.id]);
-
-  const paradas = ruta.paradas || [];
-  const totalParadas = paradas.length;
-  const recogidos = paradas.filter((p) => p.estado === 'recogido').length;
-  const ausentes = paradas.filter((p) => p.estado === 'ausente').length;
-  const pendientes = paradas.filter((p) => p.estado === 'pendiente').length;
-  const progreso = totalParadas > 0 ? Math.round((recogidos / totalParadas) * 100) : 0;
-
-  const handleParadaClick = (parada: ParadaRuta, nuevo: ParadaEstado) => {
-    if (parada.estado === nuevo) return;
-    const updated = {
-      ...ruta,
-      paradas: paradas.map((p) => (p.id === parada.id ? { ...p, estado: nuevo } : p)),
-    };
-    onUpdateRuta(updated);
-    onUpdateParada(parada.id, nuevo);
-  };
 
   const nextParada = paradas.find((p) => p.estado === 'pendiente');
 
@@ -124,15 +188,15 @@ export const DriverPanelSimple: React.FC<DriverPanelSimpleProps> = ({
 
         {/* Today's route status bar */}
         <div className={`rounded-card border p-4 sm:p-5 shadow-soft ${
-          ruta.estado === 'en_curso' ? 'bg-emerald-50 border-emerald-200' :
-          ruta.estado === 'completada' ? 'bg-soft-blue border-primary/25' :
+          routeState === 'en_curso' ? 'bg-emerald-50 border-emerald-200' :
+          routeState === 'completada' ? 'bg-soft-blue border-primary/25' :
           'bg-surface border-line'
         }`}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${
-                ruta.estado === 'en_curso' ? 'bg-emerald-500 text-white' :
-                ruta.estado === 'completada' ? 'bg-primary text-white' : 'bg-primary/10 text-primary'
+                routeState === 'en_curso' ? 'bg-emerald-500 text-white' :
+                routeState === 'completada' ? 'bg-primary text-white' : 'bg-primary/10 text-primary'
               }`}>
                 <Compass className="h-5 w-5" />
               </div>
@@ -141,35 +205,37 @@ export const DriverPanelSimple: React.FC<DriverPanelSimpleProps> = ({
                 <h3 className="font-extrabold text-ink">{colegio.nombre}</h3>
                 <p className="text-[11px] text-muted flex items-center gap-1.5">
                   <Clock className="h-3 w-3" />
-                  Salida {formatFriendlyTime(ruta.hora_salida_estimada)} · Llegada {formatFriendlyTime(ruta.hora_llegada_objetivo)}
+                  {isCombined && <span className="font-bold text-primary">{effJourney === 'ida' ? 'IDA' : 'VUELTA'}</span>}
+                  Salida {formatFriendlyTime(meta.hora_salida_estimada)} · Llegada {formatFriendlyTime(meta.hora_llegada_objetivo)}
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              {ruta.estado === 'planificada' && (
+              {routeState === 'planificada' && (
                 <button
                   id="btn-simple-start-route"
-                  onClick={onStartRoute}
+                  onClick={() => onStartRoute(isCombined ? effJourney : undefined)}
                   className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-black text-white shadow-soft hover:bg-blue-600 transition-colors cursor-pointer"
                 >
-                  <Play className="h-4 w-4" /> EMPEZAR RUTA
+                  <Play className="h-4 w-4" />
+                  {isCombined ? `EMPEZAR ${effJourney === 'ida' ? 'IDA' : 'VUELTA'}` : 'EMPEZAR RUTA'}
                 </button>
               )}
-              {ruta.estado === 'en_curso' && (
+              {routeState === 'en_curso' && (
                 <>
                   <button
                     id="btn-simple-complete-route"
-                    onClick={onCompleteRoute}
+                    onClick={() => onCompleteRoute?.(isCombined ? effJourney : undefined)}
                     title="Finalizar la ruta aunque falten paradas"
                     className="flex items-center gap-1.5 rounded-xl bg-white px-4 py-2.5 text-xs font-black text-emerald-700 border border-emerald-200 shadow-soft hover:bg-emerald-100 transition-colors cursor-pointer"
                   >
-                    <Flag className="h-4 w-4" /> FINALIZAR RUTA
+                    <Flag className="h-4 w-4" /> FINALIZAR {isCombined ? (effJourney === 'ida' ? 'IDA' : 'VUELTA') : 'RUTA'}
                   </button>
                   <span className="rounded-full bg-emerald-500 px-3 py-1 text-[11px] font-extrabold text-white animate-pulse">● EN CURSO</span>
                 </>
               )}
-              {ruta.estado === 'completada' && (
+              {routeState === 'completada' && (
                 <span className="rounded-full bg-primary px-3 py-1 text-[11px] font-extrabold text-white">✓ COMPLETADA</span>
               )}
             </div>
@@ -189,8 +255,27 @@ export const DriverPanelSimple: React.FC<DriverPanelSimpleProps> = ({
           )}
         </div>
 
+        {/* Journey selector (ruta combinada: IDA + VUELTA) */}
+        {journeys.length > 1 && (
+          <div className="flex items-center gap-1 rounded-xl bg-soft-gray p-1 w-fit">
+            {journeys.map((j) => (
+              <button
+                key={j.tipo_trayecto}
+                onClick={() => setActiveJourney(j.tipo_trayecto)}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                  effJourney === j.tipo_trayecto
+                    ? 'bg-surface text-primary shadow-soft'
+                    : 'text-muted hover:text-ink'
+                }`}
+              >
+                {j.tipo_trayecto === 'ida' ? '🌅 Ruta de IDA' : '🌇 Ruta de VUELTA'} ({j.paradas.length})
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Next stop highlight */}
-        {ruta.estado === 'en_curso' && nextParada && (
+        {routeState === 'en_curso' && nextParada && (
           <div className="rounded-card bg-primary p-4 sm:p-5 text-white shadow-soft relative overflow-hidden">
             <div className="absolute top-0 right-0 h-24 w-24 rounded-full bg-white/10 blur-2xl" />
             <p className="text-[10px] font-bold uppercase tracking-wider text-white/70 flex items-center gap-1.5">
@@ -380,9 +465,9 @@ export const DriverPanelSimple: React.FC<DriverPanelSimpleProps> = ({
                     origen={{ lat: ruta.origen_lat, lng: ruta.origen_lng, direccion: ruta.origen_direccion }}
                     paradas={paradas}
                     alumnosMap={alumnosMap}
-                    polylineGeometry={ruta.polyline_geometry}
-                    targetArrivalTime={ruta.hora_llegada_objetivo}
-                    tipoTrayecto={ruta.tipo_trayecto || 'ida'}
+                    polylineGeometry={meta.polyline_geometry}
+                    targetArrivalTime={meta.hora_llegada_objetivo}
+                    tipoTrayecto={meta.tipo_trayecto || 'ida'}
                     onOriginChange={undefined}
                   />
                 </div>
@@ -438,43 +523,21 @@ export const DriverPanelSimple: React.FC<DriverPanelSimpleProps> = ({
 
                   {isExpanded && (
                     <div className="border-t border-line/70 px-4 py-3 space-y-2 animate-fadeIn">
-                      <p className="text-[11px] font-black uppercase text-muted">Paradas</p>
-                      {(entry.ruta.paradas || []).map((p, idx) => (
-                        <div key={p.id || idx} className="rounded-lg bg-soft-gray px-3 py-2 text-xs">
-                          <div className="flex items-center gap-2.5">
-                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-surface border border-line text-[9px] font-black text-primary shrink-0">
-                              {p.orden}
-                            </span>
-                            <span className="truncate font-bold text-ink flex-1">{p.alumno?.nombre || 'Alumno'}</span>
-                            <span className="text-muted font-mono">{formatFriendlyTime(p.hora_estimada)}</span>
-                            <span className={`text-[10px] font-extrabold ${
-                              p.estado === 'recogido' ? 'text-emerald-600' : p.estado === 'ausente' ? 'text-alert' : 'text-muted'
-                            }`}>
-                              {p.estado === 'recogido' ? '✓' : p.estado === 'ausente' ? '✗' : '⏳'}
-                            </span>
-                          </div>
-                          <div className="mt-1.5 flex items-center gap-1.5 pl-8">
-                            <a
-                              href={`https://waze.com/ul?ll=${p.lat},${p.lng}&navigate=yes`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="flex items-center gap-1 rounded bg-surface border border-line px-2 py-1 text-[9px] font-extrabold text-ink hover:border-primary/40 hover:text-primary transition-colors"
-                              title="Abrir en Waze"
-                            >
-                              🚗 Waze
-                            </a>
-                            <a
-                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${p.lat},${p.lng}`)}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="flex items-center gap-1 rounded bg-surface border border-line px-2 py-1 text-[9px] font-extrabold text-ink hover:border-primary/40 hover:text-primary transition-colors"
-                              title="Abrir en Google Maps"
-                            >
-                              📍 Maps
-                            </a>
-                          </div>
-                        </div>
-                      ))}
+                      {getJourneys(entry.ruta).length > 0
+                        ? getJourneys(entry.ruta).map((jj) => (
+                            <div key={jj.tipo_trayecto}>
+                              <p className="text-[11px] font-black uppercase text-muted mb-1.5">
+                                {jj.tipo_trayecto === 'ida' ? '🌅 Paradas IDA' : '🌇 Paradas VUELTA'} ({jj.paradas.length})
+                              </p>
+                              {(jj.paradas || []).map((p, idx) => <StopLine key={p.id || idx} p={p} idx={idx} />)}
+                            </div>
+                          ))
+                        : (
+                            <>
+                              <p className="text-[11px] font-black uppercase text-muted">Paradas</p>
+                              {(entry.ruta.paradas || []).map((p, idx) => <StopLine key={p.id || idx} p={p} idx={idx} />)}
+                            </>
+                          )}
                     </div>
                   )}
                 </div>

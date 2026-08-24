@@ -26,6 +26,11 @@ export interface RouteHistoryEntry {
   tipo_trayecto: string;
   dia_semana?: string;     // 'Lun'..'Vie'
   variante?: string;       // variant id
+  // Ruta combinada (ida + vuelta en un mismo registro)
+  tiene_ida?: boolean;
+  tiene_vuelta?: boolean;
+  paradas_ida?: number;
+  paradas_vuelta?: number;
   created_at: string;      // ISO timestamp
   ruta: RutaDiaria;        // full snapshot
 }
@@ -53,6 +58,11 @@ function saveHistoryLocal(entries: RouteHistoryEntry[]) {
  * Build a history entry from a full route snapshot.
  */
 export function buildHistoryEntry(ruta: RutaDiaria): RouteHistoryEntry {
+  const paradas = ruta.paradas || [];
+  const idaCount = ruta.ida?.paradas?.length || 0;
+  const vueltaCount = ruta.vuelta?.paradas?.length || 0;
+  const totalParadas = paradas.length > 0 ? paradas.length : idaCount + vueltaCount;
+
   return {
     id: ensureUUID(ruta.id),
     fecha: ruta.fecha,
@@ -64,13 +74,17 @@ export function buildHistoryEntry(ruta: RutaDiaria): RouteHistoryEntry {
     hora_llegada_objetivo: ruta.hora_llegada_objetivo,
     distancia_total_km: ruta.distancia_total_km,
     tiempo_total_estimado_min: ruta.tiempo_total_estimado_min,
-    total_paradas: ruta.paradas?.length || 0,
-    recogidos: (ruta.paradas || []).filter((p) => p.estado === 'recogido' || p.estado === 'completado').length,
-    ausentes: (ruta.paradas || []).filter((p) => p.estado === 'ausente').length,
+    total_paradas: totalParadas,
+    recogidos: paradas.filter((p) => p.estado === 'recogido' || p.estado === 'completado').length,
+    ausentes: paradas.filter((p) => p.estado === 'ausente').length,
     modo_optimizacion: ruta.modo_optimizacion,
     tipo_trayecto: ruta.tipo_trayecto || 'ida',
     dia_semana: ruta.dia_semana,
     variante: ruta.variante,
+    tiene_ida: !!ruta.ida,
+    tiene_vuelta: !!ruta.vuelta,
+    paradas_ida: idaCount > 0 ? idaCount : undefined,
+    paradas_vuelta: vueltaCount > 0 ? vueltaCount : undefined,
     created_at: new Date().toISOString(),
     ruta: JSON.parse(JSON.stringify(ruta)) as RutaDiaria,
   };
