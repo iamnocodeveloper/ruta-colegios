@@ -67,9 +67,8 @@ rutas-coplegio/
 ## 5. Convenciones de código
 
 ### Regla de oro: NO generar datos de ejemplo automáticamente
-- La app **nunca** crea datos demo al iniciar (no hay auto-seed). Los datos demo solo se generan vía `seedInstantDatabase()` desde botones explícitos con `window.confirm`.
-- No usar `INITIAL_*` (mockData) como fallback en mapeadores ni en estados por defecto; si no hay datos, devolver listas vacías / estados neutros.
-- Si necesitas poblar datos de prueba en local, usa los botones de seed manual (solo desarrollo) o `seedInstantDatabase(true)` a propósito.
+- La app **nunca** crea datos demo (no hay auto-seed ni botones de seed en la UI). `seedInstantDatabase()` existe solo como utilidad interna; no se invoca desde ningún componente.
+- No usar `INITIAL_*` (mockData) como fallback en mapeadores ni en estados por defecto; si no hay datos de la BD, devolver listas vacías / estados neutros. La fuente de verdad es **siempre InstantDB**.
 
 ### Estilo
 - **TypeScript estricto**: tipos explícitos, sin `any` salvo interop con InstantDB (patrón `(alu: any)` en mapeos).

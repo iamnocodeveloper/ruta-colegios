@@ -20,13 +20,11 @@ import {
   Zap,
   CheckCircle2,
   AlertCircle,
-  Database,
   Search,
-  UserCheck,
-  RefreshCw
+  UserCheck
 } from 'lucide-react';
 import { Alumno } from '../../types';
-import { db, INSTANT_APP_ID, seedInstantDatabase } from '../../services/instantDb';
+import { db, INSTANT_APP_ID } from '../../services/instantDb';
 
 interface LoginGatewayProps {
   allStudents: Alumno[];
@@ -52,10 +50,6 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
   // Parent form state
   const [studentIdInput, setStudentIdInput] = useState('');
   const [parentError, setParentError] = useState<string | null>(null);
-
-  // InstantDB Seed helper
-  const [isSeeding, setIsSeeding] = useState(false);
-  const [seedSuccess, setSeedSuccess] = useState(false);
 
   // 1. Quick 1-Click Admin Login (dueño / demo)
   const handleQuickAdminLogin = () => {
@@ -129,22 +123,6 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
     } else {
       setParentError(`No se encontró ningún alumno con el ID "${target}". Prueba con un ID de la lista sugerida.`);
     }
-  };
-
-  // 4. Seed Database in InstantDB (con confirmación para no pisar datos)
-  const handleSeedDatabase = async () => {
-    if (!window.confirm('Se crearán/sobrescribirán los datos DEMO. Si ya tienes datos reales, NO los borra, pero añadirá los demo. ¿Continuar?')) return;
-    setIsSeeding(true);
-    try {
-      const ok = await seedInstantDatabase(true);
-      if (ok) {
-        setSeedSuccess(true);
-        setTimeout(() => setSeedSuccess(false), 3000);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-    setIsSeeding(false);
   };
 
   return (
@@ -396,25 +374,6 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
               )}
             </div>
           )}
-
-          {/* Database Synchronization Helper in InstantDB */}
-          <div className="border-t border-line/80 pt-3 flex items-center justify-between text-[11px] text-muted">
-            <span className="flex items-center gap-1.5">
-              <Database className="h-3.5 w-3.5 text-primary" />
-              <span>Tablas InstantDB Listas</span>
-            </span>
-
-            <button
-              id="btn-seed-gateway"
-              type="button"
-              onClick={handleSeedDatabase}
-              disabled={isSeeding}
-              className="flex items-center gap-1 text-primary hover:text-primary transition-colors font-semibold cursor-pointer"
-            >
-              <RefreshCw className={`h-3 w-3 ${isSeeding ? 'animate-spin' : ''}`} />
-              <span>{isSeeding ? 'Sincronizando...' : seedSuccess ? '¡Sincronizado!' : 'Poblar Datos Reales'}</span>
-            </button>
-          </div>
         </div>
       </div>
     </div>

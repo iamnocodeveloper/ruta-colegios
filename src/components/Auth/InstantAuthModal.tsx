@@ -13,15 +13,13 @@ import {
   AlertCircle,
   LogOut,
   Sparkles,
-  Database,
-  RefreshCw,
   X,
   Zap,
   Lock,
   UserCheck,
   ArrowRight
 } from 'lucide-react';
-import { db, INSTANT_APP_ID, seedInstantDatabase } from '../../services/instantDb';
+import { db, INSTANT_APP_ID } from '../../services/instantDb';
 
 interface InstantAuthModalProps {
   isOpen: boolean;
@@ -43,7 +41,6 @@ export const InstantAuthModal: React.FC<InstantAuthModalProps> = ({
   const [codeSent, setCodeSent] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [isSeeding, setIsSeeding] = useState(false);
 
   const activeUser = instantUser || currentDemoUser;
 
@@ -154,25 +151,6 @@ export const InstantAuthModal: React.FC<InstantAuthModalProps> = ({
     } catch (err: any) {
       setStatusMessage({ type: 'error', text: err?.message || 'Error al cerrar sesión.' });
     }
-  };
-
-  const handleSeedData = async () => {
-    if (!window.confirm('Se crearán/sobrescribirán los datos DEMO. Si ya tienes datos reales, NO los borra, pero añadirá los demo. ¿Continuar?')) return;
-    setIsSeeding(true);
-    setStatusMessage(null);
-    const success = await seedInstantDatabase(true);
-    if (success) {
-      setStatusMessage({
-        type: 'success',
-        text: '¡Tablas y datos reales sincronizados en InstantDB correctamente!'
-      });
-    } else {
-      setStatusMessage({
-        type: 'error',
-        text: 'Hubo un inconveniente al sembrar datos en InstantDB.'
-      });
-    }
-    setIsSeeding(false);
   };
 
   return (
@@ -347,28 +325,6 @@ export const InstantAuthModal: React.FC<InstantAuthModalProps> = ({
             </form>
           </div>
         )}
-
-        {/* Database Real Seed & Sync Helper */}
-        <div className="border-t border-line pt-3 space-y-2">
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-bold text-ink flex items-center gap-1.5">
-              <Database className="h-3.5 w-3.5 text-primary" />
-              <span>Sincronización de Tablas InstantDB</span>
-            </span>
-          </div>
-          <p className="text-[11px] text-muted leading-relaxed">
-            Escribe y actualiza las tablas de Colegios, Representantes, Alumnos, Rutas, Paradas y Usuarios en tu App InstantDB.
-          </p>
-          <button
-            id="btn-seed-instantdb"
-            onClick={handleSeedData}
-            disabled={isSeeding}
-            className="w-full flex items-center justify-center gap-2 rounded-xl bg-soft-gray border border-line py-2 text-xs font-bold text-ink hover:bg-line transition-all disabled:opacity-50 cursor-pointer"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 text-primary ${isSeeding ? 'animate-spin' : ''}`} />
-            <span>{isSeeding ? 'Sincronizando Tablas...' : 'Sincronizar Tablas con Datos Reales'}</span>
-          </button>
-        </div>
       </div>
     </div>
   );

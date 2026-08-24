@@ -35,6 +35,7 @@
 | `f289f47` | feat: actualización PWA visible — banner nueva versión, indicador v1.2.0, SW v4 con SKIP_WAITING | 24/08 |
 | `66dbdb2` | feat: multiusuarios (multi-tenant) — clientes, cliente_id, login por rol, filtrado, gestor de clientes + CSV, respaldo; v1.4.0 | 24/08 |
 | `0846d02` | fix: NO generar datos demo automáticamente — sin auto-seed, sin fallbacks INITIAL_*, botón "Limpiar datos demo", seed manual con confirmación | 24/08 |
+| `—` | fix: datos reales de la BD siempre — sin botones de seed en login/modal, mapeadores sin fallback localStorage | 24/08 |
 
 ---
 

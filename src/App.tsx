@@ -426,12 +426,7 @@ export default function App() {
         created_at: col.created_at
       }));
     }
-    try {
-      const saved = localStorage.getItem('rutaescolar_colegios');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
+    return [];
   }, [instantData?.colegios]);
 
   const [selectedColegioId, setSelectedColegioId] = useState<string>('');
@@ -459,12 +454,7 @@ export default function App() {
         created_at: rep.created_at
       }));
     }
-    try {
-      const saved = localStorage.getItem('rutaescolar_representantes');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
+    return [];
   }, [instantData?.representantes]);
 
   const repsMap = useMemo(() => {
@@ -520,29 +510,7 @@ export default function App() {
         };
       });
     }
-    try {
-      const saved = localStorage.getItem('rutaescolar_alumnos');
-      if (saved) {
-        const parsed = JSON.parse(saved) as Alumno[];
-        // Apply override to localStorage-loaded students too
-        if (alumnosOverride) {
-          return parsed.map((a) => ({
-            ...a,
-            modalidad_servicio: alumnosOverride[a.id]?.modalidad_servicio || a.modalidad_servicio || 'ida_y_vuelta',
-            activo_en_rutas: alumnosOverride[a.id]?.activo_en_rutas ?? a.activo_en_rutas !== false,
-            dias_ruta: alumnosOverride[a.id]?.dias_ruta || normalizeDays(a.dias_ruta),
-          }));
-        }
-        return parsed.map((a) => ({
-          ...a,
-          dias_ruta: normalizeDays(a.dias_ruta),
-          modalidad_servicio: a.modalidad_servicio || 'ida_y_vuelta',
-        }));
-      }
-      return [];
-    } catch {
-      return [];
-    }
+    return [];
   }, [instantData?.alumnos, colegiosMap, repsMap, selectedColegio, alumnosOverride]);
 
   const conductores: Conductor[] = useMemo(() => {
@@ -570,12 +538,7 @@ export default function App() {
         created_at: cond.created_at
       }));
     }
-    try {
-      const saved = localStorage.getItem('rutaescolar_conductores');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
+    return [];
   }, [instantData?.conductores]);
 
   const [origen, setOrigen] = useState(() => {
