@@ -1,7 +1,7 @@
 # 🧠 Memoria del Proyecto — RutaEscolar PWA
 
 > **Propósito:** Este documento es la memoria histórica del proyecto. Registra el contexto, las decisiones tomadas, el porqué de cada elección y el estado mental del desarrollo. Sirve para retomar el trabajo en cualquier momento con todo el contexto.
-> **Última actualización:** 22/08/2026
+> **Última actualización:** 24/08/2026
 
 ---
 
@@ -29,6 +29,8 @@
 5. **Variantes de ruta con colores + reordenamiento manual + días por alumno**.
 6. **Botones de navegación** (Waze/Google Maps/Llamar/WhatsApp) en paradas.
 7. **Fixes de estabilidad**: ErrorBoundary global, normalización de días, service worker network-first.
+8. **Webhook n8n + auditoría**: cada evento de ejecución de ruta se envía a n8n y se audita en InstantDB (`eventos_ruta`, `webhook_logs`).
+9. **Itinerario desplegable + reorden por arrastre y desde el mapa**: acordeón cerrado por defecto (mapa más grande), drag & drop con `motion` Reorder y modo "Editar Orden en Mapa".
 
 ---
 
@@ -44,6 +46,10 @@
 | **Link de revisión sin login** | Un link de "solo lectura" debe ser compartible; no tiene sentido exigir sesión para ver algo no editable. | Fix de pantalla en blanco |
 | **Variantes de ruta (4 algoritmos)** | El usuario pidió "buscar la ruta más corta y poder elegir"; se generan 2-Opt, Vecino Cercano, Extremos Primero y Aleatoria, cada una con color. | Feature request |
 | **Días por alumno (Lun–Vie)** | El usuario pidió marcar qué días asiste cada alumno; el listado del planificador se filtra automáticamente por día + modalidad + activo. | Feature request |
+| **Itinerario desplegable (cerrado por defecto)** | El usuario pidió dar más espacio al mapa; la sección del itinerario es un acordeón que arranca cerrado y el mapa crece a `calc(100vh-320px)`. | Feature request |
+| **Reorden por arrastre (drag & drop)** | El usuario pidió mover una parada a una posición exacta (ej. "la #1 al final, que la #2 pase a ser la #1"). Se usó `motion` `Reorder` (ya instalado, sin dependencias nuevas) con asa ⋮⋮, manteniendo las flechas ↑/↓ como alternativa accesible. | Feature request |
+| **Reorden desde el mapa** | El usuario pidió poder reordenar también tocando los marcadores. Se implementó el modo "Editar Orden en Mapa" (progreso X/N, aplicar/cancelar, orden parcial) vía `onMarkerClick` + `reorderProgress` en `SchoolRouteMap`. | Feature request |
+| **`applyManualOrder` centralizado** | Flechas, drag & drop y reorden en mapa recalcular con el mismo camino: `setOrderedStudentIds` + `ordenManual` + variante "Manual". Evita lógica duplicada. | Refactor |
 | **Service worker network-first para HTML** | El cache-first servía el index.html viejo → errores MIME text/html en producción tras redesplegar. | Fix de producción |
 | **ErrorBoundary global** | Un error de runtime (ej. `ruta.paradas[0]` con paradas undefined) daba pantalla en blanco total. Ahora muestra fallback con mensaje. | Fix de producción |
 
@@ -61,7 +67,7 @@
 | Leaflet 1.9 | ^1.9.4 | Mapas (tiles CartoDB Voyager) | Mapbox GL |
 | Express 4 | ^4.21.2 | Servidor (dev middleware + prod static) | — |
 | lucide-react | ^0.546.0 | Iconos | — |
-| motion | ^12.23.24 | Animaciones (declarada, uso mínimo) | — |
+| motion | ^12.23.24 | Animaciones + `Reorder` (drag & drop de paradas) | framer-motion |
 | canvas-confetti | ^1.9.4 | Confeti al completar ruta | — |
 | Bun | — | Lockfile original (`bun.lock`) | npm |
 

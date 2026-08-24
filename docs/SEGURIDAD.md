@@ -1,7 +1,7 @@
 # 🔒 Seguridad y Auditoría — RutaEscolar PWA
 
 > **Auditoría de seguridad estática** + recomendaciones de hardening.
-> **Última actualización:** 22/08/2026 · **Estado:** auditoría completada, no se modificó código.
+> **Última actualización:** 24/08/2026 · **Estado:** auditoría completada, no se modificó código.
 
 ---
 
@@ -59,6 +59,7 @@
 | 5.3 | `bindPopup` con HTML crudo | 🟠 Media |
 
 **Riesgo:** datos manipulados en InstantDB (por un tercero con acceso) podrían ejecutar HTML en el mapa. **Mitigación actual:** solo escriben staff autenticado. **Recomendación:** escapar con `escapeHtml()` antes de interpolar.
+> Nota: el modo reorden de paradas (`reorderProgress` en `SchoolRouteMap.tsx`, commit `a03dd2a`) también interpola el nombre del alumno en el HTML del marcador — mismo patrón y misma mitigación aplican.
 
 ### 2.5 Autenticación
 

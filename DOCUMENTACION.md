@@ -1,7 +1,7 @@
 # 📚 Documentación del Sistema — RutaEscolar PWA
 
 > **Documento vivo**: actualizar siempre que haya avances, mejoras o cambios en el sistema.
-> **Última actualización:** 23/08/2026
+> **Última actualización:** 24/08/2026
 
 ---
 
@@ -43,7 +43,7 @@
 | **Backend (dev)** | Express + Vite middleware (`server.ts`, puerto 3000) |
 | **Base de datos en tiempo real** | InstantDB (`@instantdb/react`) — App ID `9bfbca9b-1445-4948-98f4-70bfcf2164a2` |
 | **Persistencia local** | localStorage (fallback resiliente) |
-| **Animación** | motion |
+| **Animación / drag & drop** | motion (Reorder) — reordenamiento de paradas por arrastre |
 | **Package manager** | Bun (`bun.lock`) / npm compatible |
 
 ### Scripts
@@ -168,7 +168,7 @@ Implementado en `src/index.css` con tokens Tailwind v4 `@theme`:
 ### 👨‍💼 Staff / Administrador
 - **Inicio (Dashboard Bento):** ruta de hoy con salida/llegada/distancia/paradas, KPIs de recogidos y matrícula, gauge de progreso, timeline de paradas, feed de actividad.
 - **Cabina del Conductor (simplificada):** selección de conductor, ruta de hoy con botón EMPEZAR, próximas paradas con RECOGIDO/AUSENTE/PENDIENTE, mapa de la ruta, lista de mis rutas.
-- **Planificador:** cálculo de ruta (IDA/VUELTA), selección de colegio, conductor, origen, modo (estándar/tráfico real), tiempo de abordaje, orden manual de paradas, itinerario con ETA.
+- **Planificador:** cálculo de ruta (IDA/VUELTA), selección de colegio, conductor, origen, modo (estándar/tráfico real), tiempo de abordaje, itinerario con ETA **desplegable**, y **reorden de paradas** por arrastre (drag & drop) o tocando los **marcadores del mapa**.
 - **Gestión de Alumnos:** CRUD completo + **toggle Activo en Rutas** (alumno desactivado no entra en el cálculo de paradas) + copiar Magic Link + ver portal.
 - **Gestión de Colegios:** CRUD con hora límite de llegada y GPS.
 - **Gestión de Conductores:** CRUD con vehículo, placa, capacidad, estado activo.
@@ -195,6 +195,7 @@ Implementado en `src/index.css` con tokens Tailwind v4 `@theme`:
 4. **Tiempos**: `T_manejo` (con factor tráfico 1.12 estándar / 1.35 tráfico real) + `T_abordaje = N × minutos_por_alumno`.
 5. **Salida inversa**: `H_salida = H_llegada_limite − T_total` (trayecto ida) o desde hora fija (vuelta).
 6. **ETAs por parada**: acumulación de tiempo de manejo + abordaje por parada.
+7. **Orden manual (`ordenManual`)**: si el usuario reordena paradas (flechas ↑/↓, **drag & drop** o **modo "Editar Orden en Mapa"**), la secuencia se respeta tal cual y la variante pasa a **"Manual"** (rojo). Un orden parcial desde el mapa se completa con el resto de paradas en su orden relativo.
 
 ---
 
@@ -298,7 +299,10 @@ Cada evento de ejecución de ruta dispara automáticamente un **POST JSON silenc
 - [x] **Toggle Activo en Rutas** por alumno (excluido del cálculo de paradas).
 - [x] **Días de ruta por alumno** (checkboxes Lun–Vie) con carga automática del listado según día + modalidad.
 - [x] **Variantes de ruta**: cálculo de 4 alternativas (Óptima 2-Opt, Vecino Cercano, Extremos Primero, Aleatoria), cada una con **color propio en el mapa**, distancia mostrada y badge **MÁS CORTA**.
-- [x] **Reordenamiento manual** de paradas (mover arriba/abajo) con variante "Manual" en rojo.
+- [x] **Reordenamiento manual** de paradas con variante "Manual" en rojo.
+- [x] **Itinerario desplegable** (acordeón, cerrado por defecto): al colapsarlo el mapa crece a `calc(100vh-320px)` para planificar con más contexto.
+- [x] **Reorden por arrastre (drag & drop)** en el itinerario (motion `Reorder`): asa ⋮⋮ por fila; al soltar se renumera todo (mover la #1 al final hace que #2 pase a ser la #1) y se recalcula la ruta.
+- [x] **Reorden desde el mapa**: botón "✏️ Editar Orden en Mapa" — toca los marcadores en el nuevo orden (verde + nueva posición, progreso `X/N`, "Aplicar" admite orden parcial, "Cancelar" aborta).
 - [x] **Historial de rutas** con snapshot completo y persistencia.
 - [x] **Link de revisión solo lectura** (`?view=review&routeId=`).
 - [x] **Botones de navegación y contacto** por parada: Waze, Google Maps, Llamar Representante, WhatsApp (en revisión, cabina, historial y cards de alumnos).

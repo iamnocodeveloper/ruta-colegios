@@ -1,7 +1,7 @@
 # 🛠️ Guía de Desarrollo — RutaEscolar PWA
 
 > **Guía para desarrolladores**: cómo correr, estructurar, añadir features y mantener el proyecto.
-> **Última actualización:** 22/08/2026
+> **Última actualización:** 24/08/2026
 
 ---
 
@@ -82,6 +82,12 @@ rutas-coplegio/
 - **`activo_en_rutas`** en alumno: `false` lo excluye de rutas.
 - **`dias_ruta`**: array de `['Lun','Mar','Mié','Jue','Vie']`; usar `normalizeDays()` al leer (puede venir como string JSON de InstantDB).
 - **`modalidad_servicio`**: `ida_y_vuelta` | `solo_ida` | `solo_vuelta` — siempre mapearlo desde InstantDB (bug histórico: se perdía en el mapeo).
+
+### Drag & drop (motion)
+- Usar `Reorder.Group` / `Reorder.Item` de **`motion/react`** (ya instalado; re-exporta de framer-motion).
+- Para que solo arrastre un asa: `dragListener={false}` + `useDragControls` y disparar `controls.start(e)` en el `onPointerDown` del handle (`GripVertical`).
+- ⚠️ **No llamar hooks (ej. `useDragControls`) dentro de un `.map()`** — extraer un componente por fila (ver `StopRow` en `RoutePlanner.tsx`).
+- Todo reorden de paradas recalcula con el helper centralizado **`applyManualOrder(newOrder)`** (variante "Manual").
 
 ## 6. Cómo añadir una feature (flujo recomendado)
 

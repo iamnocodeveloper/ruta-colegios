@@ -1,7 +1,7 @@
 # 🏫 Descripción del Sistema — RutaEscolar PWA
 
 > **Descripción funcional y técnica profunda.** Incluye el modelo de datos completo, referencia de servicios, componentes, flujos y API.
-> **Última actualización:** 22/08/2026
+> **Última actualización:** 24/08/2026
 
 ---
 
@@ -158,6 +158,11 @@ type EstadoParada = 'pendiente' | 'recogido' | 'completado' | 'ausente';
 3. `farthest` — Extremo más lejano primero (barrido geográfico)
 4. `random` — Shuffle + reorden greedy (exploración)
 
+**`calculateOptimizedRoute` — opción `ordenManual`:**
+- Si `options.ordenManual` coincide en longitud con la lista de alumnos elegibles, la secuencia se respeta tal cual (sin re-optimizar).
+- Es el mecanismo detrás de las **flechas ↑/↓**, el **drag & drop** y el **reorden desde el mapa** → la variante activa pasa a `manual` (rojo).
+- Si el orden manual está incompleto (orden parcial desde el mapa), `RoutePlanner.buildFullOrder()` completa la secuencia con el resto de paradas en su orden relativo.
+
 ### 4.3 `src/services/routeHistory.ts` — Historial de rutas
 
 | Función | Firma | Qué hace |
@@ -200,7 +205,7 @@ type EstadoParada = 'pendiente' | 'recogido' | 'completado' | 'ausente';
 ### Admin
 | Componente | Props | Descripción |
 |---|---|---|
-| `RoutePlanner` | `colegios, selectedColegio, onSelectColegio, origen, onUpdateOrigen, allAlumnos, alumnosMap, activeRuta, conductores, onSaveRoute, onSwitchToDriver` | Planificador: día, IDA/VUELTA, variantes, orden manual, guardar |
+| `RoutePlanner` | `colegios, selectedColegio, onSelectColegio, origen, onUpdateOrigen, allAlumnos, alumnosMap, activeRuta, conductores, onSaveRoute, onSwitchToDriver` | Planificador: día, IDA/VUELTA, variantes, itinerario desplegable, reorden por arrastre y desde el mapa, guardar |
 | `StudentManager` | `alumnos, representantes, colegios, onSaveAlumno, onDeleteAlumno, onToggleActivoRutas, onOpenParentPortal` | CRUD alumnos + días + modalidad + toggle |
 | `SchoolManager` | `colegios, alumnos, onSaveColegio, onDeleteColegio` | CRUD colegios |
 | `DriverManager` | `conductores, activeRuta, onSaveConductor, onDeleteConductor, onSelectDriverForCockpit` | CRUD conductores |
@@ -218,7 +223,7 @@ type EstadoParada = 'pendiente' | 'recogido' | 'completado' | 'ausente';
 ### Map
 | Componente | Props | Descripción |
 |---|---|---|
-| `SchoolRouteMap` | `colegio, origen, onOriginChange?, paradas, alumnosMap, vanLocation?, polylineGeometry?, activeStopIndex?, highlightStudentId?, targetArrivalTime?, tipoTrayecto?, onMarkerClick?, polylineColor?, polylineDash?, className?` | Mapa Leaflet completo |
+| `SchoolRouteMap` | `colegio, origen, onOriginChange?, paradas, alumnosMap, vanLocation?, polylineGeometry?, activeStopIndex?, highlightStudentId?, targetArrivalTime?, tipoTrayecto?, onMarkerClick?, polylineColor?, polylineDash?, reorderProgress?, className?` | Mapa Leaflet completo; `onMarkerClick` + `reorderProgress` habilitan el modo reorden (marcadores elegidos en verde con su nueva posición, siguiente a tocar con pulso) |
 | `LocationPicker` | `lat, lng, onChange, title, pinType, currentAddress, height` | Picker de coordenadas con búsqueda |
 
 ### Otros
@@ -236,7 +241,10 @@ type EstadoParada = 'pendiente' | 'recogido' | 'completado' | 'ausente';
 1. Seleccionar **día** (contador de alumnos por día).
 2. Seleccionar **IDA/VUELTA** (filtra modalidad).
 3. Lista de alumnos se **carga automáticamente** (día + modalidad + activo).
-4. Genera **4 variantes** con colores; elegir una (o reordenar manualmente).
+4. Genera **4 variantes** con colores; elegir una, o **reordenar manualmente**:
+   - **Arrastra** las filas del itinerario (sección desplegable, cerrada por defecto) con el asa ⋮⋮.
+   - O activa **"✏️ Editar Orden en Mapa"** y toca los marcadores en el orden deseado (progreso `X/N`, "Aplicar"/"Cancelar", admite orden parcial).
+   - Cualquier cambio manual pasa la variante a **"Manual"** (rojo) y recalcula ETAs con `ordenManual`; "Restaurar Orden 2-Opt" revierte a la sugerencia algorítmica.
 5. "GUARDAR Y ASIGNAR" → `handleSaveAndActivate` → `onSaveRoute` → `handleSaveRoute` (App.tsx) → InstantDB + historial.
 
 ### 6.2 Conductor ejecuta la ruta

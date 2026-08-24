@@ -1,7 +1,7 @@
 # 🚀 Avances del Proyecto — RutaEscolar PWA
 
 > **Registro cronológico de avances.** Cada entrada incluye el commit, la fecha y qué se implementó.
-> **Última actualización:** 22/08/2026
+> **Última actualización:** 24/08/2026
 
 ---
 
@@ -24,6 +24,9 @@
 | `2cf340a` | fix: service worker network-first para HTML | 22/08 |
 | `72126d1` | fix: modalidad de servicio no se reflejaba en lista de ruta | 22/08 |
 | `e065b08` | fix: alumnos no aparecían en lista — dias_ruta string JSON | 22/08 |
+| `50cd1a8` | docs: documentación completa del proyecto (memoria, avances, descripción, seguridad, guía) | 23/08 |
+| `9363a57` | feat: webhook n8n para eventos de ruta + auditoría en InstantDB | 23/08 |
+| `a03dd2a` | feat: itinerario desplegable + reordenar paradas por arrastre y desde el mapa | 24/08 |
 
 ---
 
@@ -101,6 +104,21 @@
 - **Service worker network-first** para HTML (invalida caché vieja, `rutaescolar-v3`).
 - **Fix modalidad**: el mapeo de InstantDB ahora copia `modalidad_servicio` (antes todos caían a `ida_y_vuelta`).
 - **Fix días**: `normalizeDays()` maneja array/string JSON/CSV (InstantDB devolvía string que rompía el filtro → lista vacía).
+
+---
+
+## Fase 7 — Itinerario desplegable + Reorden por arrastre y desde el mapa (commit a03dd2a)
+
+### ✅ Lo que se logró
+- **Itinerario desplegable (acordeón)**: la sección "Itinerario de Recogida/Entrega" se colapsa/expande con una flecha y arranca **cerrada por defecto**, agrandando el mapa a `calc(100vh-320px)` para planificar con más contexto geográfico.
+- **Drag & drop** en el itinerario (`motion` `Reorder.Group`/`Reorder.Item` + `useDragControls`): cada fila tiene un asa ⋮⋮ para arrastrarla a cualquier posición; al soltar se renumera todo (mover la #1 al final hace que #2 pase a ser la #1) y se **recalcula la ruta** con `ordenManual` (variante "Manual" en rojo).
+- **Reorden desde el mapa**: botón flotante **"✏️ Editar Orden en Mapa"** sobre el mapa. En ese modo se tocan los marcadores en el nuevo orden: los ya elegidos se pintan en verde con su nueva posición, hay progreso `X/N`, y al completar las N paradas (o con "Aplicar" para un orden parcial) se aplica y recalcula automáticamente. Botón "Cancelar" para abortar.
+- Refactor: `moveStudent` se generalizó en **`applyManualOrder(newOrder)`**, reutilizado por las flechas ↑/↓, el drag & drop y el reorden en el mapa.
+- `SchoolRouteMap` ahora acepta `onMarkerClick` y `reorderProgress` para renderizar el modo reorden.
+
+### 📝 Notas
+- Sin dependencias nuevas: se usa `motion` (ya declarado), que re-exporta `Reorder` y `useDragControls` de framer-motion.
+- El reorden por mapa permite **orden parcial**: los marcadores tocados van primero y el resto conserva su orden relativo.
 
 ---
 
