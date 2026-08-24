@@ -29,6 +29,7 @@
 | `a03dd2a` | feat: itinerario desplegable + reordenar paradas por arrastre y desde el mapa | 24/08 |
 | `76b24ea` | feat: informe de ruta en PDF (jsPDF + autoTable) desde Historial y Ver Recorrido | 24/08 |
 | `e01e581` | feat: ruta completa con jornadas de ida y vuelta en un solo registro | 24/08 |
+| `15ebe28` | feat: enlace de revisión de ruta sin login — carga desde la nube en cualquier dispositivo | 24/08 |
 
 ---
 
@@ -153,6 +154,15 @@
 ### 📝 Notas
 - El `activeRuta` ahora se persiste también en localStorage al guardar (sobrevive a recargas).
 - `saveRutaInstant` guarda la concatenación de paradas en la nube; la integridad de jornadas vive en el snapshot local del historial.
+
+---
+
+## Fase 10 — Enlace de revisión sin login (carga desde la nube) (commit 15ebe28)
+
+### ✅ Lo que se logró
+- La vista de revisión **no requiere login** (renderiza antes de la puerta de autenticación) y **sin flash del login** (la vista inicial se deriva de la URL).
+- Si la ruta no está en el historial local (otro navegador/dispositivo), se **carga desde InstantDB** (`buildReviewEntryFromCloud`) con sus paradas, colegio, conductor y alumnos.
+- Estado de carga ("Cargando ruta...") mientras se busca en la nube; mensaje "Ruta no encontrada" solo si no existe en local ni en nube.
 
 ---
 

@@ -208,7 +208,7 @@ Implementado en `src/index.css` con tokens Tailwind v4 `@theme`:
 
 - Cada vez que se guarda una ruta (`handleSaveRoute`), se persiste un **snapshot completo** (`RouteHistoryEntry`) con: id, fecha, colegio, conductor, estado, horarios, distancia, tiempos, nº paradas, recogidos/ausentes, modo, trayecto, `created_at` y la **ruta completa** (paradas + polyline).
 - Almacenamiento: **localStorage** (clave `rutaescolar_route_history`, tope 200 entradas) + sync best-effort a InstantDB.
-- **Link de revisión**: `GET /?view=review&routeId=<id>` carga la ruta desde el historial y muestra la vista `RouteReviewView` (mapa + itinerario + resumen) **sin opciones de edición**.
+- **Link de revisión**: `GET /?view=review&routeId=<id>` muestra la vista `RouteReviewView` (mapa + itinerario + resumen) **sin opciones de edición y SIN login**. Busca primero en el historial local y, si no está, **carga la ruta desde la nube (InstantDB)**, por lo que funciona en cualquier dispositivo con el enlace.
 - **Informe PDF**: `generateRoutePdf(entry)` (`src/services/pdfReport.ts`) descarga un informe A4 de texto con encabezado, resumen y tabla de paradas coloreada por estado — accesible desde Historial y Ver Recorrido.
 - Acciones del historial: ver recorrido, **generar PDF**, copiar link, **usar hoy** (replica la ruta con fecha actual y paradas en pendiente), eliminar.
 
