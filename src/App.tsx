@@ -78,16 +78,190 @@ export type AuthSession =
   | { type: 'parent'; studentId: string }
   | null;
 
+const STAFF_VIEWS: StaffView[] = ['home', 'driver', 'parent', 'planner', 'students', 'schools', 'drivers', 'sql', 'history', 'review'];
+
+/** Normaliza el resultado de db.useQuery a un array (puede venir como objeto keyed por id). */
+function toList(raw: any): any[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  return Object.values(raw);
+}
+
+/**
+ * Construye una RouteHistoryEntry leyendo una ruta desde los datos de InstantDB.
+ * Permite que el enlace de revisión funcione SIN login y en cualquier dispositivo.
+ */
+function buildReviewEntryFromCloud(routeId: string, data: any): RouteHistoryEntry | null {
+  const rutaId = ensureUUID(routeId);
+  const rutaRow = toList(data?.rutas_diarias).find((r) => ensureUUID(r.id) === rutaId);
+  if (!rutaRow) return null;
+
+  const colegioRow = toList(data?.colegios).find((c) => ensureUUID(c.id) === ensureUUID(rutaRow.colegio_id)) || null;
+  const conductorRow = toList(data?.conductores).find((c) => ensureUUID(c.id) === ensureUUID(rutaRow.conductor_id)) || null;
+  const reps = toList(data?.representantes);
+
+  const paradas: ParadaRuta[] = toList(data?.paradas_ruta)
+    .filter((p) => ensureUUID(p.ruta_id) === rutaId)
+    .sort((a, b) => Number(a.orden) - Number(b.orden))
+    .map((p) => {
+      const alu = toList(data?.alumnos).find((a) => ensureUUID(a.id) === ensureUUID(p.alumno_id));
+      const rep = alu ? reps.find((r) => ensureUUID(r.id) === ensureUUID(alu.representante_id)) : null;
+      return {
+        id: ensureUUID(p.id),
+        ruta_id: rutaId,
+        alumno_id: ensureUUID(p.alumno_id),
+        orden: Number(p.orden) || 1,
+        hora_estimada: p.hora_estimada || '07:00:00',
+        hora_real: p.hora_real || undefined,
+        estado: (p.estado as any) || 'pendiente',
+        lat: Number(p.lat) || 0,
+        lng: Number(p.lng) || 0,
+        distancia_desde_anterior_km: Number(p.distancia_desde_anterior_km || 0),
+        tiempo_desde_anterior_min: Number(p.tiempo_desde_anterior_min || 0),
+        alumno: alu
+          ? {
+              id: ensureUUID(alu.id),
+              nombre: alu.nombre || 'Estudiante',
+              colegio_id: ensureUUID(alu.colegio_id || rutaRow.colegio_id || ''),
+              representante_id: ensureUUID(alu.representante_id || ''),
+              direccion_recogida: alu.direccion_recogida || '',
+              lat: Number(alu.lat) || 0,
+              lng: Number(alu.lng) || 0,
+              grado: alu.grado || '',
+              notas_medicas: alu.notas_medicas || '',
+              modalidad_servicio: (alu.modalidad_servicio as any) || 'ida_y_vuelta',
+              activo_en_rutas: alu.activo_en_rutas !== false,
+              representante: rep
+                ? {
+                    id: ensureUUID(rep.id),
+                    nombre: rep.nombre || '',
+                    telefono_whatsapp: rep.telefono_whatsapp || '',
+                    magic_token: rep.magic_token || '',
+                  }
+                : undefined,
+            }
+          : undefined,
+      };
+    });
+
+  let polyline: [number, number][] = [];
+  try {
+    const parsed = JSON.parse(rutaRow.polyline_json || '[]');
+    if (Array.isArray(parsed)) polyline = parsed;
+  } catch {}
+
+  const colegio: Colegio | undefined = colegioRow
+    ? {
+        id: ensureUUID(colegioRow.id),
+        nombre: colegioRow.nombre || 'Colegio',
+        direccion: colegioRow.direccion || '',
+        lat: Number(colegioRow.lat) || 0,
+        lng: Number(colegioRow.lng) || 0,
+        hora_llegada_limite: colegioRow.hora_llegada_limite || '07:45:00',
+        contacto_telefono: colegioRow.contacto_telefono || '',
+      }
+    : undefined;
+
+  const conductor: Conductor | undefined = conductorRow
+    ? {
+        id: ensureUUID(conductorRow.id),
+        nombre: conductorRow.nombre || 'Conductor',
+        telefono: conductorRow.telefono || '',
+        vehiculo_modelo: conductorRow.vehiculo_modelo || '',
+        vehiculo_placa: conductorRow.vehiculo_placa || '',
+        capacidad_pasajeros: Number(conductorRow.capacidad_pasajeros || 0),
+        activo: conductorRow.activo !== false,
+      }
+    : undefined;
+
+  const ruta: RutaDiaria = {
+    id: rutaId,
+    fecha: rutaRow.fecha || new Date().toISOString().substring(0, 10),
+    colegio_id: ensureUUID(rutaRow.colegio_id || ''),
+    origen_lat: Number(rutaRow.origen_lat) || 0,
+    origen_lng: Number(rutaRow.origen_lng) || 0,
+    origen_direccion: rutaRow.origen_direccion || '',
+    modo_optimizacion: (rutaRow.modo_optimizacion as any) || 'fijo',
+    tipo_trayecto: (rutaRow.tipo_trayecto as any) || 'ida',
+    dia_semana: rutaRow.dia_semana || undefined,
+    variante: rutaRow.variante || undefined,
+    hora_llegada_objetivo: rutaRow.hora_llegada_objetivo || '',
+    hora_salida_estimada: rutaRow.hora_salida_estimada || '',
+    hora_salida_real: rutaRow.hora_salida_real || undefined,
+    hora_llegada_real: rutaRow.hora_llegada_real || undefined,
+    tiempo_manejo_estimado_min: Number(rutaRow.tiempo_manejo_estimado_min || 0),
+    tiempo_abordaje_total_min: Number(rutaRow.tiempo_abordaje_total_min || 0),
+    tiempo_total_estimado_min: Number(rutaRow.tiempo_total_estimado_min || 0),
+    distancia_total_km: Number(rutaRow.distancia_total_km || 0),
+    estado: (rutaRow.estado as any) || 'planificada',
+    tiempo_abordaje_por_alumno_min: Number(rutaRow.tiempo_abordaje_por_alumno_min || 2.5),
+    created_at: rutaRow.created_at,
+    colegio,
+    conductor,
+    conductor_id: conductor?.id,
+    paradas,
+    polyline_geometry: polyline,
+  };
+
+  return {
+    id: ruta.id,
+    fecha: ruta.fecha,
+    colegio_nombre: colegio?.nombre || 'Colegio',
+    conductor_nombre: conductor?.nombre || 'Sin conductor',
+    conductor_id: conductor?.id,
+    estado: ruta.estado,
+    hora_salida_estimada: ruta.hora_salida_estimada,
+    hora_llegada_objetivo: ruta.hora_llegada_objetivo,
+    distancia_total_km: ruta.distancia_total_km,
+    tiempo_total_estimado_min: ruta.tiempo_total_estimado_min,
+    total_paradas: paradas.length,
+    recogidos: paradas.filter((p) => p.estado === 'recogido' || p.estado === 'completado').length,
+    ausentes: paradas.filter((p) => p.estado === 'ausente').length,
+    modo_optimizacion: ruta.modo_optimizacion,
+    tipo_trayecto: ruta.tipo_trayecto || 'ida',
+    dia_semana: ruta.dia_semana,
+    variante: ruta.variante,
+    created_at: ruta.created_at || new Date().toISOString(),
+    ruta,
+  };
+}
+
 export default function App() {
-  // Navigation State
-  const [currentView, setCurrentView] = useState<StaffView>('home');
+  // Navigation State (vista inicial desde URL para que el link de revisión
+  // renderice directo, SIN pasar por el login)
+  const [currentView, setCurrentView] = useState<StaffView>(() => {
+    try {
+      const v = new URLSearchParams(window.location.search).get('view');
+      if (v && STAFF_VIEWS.includes(v as StaffView)) return v as StaffView;
+    } catch {}
+    return 'home';
+  });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [currentDriverId, setCurrentDriverId] = useState<string>('d1000000-0000-4000-8000-000000000001');
 
-  // Route History State
+  // Route History State (el enlace de revisión carga desde historial local o nube)
   const [routeHistory, setRouteHistory] = useState<RouteHistoryEntry[]>(() => getRouteHistory());
-  const [reviewEntry, setReviewEntry] = useState<RouteHistoryEntry | null>(null);
+  const [reviewEntry, setReviewEntry] = useState<RouteHistoryEntry | null>(() => {
+    try {
+      const u = new URLSearchParams(window.location.search);
+      const routeId = u.get('routeId');
+      if (u.get('view') === 'review' && routeId) {
+        return getRouteHistoryById(routeId) || null;
+      }
+    } catch {}
+    return null;
+  });
+  const [reviewLoading, setReviewLoading] = useState<boolean>(() => {
+    try {
+      const u = new URLSearchParams(window.location.search);
+      if (u.get('view') === 'review' && u.get('routeId')) {
+        // Si no hay entrada local, queda en loading mientras intenta cargar de la nube
+        return !getRouteHistoryById(u.get('routeId')!);
+      }
+    } catch {}
+    return false;
+  });
 
   // Authentication Session (Mandatory Login Gate)
   const [authSession, setAuthSession] = useState<AuthSession>(() => {
@@ -523,10 +697,12 @@ export default function App() {
     const routeIdParam = urlParams.get('routeId');
 
     if (routeIdParam && viewParam === 'review') {
-      // Read-only review link: load the route from history (works without login)
+      // Read-only review link: load the route from history (works without login).
+      // Si no está en local, se intentará cargar desde la nube (efecto aparte).
       const entry = getRouteHistoryById(routeIdParam);
       setReviewEntry(entry || null);
       setCurrentView('review');
+      if (entry) setReviewLoading(false);
       return;
     }
 
@@ -553,6 +729,21 @@ export default function App() {
       handleSyncAllStudentsToRoute(schoolAlumnos);
     }
   }, [schoolAlumnos.length, selectedColegio.id]);
+
+  // REVIEW LINK: si la ruta no está en el historial local, cargarla desde la NUBE
+  // (InstantDB) para que el enlace funcione SIN login y en cualquier dispositivo.
+  useEffect(() => {
+    const u = new URLSearchParams(window.location.search);
+    const viewParam = u.get('view');
+    const routeIdParam = u.get('routeId');
+    if (!(viewParam === 'review' && routeIdParam)) return;
+    if (instantLoading || reviewEntry) return; // ya resuelto (local o nube)
+
+    const entry = buildReviewEntryFromCloud(routeIdParam, instantData);
+    if (entry) setReviewEntry(entry);
+    setReviewLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [instantLoading, instantData, reviewEntry]);
 
   // Handlers with InstantDB Real-Time Synchronization
   const handleSaveSingleAlumno = async (newAlumno: Alumno, newRep: Representante) => {
@@ -897,13 +1088,22 @@ export default function App() {
     db.auth.signOut().catch(() => {});
   };
 
-  // REVIEW VIEW: Read-only route link works WITHOUT login (shared link)
+  // REVIEW VIEW: Read-only route link works WITHOUT login (shared link),
+  // cargando desde historial local o desde la nube (InstantDB)
   if (currentView === 'review') {
     return (
       <div className="flex h-screen w-screen bg-canvas text-ink font-sans overflow-hidden">
         <div className="flex flex-1 flex-col min-w-0">
           <main className="flex-1 overflow-hidden relative">
-            {reviewEntry ? (
+            {reviewLoading && !reviewEntry ? (
+              <div className="h-full flex items-center justify-center bg-canvas p-6">
+                <div className="rounded-card bg-surface border border-line shadow-soft p-8 max-w-md w-full text-center space-y-3">
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-soft-gray text-3xl animate-pulse">🔍</div>
+                  <h2 className="text-lg font-black text-ink">Cargando ruta...</h2>
+                  <p className="text-sm text-muted">Buscando la ruta en la nube para mostrarla sin necesidad de iniciar sesión.</p>
+                </div>
+              </div>
+            ) : reviewEntry ? (
               <RouteReviewView
                 entry={reviewEntry}
                 alumnosMap={alumnosMap}
@@ -915,8 +1115,8 @@ export default function App() {
                   <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-soft-gray text-3xl">🔍</div>
                   <h2 className="text-lg font-black text-ink">Ruta no encontrada</h2>
                   <p className="text-sm text-muted">
-                    No pudimos encontrar la ruta solicitada en este dispositivo. El enlace de revisión
-                    solo funciona en el navegador donde se creó la ruta (los datos se guardan localmente).
+                    No pudimos encontrar la ruta solicitada. Verifica que el enlace sea correcto o
+                    contacta con quien lo compartió.
                   </p>
                   <button
                     onClick={() => setCurrentView('home')}
