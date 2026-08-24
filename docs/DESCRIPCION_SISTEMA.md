@@ -176,7 +176,15 @@ type EstadoParada = 'pendiente' | 'recogido' | 'completado' | 'ausente';
 
 **Clave localStorage:** `rutaescolar_route_history`
 
-### 4.4 `src/services/mockData.ts` — Datos demo
+### 4.4 `src/services/pdfReport.ts` — Informe de ruta en PDF
+
+| Función | Firma | Qué hace |
+|---|---|---|
+| `generateRoutePdf` | `(entry: RouteHistoryEntry) => void` | Genera y descarga un informe A4 (jsPDF + autoTable): encabezado (marca, colegio, fecha/trayecto/estado/variante/modo, fecha de generación), resumen (conductor+unidad, salida/llegada, distancia, tiempos, paradas, recogidos/ausentes/pendientes coloreados) y tabla de paradas con fila coloreada por estado. Solo texto — sin mapas ni imágenes. Nombre de archivo `Informe_Ruta_<colegio>_<fecha>.pdf`. |
+
+Dependencias: `jspdf` + `jspdf-autotable`.
+
+### 4.5 `src/services/mockData.ts` — Datos demo
 
 - `INITIAL_SCHOOL_ID`, `SECOND_SCHOOL_ID`
 - `INITIAL_CONDUCTORES` (3), `INITIAL_SCHOOL`, `INITIAL_DRIVER_ORIGIN`

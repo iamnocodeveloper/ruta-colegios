@@ -27,6 +27,7 @@
 | `50cd1a8` | docs: documentación completa del proyecto (memoria, avances, descripción, seguridad, guía) | 23/08 |
 | `9363a57` | feat: webhook n8n para eventos de ruta + auditoría en InstantDB | 23/08 |
 | `a03dd2a` | feat: itinerario desplegable + reordenar paradas por arrastre y desde el mapa | 24/08 |
+| `76b24ea` | feat: informe de ruta en PDF (jsPDF + autoTable) desde Historial y Ver Recorrido | 24/08 |
 
 ---
 
@@ -119,6 +120,20 @@
 ### 📝 Notas
 - Sin dependencias nuevas: se usa `motion` (ya declarado), que re-exporta `Reorder` y `useDragControls` de framer-motion.
 - El reorden por mapa permite **orden parcial**: los marcadores tocados van primero y el resto conserva su orden relativo.
+
+---
+
+## Fase 8 — Informe de ruta en PDF (commit 76b24ea)
+
+### ✅ Lo que se logró
+- **`src/services/pdfReport.ts`** → `generateRoutePdf(entry)` descarga directa de un PDF (jsPDF + jspdf-autotable, A4, **solo texto/negritas/colores, sin mapas ni imágenes**).
+- **Estructura del informe:**
+  - Encabezado con barra color primario `#0084FF` ("RutaEscolar" + "INFORME DE RUTA"), colegio + dirección, fecha y día de la ruta, trayecto, estado, variante, modo y fecha de generación.
+  - Bloque **Resumen**: conductor + unidad, salida/llegada, distancia, tiempo total (manejo + abordaje), nº paradas, ID de ruta, y contadores **Recogidos/Ausentes/Pendientes** con color (verde/rojo/ámbar).
+  - **Tabla de paradas**: `# · Alumno · Ubicación · Hora est. · Dist. ant. · Estado`, con fila sombreada y texto coloreado según estado, salto de página automático y pie "Generado por RutaEscolar · página X".
+  - Nombre de archivo: `Informe_Ruta_<colegio>_<YYYY-MM-DD>.pdf` (slug sanitizado).
+- **Botones**: "Generar PDF" en cada tarjeta del **Historial de Rutas** y "Descargar PDF" en **Ver Recorrido** (`RouteReviewView`).
+- Dependencias nuevas: `jspdf ^4.2.1` + `jspdf-autotable ^5.0.8`.
 
 ---
 

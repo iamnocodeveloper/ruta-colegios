@@ -42,6 +42,7 @@
 | **Mapas** | Leaflet + tiles CartoDB Voyager + OSRM (rutas) + Nominatim (geocoding) |
 | **Backend (dev)** | Express + Vite middleware (`server.ts`, puerto 3000) |
 | **Base de datos en tiempo real** | InstantDB (`@instantdb/react`) — App ID `9bfbca9b-1445-4948-98f4-70bfcf2164a2` |
+| **Informes PDF** | jspdf + jspdf-autotable (descarga directa, texto vectorial) |
 | **Persistencia local** | localStorage (fallback resiliente) |
 | **Animación / drag & drop** | motion (Reorder) — reordenamiento de paradas por arrastre |
 | **Package manager** | Bun (`bun.lock`) / npm compatible |
@@ -172,7 +173,7 @@ Implementado en `src/index.css` con tokens Tailwind v4 `@theme`:
 - **Gestión de Alumnos:** CRUD completo + **toggle Activo en Rutas** (alumno desactivado no entra en el cálculo de paradas) + copiar Magic Link + ver portal.
 - **Gestión de Colegios:** CRUD con hora límite de llegada y GPS.
 - **Gestión de Conductores:** CRUD con vehículo, placa, capacidad, estado activo.
-- **Historial de Rutas:** listado de todas las rutas creadas con datos completos (paradas, horarios, conductor, colegio, km, tiempos), acciones: **Ver Recorrido** (solo lectura), **Copiar Link de Revisión**, **Usar Hoy**, **Ver Todos los Datos**, **Eliminar**.
+- **Historial de Rutas:** listado de todas las rutas creadas con datos completos (paradas, horarios, conductor, colegio, km, tiempos), acciones: **Ver Recorrido** (solo lectura), **Generar PDF** (informe descargable), **Copiar Link de Revisión**, **Usar Hoy**, **Ver Todos los Datos**, **Eliminar**.
 
 ### 🚌 Conductor
 - Ver **rutas asignadas** (filtradas por conductor desde el historial).
@@ -204,7 +205,8 @@ Implementado en `src/index.css` con tokens Tailwind v4 `@theme`:
 - Cada vez que se guarda una ruta (`handleSaveRoute`), se persiste un **snapshot completo** (`RouteHistoryEntry`) con: id, fecha, colegio, conductor, estado, horarios, distancia, tiempos, nº paradas, recogidos/ausentes, modo, trayecto, `created_at` y la **ruta completa** (paradas + polyline).
 - Almacenamiento: **localStorage** (clave `rutaescolar_route_history`, tope 200 entradas) + sync best-effort a InstantDB.
 - **Link de revisión**: `GET /?view=review&routeId=<id>` carga la ruta desde el historial y muestra la vista `RouteReviewView` (mapa + itinerario + resumen) **sin opciones de edición**.
-- Acciones del historial: ver recorrido, copiar link, **usar hoy** (replica la ruta con fecha actual y paradas en pendiente), eliminar.
+- **Informe PDF**: `generateRoutePdf(entry)` (`src/services/pdfReport.ts`) descarga un informe A4 de texto con encabezado, resumen y tabla de paradas coloreada por estado — accesible desde Historial y Ver Recorrido.
+- Acciones del historial: ver recorrido, **generar PDF**, copiar link, **usar hoy** (replica la ruta con fecha actual y paradas en pendiente), eliminar.
 
 ---
 
@@ -304,6 +306,7 @@ Cada evento de ejecución de ruta dispara automáticamente un **POST JSON silenc
 - [x] **Reorden por arrastre (drag & drop)** en el itinerario (motion `Reorder`): asa ⋮⋮ por fila; al soltar se renumera todo (mover la #1 al final hace que #2 pase a ser la #1) y se recalcula la ruta.
 - [x] **Reorden desde el mapa**: botón "✏️ Editar Orden en Mapa" — toca los marcadores en el nuevo orden (verde + nueva posición, progreso `X/N`, "Aplicar" admite orden parcial, "Cancelar" aborta).
 - [x] **Historial de rutas** con snapshot completo y persistencia.
+- [x] **Informe en PDF** de cada ruta (`jspdf` + `jspdf-autotable`): encabezado con colegio/fecha/trayecto, resumen con conductor y tiempos, tabla de paradas (# · Alumno · Ubicación · Hora · Dist. · Estado) con colores por estado — solo texto, sin mapas/imágenes. Botones "Generar PDF" (Historial) y "Descargar PDF" (Ver Recorrido).
 - [x] **Link de revisión solo lectura** (`?view=review&routeId=`).
 - [x] **Botones de navegación y contacto** por parada: Waze, Google Maps, Llamar Representante, WhatsApp (en revisión, cabina, historial y cards de alumnos).
 - [x] SQL oculto del menú (acceso por URL).

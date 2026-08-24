@@ -55,7 +55,7 @@ rutas-coplegio/
 │   ├── App.tsx             # Estado global, auth, vistas, handlers
 │   ├── types.ts            # Modelo de datos
 │   ├── index.css           # Design system (@theme) + estilos Leaflet
-│   ├── services/           # instantDb, routeCalculator, routeHistory, mockData
+│   ├── services/           # instantDb, routeCalculator, routeHistory, pdfReport, mockData
 │   └── components/
 │       ├── Layout/  Home/  Driver/  Admin/  Parent/
 │       ├── Auth/    Map/   PWA/
