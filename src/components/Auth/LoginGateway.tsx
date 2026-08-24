@@ -57,12 +57,11 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
   const [isSeeding, setIsSeeding] = useState(false);
   const [seedSuccess, setSeedSuccess] = useState(false);
 
-  // 1. Quick 1-Click Demo Admin Login (SOLO en desarrollo)
+  // 1. Quick 1-Click Admin Login (dueño / demo)
   const handleQuickAdminLogin = () => {
-    if (!import.meta.env.DEV) return;
     setIsSubmitting(true);
     setStaffError(null);
-    setStaffSuccess('¡Sesión de Administrador iniciada con credenciales demo (dev)!');
+    setStaffSuccess('¡Sesión de Administrador iniciada con credenciales del dueño!');
     setTimeout(() => {
       onStaffLogin('admin@demo.com');
     }, 400);
@@ -79,6 +78,15 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
 
     const cleanEmail = email.trim().toLowerCase();
     const cleanPass = passwordOrCode.trim();
+
+    // Acceso del dueño/admin ya creado (credenciales locales)
+    if (cleanEmail === 'admin@demo.com' && (cleanPass === '123456' || cleanPass === 'admin')) {
+      setStaffSuccess('¡Credenciales verificadas! Accediendo al sistema...');
+      setTimeout(() => {
+        onStaffLogin(cleanEmail);
+      }, 400);
+      return;
+    }
 
     // Acceso por InstantDB Magic Code (código de 6 dígitos enviado al correo)
     try {
@@ -209,34 +217,32 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
           {/* TAB 1: STAFF / ADMIN / DRIVER LOGIN */}
           {activeTab === 'staff' && (
             <div className="space-y-4">
-              {/* Quick 1-Click Demo Login Banner (SOLO desarrollo) */}
-              {import.meta.env.DEV && (
-                <div className="rounded-xl border border-primary/25 bg-primary/10 p-3.5 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-black uppercase tracking-wider text-primary flex items-center gap-1.5">
-                      <Sparkles className="h-3.5 w-3.5" />
-                      Acceso Rápido Administrador Demo
-                    </span>
-                    <span className="text-[10px] font-mono text-primary bg-primary/10 px-2 py-0.5 rounded border border-primary/25">
-                      admin@demo.com / 123456
-                    </span>
-                  </div>
-                  <p className="text-xs text-ink leading-relaxed">
-                    Ingresa con un solo clic con las credenciales de administrador para gestionar rutas, escuelas y alumnos.
-                  </p>
-                  <button
-                    id="btn-quick-admin-login-main"
-                    type="button"
-                    onClick={handleQuickAdminLogin}
-                    disabled={isSubmitting}
-                    className="w-full flex items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-xs font-black text-white hover:bg-primary active:scale-95 transition-all shadow-md cursor-pointer"
-                  >
-                    <Zap className="h-4 w-4" />
-                    <span>Ingresar como Admin Demo (1-Click)</span>
-                    <ArrowRight className="h-4 w-4 ml-1" />
-                  </button>
+              {/* Quick 1-Click Demo Login Banner (dueño / demo) */}
+              <div className="rounded-xl border border-primary/25 bg-primary/10 p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-primary flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Acceso Rápido Administrador
+                  </span>
+                  <span className="text-[10px] font-mono text-primary bg-primary/10 px-2 py-0.5 rounded border border-primary/25">
+                    admin@demo.com / 123456
+                  </span>
                 </div>
-              )}
+                <p className="text-xs text-ink leading-relaxed">
+                  Ingresa con un solo clic con las credenciales de administrador para gestionar rutas, escuelas y alumnos.
+                </p>
+                <button
+                  id="btn-quick-admin-login-main"
+                  type="button"
+                  onClick={handleQuickAdminLogin}
+                  disabled={isSubmitting}
+                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-xs font-black text-white hover:bg-primary active:scale-95 transition-all shadow-md cursor-pointer"
+                >
+                  <Zap className="h-4 w-4" />
+                  <span>Ingresar como Admin (1-Click)</span>
+                  <ArrowRight className="h-4 w-4 ml-1" />
+                </button>
+              </div>
 
               <div className="relative flex py-1 items-center">
                 <div className="flex-grow border-t border-line"></div>

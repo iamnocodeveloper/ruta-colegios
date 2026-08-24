@@ -224,7 +224,7 @@ Implementado en `src/index.css` con tokens Tailwind v4 `@theme`:
 ## 10. Autenticación
 
 - **Puerta de acceso obligatoria** (`LoginGateway`) antes de cualquier vista operativa.
-- **Staff/admin/conductor**: login por **InstantDB Magic Code** (email + código de 6 dígitos). Al autenticar se resuelve rol y cliente desde `usuarios.email` o `conductores.email` (→ `superadmin`/`admin`/`conductor`). El backdoor demo (`admin@demo.com/123456`) solo existe en **desarrollo** (`import.meta.env.DEV`).
+- **Dueño/admin**: acceso directo con `admin@demo.com` / `123456` (botón 1-click) — es el superadmin. **Otros usuarios** (admin de colegio / conductor): login por **InstantDB Magic Code** (email + código de 6 dígitos); al autenticar se resuelve rol y cliente desde `usuarios.email` o `conductores.email`.
 - **Representante**: acceso por ID de alumno o Magic Link (`?magic=<token>&student=<id>`).
 - Sesión persistida en `localStorage` (`rutaescolar_staff_session`, `rutaescolar_parent_student_id`).
 - Badge `InstantSyncBadge` en el header muestra estado de conexión/autenticación; el modal `InstantAuthModal` permite auth de InstantDB y reseed (herramienta de desarrollo).

@@ -3,7 +3,7 @@
 > **Auditoría de seguridad estática** + recomendaciones de hardening.
 > **Última actualización:** 24/08/2026 · **Estado:** auditoría completada, no se modificó código.
 >
-> **Nota (v1.4.0):** se aplicó un primer hardening — login real por rol vía InstantDB Magic Code y el backdoor demo `admin@demo.com/123456` queda **solo en desarrollo** (`import.meta.env.DEV`); el dueño resuelve como `superadmin`. Siguen pendientes el resto de la Prioridad 1 (sesión firmada/cookie, helmet, limpieza de PII opcional).
+> **Nota (v1.4.0):** se aplicó login por rol vía InstantDB Magic Code para los usuarios, y el **dueño** (`admin@demo.com / 123456`) mantiene su acceso directo (credencial local, es el superadmin). Pendiente del resto de la Prioridad 1: sesión firmada/cookie, helmet, limpieza de PII opcional. El acceso por credencial del dueño es un riesgo conocido si se comparte el dispositivo — endurecer (2FA/cookie) antes de producción multiusuario.
 
 ---
 
@@ -27,7 +27,7 @@
 | # | Hallazgo | Severidad | Detalle |
 |---|---|---|---|
 | 1.1 | `INSTANT_APP_ID` en `src/services/instantDb.ts:28` | ⚪ Info | Público por diseño (cliente). No es secreto. |
-| 1.2 | Credenciales demo `admin@demo.com` / `123456` hardcodeadas (`LoginGateway.tsx:46,88,242`, `InstantAuthModal.tsx`) | 🔴 Alta → 🟠 Parcial | Backdoor oculto en producción (solo dev); login por Magic Code + rol. Sigue habiendo demo en `InstantAuthModal` (herramienta dev). |
+| 1.2 | Credenciales demo `admin@demo.com` / `123456` hardcodeadas (`LoginGateway.tsx:46,88,242`, `InstantAuthModal.tsx`) | 🔴 Alta | Acceso del **dueño** (superadmin) por credencial local, restaurado por requerimiento (el Magic Code va a un correo no controlado). Endurecer antes de producción multiusuario. |
 | 1.3 | Magic tokens estáticos en seed (`mockData.ts:72-100`) | 🟠 Media | Formato predecible `tok-<nombre>-<hex>`. |
 | 1.4 | `GEMINI_API_KEY` placeholder | ⚪ Info | Solo ejemplo; `.env*` está en .gitignore. |
 | 1.5 | `MAPBOX_ACCESS_TOKEN` vacío | ⚪ Info | No usado. |
@@ -67,7 +67,7 @@
 
 | # | Hallazgo | Severidad |
 |---|---|---|
-| 6.1 | Login admin = comparación hardcodeada en cliente + botón 1-click sin contraseña | 🔴 Alta → 🟠 Parcial | En v1.4.0 el login es por InstantDB Magic Code con resolución de rol (`usuarios`/`conductores`); el botón 1-click solo en dev. |
+| 6.1 | Login admin = comparación hardcodeada en cliente + botón 1-click sin contraseña | 🔴 Alta | Acceso del dueño (`admin@demo.com/123456` + botón 1-click) restaurado por requerimiento; los demás usuarios usan InstantDB Magic Code con resolución de rol. |
 | 6.2 | Sesión en localStorage sin firma, forjable, sin expiración | 🔴 Alta |
 | 6.3 | Rol de sesión no aplica permisos (sin RBAC) | 🟠 Media |
 | 6.4 | Magic tokens baja entropía + en URL + legibles desde InstantDB | 🔴 Alta |
