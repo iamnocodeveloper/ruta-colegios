@@ -519,6 +519,88 @@ export function isMigrationDone(): boolean {
   return localStorage.getItem(MIGRATION_KEY) === 'done';
 }
 
+// ===========================================================================
+// LIMPIEZA DE DATOS DEMO (solo filas que siguen siendo exactamente demo)
+// ===========================================================================
+
+interface DemoRecord {
+  entity: 'alumnos' | 'conductores' | 'representantes' | 'colegios';
+  id: string;
+  name: string;
+}
+
+// IDs + nombre ORIGINAL de cada dato demo. Solo se elimina una fila si su ID y
+// nombre coinciden EXACTAMENTE (una fila editada/renombrada no se toca).
+const DEMO_RECORDS: DemoRecord[] = [
+  // Alumnos
+  { entity: 'alumnos', id: 'e3000000-0000-4000-8000-000000000001', name: 'Mateo Mendoza' },
+  { entity: 'alumnos', id: 'e3000000-0000-4000-8000-000000000002', name: 'Camila Silva' },
+  { entity: 'alumnos', id: 'e3000000-0000-4000-8000-000000000003', name: 'Santiago Gómez' },
+  { entity: 'alumnos', id: 'e3000000-0000-4000-8000-000000000004', name: 'Valeria Rodríguez' },
+  { entity: 'alumnos', id: 'e3000000-0000-4000-8000-000000000005', name: 'Lucas Morales' },
+  // Conductores
+  { entity: 'conductores', id: 'e7000000-0000-4000-8000-000000000001', name: 'Juan Carlos Guamán' },
+  { entity: 'conductores', id: 'e7000000-0000-4000-8000-000000000002', name: 'Maritza Villacís' },
+  { entity: 'conductores', id: 'e7000000-0000-4000-8000-000000000003', name: 'Segundo Toapanta' },
+  // Representantes
+  { entity: 'representantes', id: 'e2000000-0000-4000-8000-000000000001', name: 'Carlos Mendoza' },
+  { entity: 'representantes', id: 'e2000000-0000-4000-8000-000000000002', name: 'Mariana Silva' },
+  { entity: 'representantes', id: 'e2000000-0000-4000-8000-000000000003', name: 'Roberto Gómez' },
+  { entity: 'representantes', id: 'e2000000-0000-4000-8000-000000000004', name: 'Elena Rodríguez' },
+  { entity: 'representantes', id: 'e2000000-0000-4000-8000-000000000005', name: 'Andrés Morales' },
+  // Colegio secundario demo
+  { entity: 'colegios', id: 'e1000000-0000-4000-8000-000000000002', name: 'Colegio Americano de Quito' },
+];
+
+const DEMO_ROUTE_ID = 'e5000000-0000-4000-8000-000000000001';
+
+/**
+ * Elimina SOLO los datos que siguen siendo exactamente demo (mismo id + mismo
+ * nombre original). Conserva el usuario admin, el colegio "San Gabriel" y toda
+ * fila creada/editada por el usuario. Devuelve la lista de elementos eliminados.
+ */
+export async function cleanupDemoData(data: any): Promise<string[]> {
+  const toList = (raw: any): any[] => (!raw ? [] : Array.isArray(raw) ? raw : Object.values(raw));
+  const transactions: any[] = [];
+  const removed: string[] = [];
+
+  const norm = (s: string) => String(s || '').trim().toLowerCase();
+
+  for (const entity of ['alumnos', 'conductores', 'representantes', 'colegios'] as const) {
+    const rows = toList(data?.[entity]);
+    for (const row of rows) {
+      const demo = DEMO_RECORDS.find(
+        (d) => d.entity === entity && ensureUUID(d.id) === ensureUUID(row.id)
+      );
+      if (demo && norm(row.nombre) === norm(demo.name)) {
+        transactions.push((tx as any)[entity][ensureUUID(row.id)].delete());
+        removed.push(`${entity}:${row.nombre}`);
+      }
+    }
+  }
+
+  // Ruta inicial demo + sus paradas (solo si sigue 'planificada')
+  const routeRow = toList(data?.rutas_diarias).find(
+    (r) => ensureUUID(r.id) === ensureUUID(DEMO_ROUTE_ID)
+  );
+  if (routeRow && routeRow.estado === 'planificada') {
+    transactions.push(tx.rutas_diarias[DEMO_ROUTE_ID].delete());
+    removed.push(`rutas_diarias:${routeRow.nombre || routeRow.id}`);
+    const demoParadas = toList(data?.paradas_ruta).filter(
+      (p) => ensureUUID(p.ruta_id) === ensureUUID(DEMO_ROUTE_ID)
+    );
+    for (const p of demoParadas) {
+      transactions.push(tx.paradas_ruta[ensureUUID(p.id)].delete());
+      removed.push(`paradas_ruta:${p.id}`);
+    }
+  }
+
+  if (transactions.length > 0) {
+    await db.transact(transactions);
+  }
+  return removed;
+}
+
 /**
  * Upsert de un cliente (tenant). No borra datos; solo crea/actualiza la fila.
  */

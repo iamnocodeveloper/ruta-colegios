@@ -15,11 +15,7 @@ import {
   RutaDiaria
 } from './types';
 import {
-  INITIAL_ALUMNOS,
-  INITIAL_CONDUCTORES,
-  INITIAL_DRIVER_ORIGIN,
-  INITIAL_REPRESENTANTES,
-  INITIAL_SCHOOL
+  INITIAL_DRIVER_ORIGIN
 } from './services/mockData';
 import { calculateOptimizedRoute, normalizeDays } from './services/routeCalculator';
 import { DriverPanelSimple } from './components/Driver/DriverPanelSimple';
@@ -55,7 +51,6 @@ import { AppHeader } from './components/Layout/AppHeader';
 import {
   db,
   INSTANT_APP_ID,
-  seedInstantDatabase,
   upsertAlumnoInstant,
   deleteAlumnoInstant,
   upsertColegioInstant,
@@ -70,9 +65,11 @@ import {
   ROOT_CLIENT_ID,
   multitenantEnabled,
   setMultitenantEnabled,
+  isMigrationDone,
   migrateToClientes,
   upsertClienteInstant,
-  deactivateClienteInstant
+  deactivateClienteInstant,
+  cleanupDemoData
 } from './services/instantDb';
 import {
   notifyRutaIniciada,
@@ -104,6 +101,16 @@ function toList(raw: any): any[] {
   if (Array.isArray(raw)) return raw;
   return Object.values(raw);
 }
+
+/** Colegio placeholder NEUTRO (sin datos de ejemplo). */
+const NEUTRAL_COLEGIO: Colegio = {
+  id: '',
+  nombre: '',
+  direccion: '',
+  lat: -0.1872,
+  lng: -78.4975,
+  hora_llegada_limite: '07:45:00',
+};
 
 /**
  * Construye una RouteHistoryEntry leyendo una ruta desde los datos de InstantDB.
@@ -316,10 +323,13 @@ export default function App() {
   const [manageClienteId, setManageClienteId] = useState<string>(ROOT_CLIENT_ID);
 
   // Alcance por cliente: superadmin gestiona `manageClienteId`; admin/conductor solo el suyo.
+  // El filtro SOLO aplica si multi-cliente está activo Y la migración se completó
+  // (evita ocultar datos reales si el dashboard de InstantDB no está configurado).
   const sessionRol = authSession?.type === 'staff' ? authSession.user.rol : '';
   const isSuperadmin = sessionRol === 'superadmin';
+  const mtActive = multitenantEnabled() && isMigrationDone();
   const scopeClienteId =
-    multitenantEnabled() && authSession?.type === 'staff'
+    mtActive && authSession?.type === 'staff'
       ? isSuperadmin
         ? manageClienteId
         : authSession.user.clienteId
@@ -339,10 +349,10 @@ export default function App() {
       tracking_logs: ent(hasScope),
       usuarios: {}, // globales (resolución de login / superadmin)
     };
-    if (multitenantEnabled()) q.clientes = {};
+    if (mtActive) q.clientes = {};
     return q;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scopeClienteId]);
+  }, [scopeClienteId, mtActive]);
   const { data: instantData, isLoading: instantLoading } = (db as any).useQuery(query);
 
   // Migración a multi-tenant (solo escribe cliente_id; idempotente)
@@ -378,21 +388,17 @@ export default function App() {
       const rawCols: any[] = Array.isArray(instantData.colegios)
         ? instantData.colegios
         : Object.values(instantData.colegios || {});
-      const rawAlus: any[] = Array.isArray(instantData.alumnos)
-        ? instantData.alumnos
-        : Object.values(instantData.alumnos || {});
-      const hasColegios = rawCols.length > 0;
-      const hasAlumnos = rawAlus.length > 0;
 
       const isOldCaracasData =
-        hasColegios &&
+        rawCols.length > 0 &&
         (Number(rawCols[0]?.lat) > 5 ||
           rawCols[0]?.direccion?.includes('Caracas') ||
           rawCols[0]?.direccion?.includes('Venezuela'));
 
-      if (!hasColegios || !hasAlumnos || isOldCaracasData) {
-        console.log('[InstantDB] Seeding / Migrating dataset to Quito, Ecuador...');
-        seedInstantDatabase(true);
+      // NUNCA se generan datos demo automáticamente. Solo se siembran si el dueño
+      // lo solicita explícitamente (botón de seed con confirmación).
+      if (isOldCaracasData) {
+        console.log('[InstantDB] Datos legacy de Caracas detectados (no se re-siembra automáticamente).');
       }
     }
   }, [instantLoading, instantData]);
@@ -422,15 +428,15 @@ export default function App() {
     }
     try {
       const saved = localStorage.getItem('rutaescolar_colegios');
-      return saved ? JSON.parse(saved) : [INITIAL_SCHOOL];
+      return saved ? JSON.parse(saved) : [];
     } catch {
-      return [INITIAL_SCHOOL];
+      return [];
     }
   }, [instantData?.colegios]);
 
-  const [selectedColegioId, setSelectedColegioId] = useState<string>(INITIAL_SCHOOL.id);
+  const [selectedColegioId, setSelectedColegioId] = useState<string>('');
   const selectedColegio = useMemo(() => {
-    return colegios.find((c) => c.id === selectedColegioId) || colegios[0] || INITIAL_SCHOOL;
+    return colegios.find((c) => c.id === selectedColegioId) || colegios[0] || NEUTRAL_COLEGIO;
   }, [colegios, selectedColegioId]);
 
   const representantes: Representante[] = useMemo(() => {
@@ -455,9 +461,9 @@ export default function App() {
     }
     try {
       const saved = localStorage.getItem('rutaescolar_representantes');
-      return saved ? JSON.parse(saved) : INITIAL_REPRESENTANTES;
+      return saved ? JSON.parse(saved) : [];
     } catch {
-      return INITIAL_REPRESENTANTES;
+      return [];
     }
   }, [instantData?.representantes]);
 
@@ -533,13 +539,9 @@ export default function App() {
           modalidad_servicio: a.modalidad_servicio || 'ida_y_vuelta',
         }));
       }
-      return INITIAL_ALUMNOS.map((a) => ({
-        ...a,
-        colegio: selectedColegio,
-        representante: repsMap.get(a.representante_id)
-      }));
+      return [];
     } catch {
-      return INITIAL_ALUMNOS;
+      return [];
     }
   }, [instantData?.alumnos, colegiosMap, repsMap, selectedColegio, alumnosOverride]);
 
@@ -570,9 +572,9 @@ export default function App() {
     }
     try {
       const saved = localStorage.getItem('rutaescolar_conductores');
-      return saved ? JSON.parse(saved) : INITIAL_CONDUCTORES;
+      return saved ? JSON.parse(saved) : [];
     } catch {
-      return INITIAL_CONDUCTORES;
+      return [];
     }
   }, [instantData?.conductores]);
 
@@ -608,24 +610,24 @@ export default function App() {
         }
       }
     } catch {}
-    const defaultConductor = INITIAL_CONDUCTORES[0];
+    // Estado por defecto NEUTRO (sin datos de ejemplo)
     return {
-      id: 'e5000000-0000-4000-8000-000000000001',
+      id: ensureUUID(),
       fecha: new Date().toISOString().substring(0, 10),
       colegio_id: selectedColegio.id,
       colegio: selectedColegio,
-      conductor_id: defaultConductor.id,
-      conductor: defaultConductor,
+      conductor_id: undefined,
+      conductor: undefined,
       origen_lat: origen.lat,
       origen_lng: origen.lng,
       origen_direccion: origen.direccion,
       modo_optimizacion: 'fijo',
-      hora_llegada_objetivo: selectedColegio.hora_llegada_limite,
-      hora_salida_estimada: '07:18:00',
-      tiempo_manejo_estimado_min: 27.5,
-      tiempo_abordaje_total_min: 12.5,
-      tiempo_total_estimado_min: 40.0,
-      distancia_total_km: 9.4,
+      hora_llegada_objetivo: selectedColegio.hora_llegada_limite || '07:45:00',
+      hora_salida_estimada: '',
+      tiempo_manejo_estimado_min: 0,
+      tiempo_abordaje_total_min: 0,
+      tiempo_total_estimado_min: 0,
+      distancia_total_km: 0,
       tiempo_abordaje_por_alumno_min: 2.5,
       estado: 'planificada',
       paradas: []
@@ -1191,6 +1193,16 @@ export default function App() {
     setCurrentView('home');
   };
 
+  // Limpiar SOLO los datos demo recreados (mismo id + mismo nombre original)
+  const handleCleanupDemo = async (): Promise<string[]> => {
+    try {
+      return await cleanupDemoData(instantData);
+    } catch (e) {
+      console.warn('Error limpiando datos demo:', e);
+      return [];
+    }
+  };
+
   // Importar alumnos (CSV) bajo un cliente
   const handleImportAlumnosCsv = async (clienteId: string, rows: CsvAlumnoRow[]) => {
     for (const row of rows) {
@@ -1515,6 +1527,7 @@ export default function App() {
               onDeactivateCliente={handleDeactivateCliente}
               onManageCliente={handleManageCliente}
               onImportAlumnos={handleImportAlumnosCsv}
+              onCleanupDemo={handleCleanupDemo}
               onBack={() => setCurrentView('home')}
             />
           )}

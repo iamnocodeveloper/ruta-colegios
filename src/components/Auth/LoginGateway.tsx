@@ -131,8 +131,9 @@ export const LoginGateway: React.FC<LoginGatewayProps> = ({
     }
   };
 
-  // 4. Seed Database in InstantDB
+  // 4. Seed Database in InstantDB (con confirmación para no pisar datos)
   const handleSeedDatabase = async () => {
+    if (!window.confirm('Se crearán/sobrescribirán los datos DEMO. Si ya tienes datos reales, NO los borra, pero añadirá los demo. ¿Continuar?')) return;
     setIsSeeding(true);
     try {
       const ok = await seedInstantDatabase(true);

@@ -18,7 +18,8 @@ import {
   Upload,
   CheckCircle2,
   AlertTriangle,
-  Database
+  Database,
+  Trash2
 } from 'lucide-react';
 import { Cliente } from '../../types';
 import { downloadBackup } from '../../services/backup';
@@ -36,6 +37,7 @@ interface ClientManagerProps {
   onDeactivateCliente: (id: string) => Promise<void>;
   onManageCliente: (id: string) => void;
   onImportAlumnos: (clienteId: string, rows: CsvAlumnoRow[]) => Promise<void>;
+  onCleanupDemo?: () => Promise<string[]>;
   onBack: () => void;
 }
 
@@ -58,6 +60,7 @@ export const ClientManager: React.FC<ClientManagerProps> = ({
   onDeactivateCliente,
   onManageCliente,
   onImportAlumnos,
+  onCleanupDemo,
   onBack,
 }) => {
   const [nombre, setNombre] = useState('');
@@ -135,6 +138,18 @@ export const ClientManager: React.FC<ClientManagerProps> = ({
               className="flex items-center gap-1.5 rounded-xl bg-surface border border-line px-3 py-2 text-xs font-bold text-ink hover:bg-soft-gray transition-colors cursor-pointer"
             >
               <Download className="h-3.5 w-3.5" /> Descargar respaldo
+            </button>
+            <button
+              onClick={async () => {
+                if (!window.confirm('Se eliminarán SOLO los datos demo que siguen siendo exactamente demo (ej. Mateo Mendoza, Juan Carlos Guamán). Tus datos reales y los que hayas editado se conservan. ¿Continuar?')) return;
+                const removed = await (onCleanupDemo ? onCleanupDemo() : Promise.resolve([]));
+                setMsg({ type: 'ok', text: `Datos demo eliminados: ${removed.length} elemento(s).` });
+                setTimeout(() => setMsg(null), 4000);
+              }}
+              className="flex items-center gap-1.5 rounded-xl bg-surface border border-rose-200 px-3 py-2 text-xs font-bold text-alert hover:bg-rose-50 transition-colors cursor-pointer"
+              title="Elimina solo los datos demo recreados (mismo id y nombre original)"
+            >
+              <Trash2 className="h-3.5 w-3.5" /> Limpiar datos demo
             </button>
             <span className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold ${multitenantActive ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-amber-50 text-amber-600 border border-amber-200'}`}>
               {multitenantActive ? '● Multi-cliente ACTIVO' : '○ Multi-cliente inactivo'}

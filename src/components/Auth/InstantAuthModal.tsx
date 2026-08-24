@@ -157,6 +157,7 @@ export const InstantAuthModal: React.FC<InstantAuthModalProps> = ({
   };
 
   const handleSeedData = async () => {
+    if (!window.confirm('Se crearán/sobrescribirán los datos DEMO. Si ya tienes datos reales, NO los borra, pero añadirá los demo. ¿Continuar?')) return;
     setIsSeeding(true);
     setStatusMessage(null);
     const success = await seedInstantDatabase(true);
