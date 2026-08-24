@@ -196,7 +196,7 @@ Implementado en `src/index.css` con tokens Tailwind v4 `@theme`:
 
 1. **Filtro de alumnos**: según modalidad de servicio (`ida`/`vuelta`) y **excluye alumnos con `activo_en_rutas === false`**.
 2. **Secuencia óptima (TSP)**: Nearest Neighbor + 2-Opt heuristic (máx. 30 iteraciones) entre origen → paradas → colegio (ida) o colegio → paradas → origen (vuelta).
-3. **Geometría real**: consulta a OSRM (`router.project-osrm.org`) con fallback geométrico (factor 1.25 urbano + interpolación).
+3. **Geometría real**: consulta a OSRM (`router.project-osrm.org`) con **rutas alternativas** (`alternatives=true` → principal + 1 alternativa, mismas paradas, calles distintas) y fallback geométrico (factor 1.25 urbano + interpolación). La ruta elegida se persiste en `ruta_elegida` (`0` principal / `1..n` alternativa).
 4. **Tiempos**: `T_manejo` (con factor tráfico 1.12 estándar / 1.35 tráfico real) + `T_abordaje = N × minutos_por_alumno`.
 5. **Salida inversa**: `H_salida = H_llegada_limite − T_total` (trayecto ida) o desde hora fija (vuelta).
 6. **ETAs por parada**: acumulación de tiempo de manejo + abordaje por parada.
@@ -310,6 +310,7 @@ Cada evento de ejecución de ruta dispara automáticamente un **POST JSON silenc
 - [x] **Reorden por arrastre (drag & drop)** en el itinerario (motion `Reorder`): asa ⋮⋮ por fila; al soltar se renumera todo (mover la #1 al final hace que #2 pase a ser la #1) y se recalcula la ruta.
 - [x] **Reorden desde el mapa**: botón "✏️ Editar Orden en Mapa" — toca los marcadores en el nuevo orden (verde + nueva posición, progreso `X/N`, "Aplicar" admite orden parcial, "Cancelar" aborta).
 - [x] **Ruta completa con jornadas**: una sola ruta guarda **ida + vuelta** (tipo `RutaTrayecto`). El planificador guarda cada jornada por separado y luego el "registro completo"; la cabina del conductor tiene selector de jornada, y el historial/revisión/PDF muestran ambas jornadas.
+- [x] **Rutas alternativas estilo Google Maps**: OSRM con `alternatives=true` devuelve ruta principal + alternativa (mismas paradas, calles distintas) en **dos colores**; selector "Rutas sugeridas (calles)" en el Planificador (persiste `ruta_elegida`) y toggle en la cabina del conductor.
 - [x] **Historial de rutas** con snapshot completo y persistencia.
 - [x] **Informe en PDF** de cada ruta (`jspdf` + `jspdf-autotable`): encabezado con colegio/fecha/trayecto, resumen con conductor y tiempos, tabla de paradas (# · Alumno · Ubicación · Hora · Dist. · Estado) con colores por estado — solo texto, sin mapas/imágenes. Botones "Generar PDF" (Historial) y "Descargar PDF" (Ver Recorrido).
 - [x] **Link de revisión solo lectura** (`?view=review&routeId=`).

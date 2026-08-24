@@ -30,6 +30,7 @@
 | `76b24ea` | feat: informe de ruta en PDF (jsPDF + autoTable) desde Historial y Ver Recorrido | 24/08 |
 | `e01e581` | feat: ruta completa con jornadas de ida y vuelta en un solo registro | 24/08 |
 | `15ebe28` | feat: enlace de revisión de ruta sin login — carga desde la nube en cualquier dispositivo | 24/08 |
+| `1e18750` | feat: rutas alternativas estilo Google Maps (OSRM alternatives) en planificador y cabina | 24/08 |
 
 ---
 
@@ -163,6 +164,22 @@
 - La vista de revisión **no requiere login** (renderiza antes de la puerta de autenticación) y **sin flash del login** (la vista inicial se deriva de la URL).
 - Si la ruta no está en el historial local (otro navegador/dispositivo), se **carga desde InstantDB** (`buildReviewEntryFromCloud`) con sus paradas, colegio, conductor y alumnos.
 - Estado de carga ("Cargando ruta...") mientras se busca en la nube; mensaje "Ruta no encontrada" solo si no existe en local ni en nube.
+
+---
+
+## Fase 11 — Rutas alternativas estilo Google Maps (commit 1e18750)
+
+### ✅ Lo que se logró
+- **`fetchRoadGeometryWithAlternatives`** en `routeCalculator.ts`: una sola llamada OSRM con `alternatives=true` devuelve la ruta principal + **1 ruta alternativa** (mismas paradas, calles distintas), con km y tiempo por ruta. Mismo fallback geométrico si OSRM falla.
+- **Nuevo tipo `RouteAlternative`** (`types.ts`) y campos `alternativas` en `RouteOptimizationResult`; `polyline_alternativas` y `ruta_elegida` (0 principal / 1..n alternativa) en `RutaDiaria` y `RutaTrayecto`.
+- **Mapa** (`SchoolRouteMap`): prop `alternativePolylines` — dibuja las alternativas **debajo** (cian punteado) y la elegida encima (sólida), con leyenda de km/min.
+- **Planificador**: card **"Rutas sugeridas (calles)"** con botones Principal / Alternativa (color + km + min); la elección cambia la polyline del mapa y se **persiste** al guardar (`ruta_elegida`).
+- **Cabina del conductor**: toggle Principal / Alternativa sobre el mapa del día (si la ruta guardó alternativas).
+
+### 📝 Notas
+- El servidor público OSRM devuelve **1 alternativa confiable**; si no la genera, la app muestra solo la principal (sin romper).
+- Cero requests extra: una sola llamada OSRM trae ambas rutas.
+- Alternativa en **cian `#06B6D4` punteado** (fuera de la paleta de variantes para no confundir).
 
 ---
 

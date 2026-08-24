@@ -82,13 +82,14 @@ interface RutaDiaria { id, fecha, colegio_id, origen_lat, origen_lng, modo_optim
                        tiempo_manejo_estimado_min, tiempo_abordaje_total_min,
                        tiempo_total_estimado_min, distancia_total_km, estado,
                        tiempo_abordaje_por_alumno_min, colegio?, conductor_id?, conductor?,
-                       paradas, polyline_geometry?, ida?, vuelta? }
+                       paradas, polyline_geometry?, ida?, vuelta?, polyline_alternativas?, ruta_elegida? }
 interface RutaTrayecto { tipo_trayecto, estado?, paradas, hora_salida_estimada,
                          hora_llegada_objetivo, hora_salida_real?, hora_llegada_real?,
                          tiempo_manejo_estimado_min, tiempo_abordaje_total_min,
                          tiempo_total_estimado_min, distancia_total_km,
                          tiempo_abordaje_por_alumno_min, modo_optimizacion, variante?,
-                         polyline_geometry? }
+                         polyline_geometry?, polyline_alternativas?, ruta_elegida? }
+interface RouteAlternative { polyline: [number,number][], distanceKm, durationMin }
 interface TrackingLog { id?, ruta_id, lat, lng, velocidad_kmh?, rumbo_grados?, timestamp }
 ```
 
@@ -148,6 +149,7 @@ type EstadoParada = 'pendiente' | 'recogido' | 'completado' | 'ausente';
 | `generateRouteVariants` | `(start, end, students) => Variant[]` | 4 variantes: 2opt, nearest, farthest, random |
 | `variantDistance` | `(start, end, studentIds, alumnosMap) => number` | Distancia haversine de una variante |
 | `fetchRoadGeometryAndDuration` | `(points, mode) => Promise<{polyline, realDrivingMinutes, totalDistanceKm}>` | OSRM con fallback geométrico |
+| `fetchRoadGeometryWithAlternatives` | `(points, mode) => Promise<{main, alternatives: RouteAlternative[]}>` | OSRM `alternatives=true`: ruta principal + alternativa (calles distintas), km/min por ruta |
 | `calculateOptimizedRoute` | `(origin, school, students, options) => Promise<RouteOptimizationResult>` | Motor principal |
 
 **Fórmulas del algoritmo:**
@@ -250,7 +252,7 @@ Dependencias: `jspdf` + `jspdf-autotable`.
 ### Map
 | Componente | Props | Descripción |
 |---|---|---|
-| `SchoolRouteMap` | `colegio, origen, onOriginChange?, paradas, alumnosMap, vanLocation?, polylineGeometry?, activeStopIndex?, highlightStudentId?, targetArrivalTime?, tipoTrayecto?, onMarkerClick?, polylineColor?, polylineDash?, reorderProgress?, className?` | Mapa Leaflet completo; `onMarkerClick` + `reorderProgress` habilitan el modo reorden (marcadores elegidos en verde con su nueva posición, siguiente a tocar con pulso) |
+| `SchoolRouteMap` | `colegio, origen, onOriginChange?, paradas, alumnosMap, vanLocation?, polylineGeometry?, activeStopIndex?, highlightStudentId?, targetArrivalTime?, tipoTrayecto?, onMarkerClick?, polylineColor?, polylineDash?, reorderProgress?, alternativePolylines?, className?` | Mapa Leaflet completo; `onMarkerClick` + `reorderProgress` habilitan el modo reorden; `alternativePolylines` dibuja rutas alternativas (estilo Google Maps) debajo de la principal con leyenda |
 | `LocationPicker` | `lat, lng, onChange, title, pinType, currentAddress, height` | Picker de coordenadas con búsqueda |
 
 ### Otros
