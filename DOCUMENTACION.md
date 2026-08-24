@@ -358,11 +358,13 @@ Cada evento de ejecución de ruta dispara automáticamente un **POST JSON silenc
 
 ## 13. Datos Demo (Quito, Ecuador)
 
+> ⚠️ **La app NO genera datos demo automáticamente.** Solo se crean si el dueño lo solicita explícitamente (botones de seed con confirmación) o en local. Los datos demo se definen en `src/services/mockData.ts` y se siembran con `seedInstantDatabase()`.
+
 - **Colegio:** Colegio San Gabriel (Av. América y Mariana de Jesús) — llegada límite 07:45.
 - **Conductores:** Juan Carlos Guamán (PBX-4521), Maritza Villacís (PCZ-8910), Segundo Toapanta (PAA-3322).
 - **Alumnos:** 5 alumnos con modalidades mixtas (ida y vuelta, solo ida, solo vuelta).
 - **Origen:** Base de operaciones, Sector La Pradera.
-- **Credenciales demo staff:** `admin@demo.com` / `123456`.
+- **Credenciales demo staff:** `admin@demo.com` / `123456` (acceso del dueño/superadmin).
 
 ---
 

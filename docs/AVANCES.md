@@ -34,6 +34,7 @@
 | `bcaf7e7` | feat: rutas alternativas por tramo (top-3 tramos largos OSRM + cache) — alternativa real en rutas multi-parada | 24/08 |
 | `f289f47` | feat: actualización PWA visible — banner nueva versión, indicador v1.2.0, SW v4 con SKIP_WAITING | 24/08 |
 | `66dbdb2` | feat: multiusuarios (multi-tenant) — clientes, cliente_id, login por rol, filtrado, gestor de clientes + CSV, respaldo; v1.4.0 | 24/08 |
+| `0846d02` | fix: NO generar datos demo automáticamente — sin auto-seed, sin fallbacks INITIAL_*, botón "Limpiar datos demo", seed manual con confirmación | 24/08 |
 
 ---
 
@@ -212,6 +213,17 @@
 1. Crear entidad `clientes` (nombre, plan, activo, created_at).
 2. Agregar atributo `cliente_id` (texto, opcional) a: colegios, representantes, alumnos, conductores, rutas_diarias, paradas_ruta, tracking_logs, usuarios, eventos_ruta, webhook_logs.
 3. En la app (menu **Clientes** → superadmin) pulsar **"Activar multi-cliente"**.
+
+---
+
+## Fase 14 — No generar datos de ejemplo automáticamente (commit 0846d02)
+
+### ✅ Lo que se logró
+- **Eliminado el auto-seed**: la app ya NO siembra datos demo al iniciar (antes lo hacía si parecía vacía). Los datos demo SOLO se crean si el dueño lo solicita explícitamente (botón "Poblar Datos Real..." / "Sincronizar Tablas", ambos con **confirmación**).
+- **Eliminados los fallbacks `INITIAL_*`** en los mapeadores de App: si no hay datos de nube ni de localStorage, se devuelve lista vacía (nunca aparecen alumnos/conductores/colegios demo).
+- **Estado inicial neutro**: `activeRuta` por defecto sin conductor ni datos demo; colegio por defecto neutro (sin `INITIAL_SCHOOL`).
+- **Limpieza de datos demo recreados**: función `cleanupDemoData()` (solo elimina filas con id **y** nombre original idénticos al demo) + botón **"Limpiar datos demo"** en *Clientes* (superadmin). Conserva usuario admin, colegio real y lo editado/creado por el usuario.
+- **Filtro multi-cliente protegido**: el `where: { cliente_id }` solo aplica si multi-cliente está activo Y la migración se completó (nunca oculta datos reales si el dashboard de InstantDB no está configurado).
 
 ---
 
