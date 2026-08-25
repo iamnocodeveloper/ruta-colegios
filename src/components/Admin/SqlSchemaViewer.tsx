@@ -60,6 +60,11 @@ const _schema = i.schema({
       modo_optimizacion: i.string(), // 'fijo' | 'trafico_real'
       hora_llegada_objetivo: i.string(),
       hora_salida_estimada: i.string(),
+      hora_salida_deseada: i.string().optional(), // H_salida elegida por el usuario
+      hora_llegada_deseada: i.string().optional(), // H_llegada elegida por el usuario
+      horario_valido: i.boolean().optional(), // true si H_salida + T_total <= H_llegada
+      hora_llegada_estimada: i.string().optional(), // H_salida + T_total
+      tramos_elegidos_json: i.string().optional(), // { legIndex: alternativa }
       hora_salida_real: i.string().optional(),
       hora_llegada_real: i.string().optional(),
       tiempo_manejo_estimado_min: i.number(),
@@ -181,6 +186,14 @@ CREATE TABLE IF NOT EXISTS rutas_diarias (
     modo_optimizacion VARCHAR(20) NOT NULL CHECK (modo_optimizacion IN ('fijo', 'trafico_real')),
     hora_llegada_objetivo TIME NOT NULL DEFAULT '08:00:00',
     hora_salida_estimada TIME NOT NULL,
+    -- Horario elegido por el usuario: hora de salida y hora de llegada deseadas
+    hora_salida_deseada TIME,
+    hora_llegada_deseada TIME,
+    -- true si H_salida + T_total <= H_llegada (el horario cubre TODAS las paradas)
+    horario_valido BOOLEAN DEFAULT TRUE,
+    hora_llegada_estimada TIME,
+    -- Tramos/paradas elegidos: JSONB { legIndex: indiceAlternativa } (0 = principal)
+    tramos_elegidos JSONB DEFAULT '{}'::jsonb,
     hora_salida_real TIMESTAMP WITH TIME ZONE,
     hora_llegada_real TIMESTAMP WITH TIME ZONE,
     tiempo_manejo_estimado_min NUMERIC(6, 2) NOT NULL DEFAULT 0.00,

@@ -11,7 +11,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
-  Clock,
   Sparkles,
   ArrowUpDown,
   MoveUp,
@@ -21,7 +20,6 @@ import {
   Users,
   Check,
   RotateCcw,
-  Sliders,
   Play,
   MapPin,
   Compass,
@@ -49,8 +47,13 @@ import {
   generateRouteVariants,
   variantDistance,
   weekdayLabel,
-  normalizeDays
+  normalizeDays,
+  validateSchedule,
+  buildPolylineFromLegs,
+  minutesToTimeString,
+  timeStringToMinutes
 } from '../../services/routeCalculator';
+import type { ScheduleValidation } from '../../services/routeCalculator';
 import { SchoolRouteMap } from '../Map/SchoolRouteMap';
 import { LocationPicker } from '../Map/LocationPicker';
 import { ensureUUID } from '../../services/instantDb';
@@ -88,6 +91,14 @@ interface JourneyPlan {
   isManual: boolean;
   horaLlegada: string;
   rutaElegida: number; // 0 = principal, 1..n = alternativa
+  // Horario elegido (hora de salida + hora de llegada) y validación
+  horaSalidaDeseada?: string;
+  horaLlegadaDeseada?: string;
+  horarioValido?: boolean;
+  mensajeHorario?: string;
+  horaLlegadaEstimada?: string;
+  // Tramos elegidos por tramo/parada: legIndex -> alternativa (0 = principal)
+  tramosElegidos?: Record<number, number>;
 }
 
 const StopRow: React.FC<StopRowProps> = ({
@@ -255,6 +266,22 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
     if (activeRuta.hora_llegada_objetivo) return activeRuta.hora_llegada_objetivo;
     return tipoTrayecto === 'ida' ? (selectedColegio.hora_llegada_limite || '08:00:00') : '14:00:00';
   });
+
+  // ===== Horario elegido por el usuario: Hora de SALIDA + Hora de LLEGADA =====
+  // Ambos campos están SIEMPRE visibles. Si se dejan vacíos, el sistema calcula
+  // la hora faltante (salida inversa en ida / llegada estimada en vuelta).
+  const [horaSalidaDeseada, setHoraSalidaDeseada] = useState<string>(() => {
+    if (activeRuta.hora_salida_deseada) return activeRuta.hora_salida_deseada;
+    return '';
+  });
+  const [horaLlegadaDeseada, setHoraLlegadaDeseada] = useState<string>(() => {
+    if (activeRuta.hora_llegada_deseada) return activeRuta.hora_llegada_deseada;
+    return '';
+  });
+  const [horarioValidacion, setHorarioValidacion] = useState<ScheduleValidation | null>(null);
+  // Tramos elegidos por tramo/parada: legIndex -> índice de alternativa (0 = principal)
+  const [tramosElegidos, setTramosElegidos] = useState<Record<number, number>>({});
+
   const [modo, setModo] = useState<ModoOptimizacion>('fijo');
   const [tiempoAbordajeMin, setTiempoAbordajeMin] = useState<number>(2.5);
   const [orderedStudentIds, setOrderedStudentIds] = useState<string[]>([]);
@@ -293,6 +320,32 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
 
   // When school changes, select all students of this school (now handled by eligibleStudents effect)
 
+  // ===== Inputs del cálculo según el horario elegido =====
+  // Hora ancla: ida -> llegada al colegio (elegida o límite del colegio);
+  // vuelta -> salida del colegio (elegida o por defecto 14:00).
+  const calcHoraLlegada =
+    tipoTrayecto === 'ida'
+      ? horaLlegadaDeseada || horaLlegada
+      : horaSalidaDeseada || horaLlegada;
+  const calcHoraSalidaFija = horaSalidaDeseada || undefined;
+
+  /** Aplica el resultado de la optimización y valida el horario elegido (si aplica). */
+  const applyOptimizationResult = (res: RouteOptimizationResult) => {
+    setOptimizationResult(res);
+    if (horaSalidaDeseada && horaLlegadaDeseada) {
+      setHorarioValidacion(
+        validateSchedule(
+          horaSalidaDeseada,
+          horaLlegadaDeseada,
+          res.tiempo_total_min,
+          res.paradas_ordenadas.length
+        )
+      );
+    } else {
+      setHorarioValidacion(null);
+    }
+  };
+
   // Recalculate route whenever parameters change
   const runRouteCalculation = async (useManualOrder: boolean = false, variantId?: string) => {
     setIsCalculating(true);
@@ -308,10 +361,11 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
           modo,
           tipoTrayecto,
           tiempoAbordajeMin,
-          horaLlegadaLimite: horaLlegada,
+          horaLlegadaLimite: calcHoraLlegada,
+          horaSalidaFija: calcHoraSalidaFija,
           ordenManual: orderedStudentIds
         });
-        setOptimizationResult(result);
+        applyOptimizationResult(result);
         setIsManualOrder(true);
         return;
       }
@@ -333,11 +387,12 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
         modo,
         tipoTrayecto,
         tiempoAbordajeMin,
-        horaLlegadaLimite: horaLlegada,
+        horaLlegadaLimite: calcHoraLlegada,
+        horaSalidaFija: calcHoraSalidaFija,
         ordenManual: targetVariant.studentIds
       });
 
-      setOptimizationResult(result);
+      applyOptimizationResult(result);
       setOrderedStudentIds(result.paradas_ordenadas.map((p) => p.alumno_id));
       setActiveVariantId(targetVariant.id);
       setIsManualOrder(false);
@@ -361,15 +416,16 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
       modo,
       tipoTrayecto,
       tiempoAbordajeMin,
-      horaLlegadaLimite: horaLlegada,
+      horaLlegadaLimite: calcHoraLlegada,
+      horaSalidaFija: calcHoraSalidaFija,
       ordenManual: variant.studentIds
-    }).then((res) => setOptimizationResult(res));
+    }).then((res) => applyOptimizationResult(res));
   };
 
   useEffect(() => {
     runRouteCalculation(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedColegio, origen, selectedStudentIds, modo, tiempoAbordajeMin, horaLlegada, tipoTrayecto]);
+  }, [selectedColegio, origen, selectedStudentIds, modo, tiempoAbordajeMin, horaLlegada, tipoTrayecto, horaSalidaDeseada, horaLlegadaDeseada]);
 
   // Cada nuevo cálculo vuelve a la ruta de conducción principal
   useEffect(() => {
@@ -381,9 +437,44 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
   const varianteMeta = ROUTE_VARIANT_COLORS[activeVariantId] || ROUTE_VARIANT_COLORS['2opt'];
   const altElegida = rutaElegida > 0 ? alternativasRuta[rutaElegida - 1] : undefined;
 
-  const mapPolyline = altElegida ? altElegida.polyline : optimizationResult?.polyline_geometry;
+  // ===== Tramos (legs) entre paradas: polyline combinada según alternativas elegidas =====
+  const legsRuta = optimizationResult?.legs || [];
+  const tramosPolyline = legsRuta.length > 0 ? buildPolylineFromLegs(legsRuta, tramosElegidos) : [];
+  const hasTramoChoices = Object.keys(tramosElegidos).length > 0 && tramosPolyline.length > 0;
+
+  const mapPolyline = hasTramoChoices
+    ? tramosPolyline
+    : altElegida
+    ? altElegida.polyline
+    : optimizationResult?.polyline_geometry;
   const mapPolylineColor = altElegida ? ROUTE_ALT_COLOR : varianteMeta.color;
   const mapPolylineDash = altElegida ? ROUTE_ALT_DASH : varianteMeta.dash;
+
+  // Alternativas por TRAMO (legs) para dibujar en el mapa junto a la ruta elegida
+  const legAlternativePolylines: {
+    geometry: [number, number][];
+    color: string;
+    dash: string;
+    label: string;
+    distanceKm?: number;
+    durationMin?: number;
+  }[] = [];
+  if (legsRuta.length > 0) {
+    legsRuta.forEach((leg, i) => {
+      const chosen = tramosElegidos[i] ?? 0;
+      leg.alternatives.forEach((a, ai) => {
+        const isChosen = chosen === ai + 1;
+        legAlternativePolylines.push({
+          geometry: a.polyline,
+          color: isChosen ? '#22C55E' : ROUTE_ALT_COLOR,
+          dash: isChosen ? '0' : ROUTE_ALT_DASH,
+          label: `Tramo ${i + 1} · Alt ${ai + 1}${isChosen ? ' ✓' : ''}`,
+          distanceKm: a.distanceKm,
+          durationMin: a.durationMin,
+        });
+      });
+    });
+  }
 
   const mapAlternativePolylines: {
     geometry: [number, number][];
@@ -429,6 +520,32 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
       });
     }
   }
+  // Añadir las alternativas por tramo para que se dibujen sobre el mapa
+  mapAlternativePolylines.push(...legAlternativePolylines);
+
+  // Etiquetas de cada punto del recorrido (para nombrar los tramos en la UI)
+  const waypointLabels = useMemo(() => {
+    const labels: string[] = [];
+    if (tipoTrayecto === 'vuelta') {
+      labels.push('🏫 Colegio (Salida)');
+      optimizationResult?.paradas_ordenadas.forEach((p) =>
+        labels.push(`${p.orden}. ${alumnosMap.get(p.alumno_id)?.nombre || 'Parada'}`)
+      );
+      labels.push('🏁 Base / Retorno');
+    } else {
+      labels.push('🏁 Origen / Base');
+      optimizationResult?.paradas_ordenadas.forEach((p) =>
+        labels.push(`${p.orden}. ${alumnosMap.get(p.alumno_id)?.nombre || 'Parada'}`)
+      );
+      labels.push('🏫 Colegio');
+    }
+    return labels;
+  }, [optimizationResult, alumnosMap, tipoTrayecto]);
+
+  // Cuando cambia el orden de las paradas (nuevo cálculo), reiniciar los tramos elegidos
+  useEffect(() => {
+    setTramosElegidos({});
+  }, [optimizationResult?.paradas_ordenadas.map((p) => p.alumno_id).join(',')]);
 
   // Manual reordering handlers
   const applyManualOrder = (newOrder: string[]) => {
@@ -443,9 +560,10 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
       modo,
       tipoTrayecto,
       tiempoAbordajeMin,
-      horaLlegadaLimite: horaLlegada,
+      horaLlegadaLimite: calcHoraLlegada,
+      horaSalidaFija: calcHoraSalidaFija,
       ordenManual: newOrder
-    }).then((res) => setOptimizationResult(res));
+    }).then((res) => applyOptimizationResult(res));
   };
 
   const moveStudent = (index: number, direction: 'up' | 'down') => {
@@ -526,8 +644,14 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
           : optimizationResult.paradas_ordenadas.map((p) => p.alumno_id),
       variantId: activeVariantId,
       isManual: isManualOrder,
-      horaLlegada,
+      horaLlegada: calcHoraLlegada,
       rutaElegida,
+      horaSalidaDeseada: horaSalidaDeseada || undefined,
+      horaLlegadaDeseada: horaLlegadaDeseada || undefined,
+      horarioValido: horarioValidacion?.valido,
+      mensajeHorario: horarioValidacion?.mensaje,
+      horaLlegadaEstimada: horarioValidacion?.horaLlegadaEstimada,
+      tramosElegidos: Object.keys(tramosElegidos).length > 0 ? { ...tramosElegidos } : undefined,
     };
     if (tipo === 'ida') {
       setIdaPlan(plan);
@@ -560,6 +684,14 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
       paradas,
       hora_salida_estimada: plan.result.hora_salida_estimada,
       hora_llegada_objetivo: plan.horaLlegada,
+      // Horario elegido (hora de salida + hora de llegada) y su validación
+      hora_salida_deseada: plan.horaSalidaDeseada,
+      hora_llegada_deseada: plan.horaLlegadaDeseada,
+      horario_valido: plan.horarioValido,
+      mensaje_horario: plan.mensajeHorario,
+      hora_llegada_estimada: plan.horaLlegadaEstimada,
+      // Tramos elegidos por tramo/parada
+      tramos_elegidos: plan.tramosElegidos,
       tiempo_manejo_estimado_min: plan.result.tiempo_manejo_min,
       tiempo_abordaje_total_min: plan.result.tiempo_abordaje_total_min,
       tiempo_total_estimado_min: plan.result.tiempo_total_min,
@@ -602,6 +734,13 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
       variante: primary.variante || activeVariantId,
       hora_llegada_objetivo: primary.hora_llegada_objetivo,
       hora_salida_estimada: primary.hora_salida_estimada,
+      // Horario elegido + validación (persistido en BD)
+      hora_salida_deseada: primary.hora_salida_deseada,
+      hora_llegada_deseada: primary.hora_llegada_deseada,
+      horario_valido: primary.horario_valido,
+      mensaje_horario: primary.mensaje_horario,
+      hora_llegada_estimada: primary.hora_llegada_estimada,
+      tramos_elegidos: primary.tramos_elegidos,
       tiempo_manejo_estimado_min: primary.tiempo_manejo_estimado_min,
       tiempo_abordaje_total_min: primary.tiempo_abordaje_total_min,
       tiempo_total_estimado_min: primary.tiempo_total_estimado_min,
@@ -738,17 +877,62 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
 
           <div>
             <label className="text-[11px] font-bold text-ink uppercase tracking-wider block mb-1">
-              {tipoTrayecto === 'ida'
-                ? 'Hora Límite de Llegada a la Escuela (H_llegada)'
-                : 'Hora de Salida de la Escuela (H_salida)'}
+              Programación del Horario
             </label>
-            <input
-              type="time"
-              step="60"
-              value={horaLlegada.substring(0, 5)}
-              onChange={(e) => setHoraLlegada(e.target.value + ':00')}
-              className="w-full rounded-lg bg-surface border border-line px-3 py-1.5 text-xs font-bold text-primary focus:border-primary/40 focus:outline-none"
-            />
+            <p className="text-[10px] text-muted mb-2">
+              Elige la hora de <b className="text-ink">SALIDA</b> y la hora de <b className="text-ink">LLEGADA</b> que quieres
+              tener. El sistema determina la ruta y avisa si las horas <b className="text-alert">NO coinciden</b> para el
+              trayecto completo (todas las paradas). Deja una vacía para calcularla automáticamente.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[11px] font-bold text-ink uppercase tracking-wider block mb-1">
+                  🚌 Hora de SALIDA deseada
+                </label>
+                <input
+                  type="time"
+                  step="60"
+                  value={horaSalidaDeseada ? horaSalidaDeseada.substring(0, 5) : ''}
+                  onChange={(e) => setHoraSalidaDeseada(e.target.value ? e.target.value + ':00' : '')}
+                  placeholder="--:--"
+                  className="w-full rounded-lg bg-surface border border-line px-3 py-2 text-xs font-bold text-primary focus:border-primary/40 focus:outline-none"
+                />
+                <p className="text-[9px] text-muted mt-0.5">
+                  {tipoTrayecto === 'ida' ? 'Salida de la base del conductor' : 'Salida del colegio'}
+                </p>
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-ink uppercase tracking-wider block mb-1">
+                  🏫 Hora de LLEGADA deseada
+                </label>
+                <input
+                  type="time"
+                  step="60"
+                  value={horaLlegadaDeseada ? horaLlegadaDeseada.substring(0, 5) : ''}
+                  onChange={(e) => setHoraLlegadaDeseada(e.target.value ? e.target.value + ':00' : '')}
+                  placeholder="--:--"
+                  className="w-full rounded-lg bg-surface border border-line px-3 py-2 text-xs font-bold text-primary focus:border-primary/40 focus:outline-none"
+                />
+                <p className="text-[9px] text-muted mt-0.5">
+                  {tipoTrayecto === 'ida'
+                    ? `Llegada al colegio (límite: ${(horaLlegada || selectedColegio.hora_llegada_limite || '08:00:00').substring(0, 5)})`
+                    : 'Llegada a la base / retorno final'}
+                </p>
+              </div>
+            </div>
+
+            {horarioValidacion && (
+              <div
+                className={`mt-2 rounded-lg border px-2.5 py-2 text-[11px] font-semibold leading-snug ${
+                  horarioValidacion.valido
+                    ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                    : 'border-rose-300 bg-rose-50 text-rose-700'
+                }`}
+              >
+                {horarioValidacion.valido ? '✅ ' : '⛔ '}
+                {horarioValidacion.mensaje}
+              </div>
+            )}
           </div>
         </div>
 
@@ -1145,6 +1329,11 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
               >
                 <Save className="h-3 w-3" />
                 {tipoTrayecto !== 'ida' ? 'Guardar Plan IDA (cambia a la pestaña IDA)' : 'Guardar Plan IDA'}
+                {horarioValidacion && !horarioValidacion.valido && tipoTrayecto === 'ida' && (
+                  <span className="ml-1 rounded bg-rose-100 text-rose-700 border border-rose-300 px-1.5 py-0.5 text-[8px] font-black">
+                    ⚠️ Horas no coinciden
+                  </span>
+                )}
               </button>
             </div>
 
@@ -1167,6 +1356,11 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
               >
                 <Save className="h-3 w-3" />
                 {tipoTrayecto !== 'vuelta' ? 'Guardar Plan VUELTA (cambia a la pestaña VUELTA)' : 'Guardar Plan VUELTA'}
+                {horarioValidacion && !horarioValidacion.valido && tipoTrayecto === 'vuelta' && (
+                  <span className="ml-1 rounded bg-rose-100 text-rose-700 border border-rose-300 px-1.5 py-0.5 text-[8px] font-black">
+                    ⚠️ Horas no coinciden
+                  </span>
+                )}
               </button>
             </div>
           </div>
@@ -1208,7 +1402,16 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
                   </h3>
                 </div>
                 <p className="text-xs text-muted mt-0.5">
-                  {tipoTrayecto === 'ida' ? (
+                  {horarioValidacion ? (
+                    <>
+                      Salida elegida: <b className="text-primary">{horaSalidaDeseada.substring(0, 5)}</b> · Llegada estimada:{' '}
+                      <b className={horarioValidacion.valido ? 'text-emerald-600' : 'text-alert'}>
+                        {horarioValidacion.horaLlegadaEstimada.substring(0, 5)}
+                      </b>{' '}
+                      · Llegada deseada: <span className="text-ink font-semibold">{horaLlegadaDeseada.substring(0, 5)}</span> · T_total:{' '}
+                      {optimizationResult.tiempo_total_min} min · {selectedStudentIds.length} paradas.
+                    </>
+                  ) : tipoTrayecto === 'ida' ? (
                     <>
                       El conductor debe partir a las <b className="text-primary">{optimizationResult.hora_salida_estimada}</b> para arribar a <span className="text-ink font-semibold">{selectedColegio.nombre}</span> exactamente a las <span className="text-primary font-semibold">{horaLlegada.substring(0, 5)}</span>.
                     </>
@@ -1235,6 +1438,39 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
                   <span>{optimizationResult.tiempo_total_min} min ({optimizationResult.distancia_total_km} km)</span>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ⚠️ Banner: las horas NO coinciden para el trayecto (todas las paradas) */}
+        {horarioValidacion && !horarioValidacion.valido && (
+          <div className="rounded-2xl border-2 border-rose-400/60 bg-rose-50/90 p-4 flex items-start gap-3 shadow-lg">
+            <ShieldAlert className="h-6 w-6 text-alert shrink-0 mt-0.5" />
+            <div className="space-y-1.5">
+              <h4 className="text-sm font-black text-alert flex items-center gap-2">
+                Las horas NO coinciden para el trayecto
+              </h4>
+              <p className="text-xs text-rose-800 leading-snug">{horarioValidacion.mensaje}</p>
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => setHoraSalidaDeseada(horarioValidacion.horaSalidaRecomendada)}
+                  className="rounded-md bg-alert text-white px-2.5 py-1 text-[10px] font-black hover:bg-rose-700 transition-colors cursor-pointer"
+                >
+                  Salir a las {horarioValidacion.horaSalidaRecomendada.substring(0, 5)}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHoraLlegadaDeseada(horarioValidacion.horaLlegadaEstimada)}
+                  className="rounded-md bg-rose-200 text-rose-800 px-2.5 py-1 text-[10px] font-black hover:bg-rose-300 transition-colors cursor-pointer"
+                >
+                  Llegar a las {horarioValidacion.horaLlegadaEstimada.substring(0, 5)}
+                </button>
+              </div>
+              <p className="text-[10px] text-rose-600">
+                El trayecto completo con {selectedStudentIds.length} paradas necesita{' '}
+                <b>{horarioValidacion.tiempoTotalMin} min</b> (manejo + abordaje). Usa los botones para ajustar el horario.
+              </p>
             </div>
           </div>
         )}
@@ -1380,14 +1616,105 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
           </div>
         )}
 
+        {/* Elige la ruta por TRAMO (entre paradas consecutivas) */}
+        {legsRuta.length > 0 && (
+          <div className="rounded-xl border border-line bg-surface p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h4 className="text-sm font-bold text-ink flex items-center gap-2">
+                  <Route className="h-4 w-4 text-primary" />
+                  Elige la ruta por tramo (entre paradas)
+                </h4>
+                <p className="text-[11px] text-muted mt-0.5">
+                  Selecciona la alternativa de calles de cada tramo entre paradas. La ruta combinada se dibuja en el mapa.
+                </p>
+              </div>
+              {hasTramoChoices && (
+                <button
+                  type="button"
+                  onClick={() => setTramosElegidos({})}
+                  className="flex items-center gap-1 text-[10px] font-bold text-muted hover:text-primary border border-line rounded-lg px-2 py-1 transition-colors cursor-pointer"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  Restablecer
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+              {legsRuta.map((leg, i) => {
+                const fromLabel = waypointLabels[i] || `Punto ${i + 1}`;
+                const toLabel = waypointLabels[i + 1] || `Punto ${i + 2}`;
+                const chosen = tramosElegidos[i] ?? 0;
+                const options = [
+                  { label: 'Principal', distanceKm: leg.main.distanceKm, durationMin: leg.main.durationMin },
+                  ...leg.alternatives.map((a, ai) => ({
+                    label: `Alternativa ${ai + 1}`,
+                    distanceKm: a.distanceKm,
+                    durationMin: a.durationMin,
+                  })),
+                ];
+                return (
+                  <div key={i} className="rounded-lg border border-line bg-soft-gray p-2.5">
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <span className="text-[11px] font-black text-ink">Tramo {i + 1}</span>
+                      <span className="text-[10px] text-muted font-semibold truncate">
+                        {fromLabel} → {toLabel}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                      {options.map((opt, oi) => {
+                        const isSel = chosen === oi;
+                        return (
+                          <button
+                            key={oi}
+                            type="button"
+                            onClick={() =>
+                              setTramosElegidos((prev) => ({ ...prev, [i]: oi }))
+                            }
+                            className={`rounded-lg border px-2 py-1.5 text-left transition-all cursor-pointer ${
+                              isSel
+                                ? oi === 0
+                                  ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
+                                  : 'border-emerald-500 bg-emerald-50 ring-1 ring-emerald-400/30'
+                                : 'border-line bg-surface hover:border-primary/40'
+                            }`}
+                          >
+                            <span
+                              className={`block text-[10px] font-black ${isSel ? 'text-ink' : 'text-muted'}`}
+                            >
+                              {isSel && '✓ '}
+                              {opt.label}
+                            </span>
+                            <span className="block text-[9px] text-muted font-semibold">
+                              {opt.distanceKm} km · {opt.durationMin} min
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {hasTramoChoices && (
+              <p className="text-[10px] text-muted flex items-center gap-1.5">
+                <Check className="h-3 w-3 text-emerald-600" />
+                Tramos personalizados activos: la ruta dibujada usa la alternativa elegida en cada tramo.
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Map Preview Stage */}
         <div className={`relative w-full rounded-xl overflow-hidden border border-line ${isItineraryOpen ? 'h-[340px] sm:h-[380px]' : 'h-[calc(100vh-320px)] min-h-[420px]'}`}>
           <SchoolRouteMap
             colegio={{
               ...selectedColegio,
-              hora_llegada_limite: horaLlegada || selectedColegio.hora_llegada_limite
+              hora_llegada_limite: calcHoraLlegada || selectedColegio.hora_llegada_limite
             }}
-            targetArrivalTime={horaLlegada}
+            targetArrivalTime={calcHoraLlegada}
             tipoTrayecto={tipoTrayecto}
             origen={origen}
             onOriginChange={onUpdateOrigen}

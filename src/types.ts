@@ -131,6 +131,14 @@ export interface RutaTrayecto {
   polyline_geometry?: [number, number][];
   polyline_alternativas?: RouteAlternative[];
   ruta_elegida?: number;
+  // ===== Horario elegido por el usuario (hora de salida + hora de llegada) =====
+  hora_salida_deseada?: string;  // hora que el usuario quiere SALIR ("07:00:00")
+  hora_llegada_deseada?: string; // hora que el usuario quiere LLEGAR ("08:00:00")
+  horario_valido?: boolean;      // true si H_salida + T_total <= H_llegada (cubre TODAS las paradas)
+  mensaje_horario?: string;      // mensaje cuando las horas NO coinciden para el trayecto
+  hora_llegada_estimada?: string; // H_salida + T_total (llegada real calculada con el horario elegido)
+  // ===== Tramos elegidos por tramo/parada: legIndex -> índice de alternativa (0 = principal) =====
+  tramos_elegidos?: Record<number, number>;
 }
 
 export interface RutaDiaria {
@@ -164,6 +172,14 @@ export interface RutaDiaria {
   // Rutas alternativas (estilo Google Maps) + ruta elegida (0 principal / 1..n alternativa)
   polyline_alternativas?: RouteAlternative[];
   ruta_elegida?: number;
+  // ===== Horario elegido por el usuario (hora de salida + hora de llegada) =====
+  hora_salida_deseada?: string;  // hora que el usuario quiere SALIR
+  hora_llegada_deseada?: string; // hora que el usuario quiere LLEGAR
+  horario_valido?: boolean;      // true si H_salida + T_total <= H_llegada (cubre TODAS las paradas)
+  mensaje_horario?: string;      // mensaje cuando las horas NO coinciden para el trayecto
+  hora_llegada_estimada?: string; // H_salida + T_total
+  // ===== Tramos elegidos por tramo/parada: legIndex -> índice de alternativa (0 = principal) =====
+  tramos_elegidos?: Record<number, number>;
   // Ruta combinada: cuando se planifican AMBAS jornadas, cada trayecto conserva sus
   // propias paradas y métricas. `ruta.paradas` es la concatenación (ida + vuelta).
   ida?: RutaTrayecto;

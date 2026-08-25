@@ -69,6 +69,14 @@ CREATE TABLE IF NOT EXISTS rutas_diarias (
     modo_optimizacion VARCHAR(20) NOT NULL CHECK (modo_optimizacion IN ('fijo', 'trafico_real')),
     hora_llegada_objetivo TIME NOT NULL DEFAULT '08:00:00',
     hora_salida_estimada TIME NOT NULL,
+    -- Horario elegido por el usuario: hora de salida y hora de llegada deseadas
+    hora_salida_deseada TIME,
+    hora_llegada_deseada TIME,
+    -- true si H_salida + T_total <= H_llegada (el horario cubre TODAS las paradas)
+    horario_valido BOOLEAN DEFAULT TRUE,
+    hora_llegada_estimada TIME,
+    -- Tramos/paradas elegidos: JSONB { legIndex: indiceAlternativa } (0 = principal)
+    tramos_elegidos JSONB DEFAULT '{}'::jsonb,
     hora_salida_real TIMESTAMP WITH TIME ZONE,
     hora_llegada_real TIMESTAMP WITH TIME ZONE,
     tiempo_manejo_estimado_min NUMERIC(6, 2) NOT NULL DEFAULT 0.00,

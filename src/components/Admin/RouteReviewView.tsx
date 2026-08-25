@@ -246,12 +246,22 @@ export const RouteReviewView: React.FC<RouteReviewViewProps> = ({ entry, alumnos
               <Clock className="h-3.5 w-3.5 text-primary" /> Salida
             </div>
             <p className="mt-1 text-lg font-extrabold text-ink">{formatFriendlyTime(ruta.hora_salida_estimada)}</p>
+            {ruta.hora_salida_deseada && (
+              <p className="text-[10px] text-muted mt-0.5">
+                Elegida: {formatFriendlyTime(ruta.hora_salida_deseada)}
+              </p>
+            )}
           </div>
           <div className="rounded-card bg-surface border border-line p-3.5 shadow-soft">
             <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-muted">
               <School className="h-3.5 w-3.5 text-primary" /> Llegada
             </div>
             <p className="mt-1 text-lg font-extrabold text-ink">{formatFriendlyTime(ruta.hora_llegada_objetivo)}</p>
+            {ruta.hora_llegada_deseada && (
+              <p className="text-[10px] text-muted mt-0.5">
+                Elegida: {formatFriendlyTime(ruta.hora_llegada_deseada)}
+              </p>
+            )}
           </div>
           <div className="rounded-card bg-surface border border-line p-3.5 shadow-soft">
             <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-muted">
@@ -266,6 +276,36 @@ export const RouteReviewView: React.FC<RouteReviewViewProps> = ({ entry, alumnos
             <p className="mt-1 text-lg font-extrabold text-ink">{ruta.paradas?.length || 0}</p>
           </div>
         </div>
+
+        {/* Estado del horario elegido (H_salida + H_llegada) */}
+        {ruta.hora_salida_deseada && ruta.hora_llegada_deseada && (
+          <div
+            className={`rounded-card border p-3.5 text-xs ${
+              ruta.horario_valido === false
+                ? 'border-rose-300 bg-rose-50 text-rose-800'
+                : 'border-emerald-300 bg-emerald-50 text-emerald-800'
+            }`}
+          >
+            <div className="flex items-center gap-2 font-black">
+              {ruta.horario_valido === false ? '⛔ Las horas no coinciden para el trayecto' : '✅ Horario válido para el trayecto'}
+            </div>
+            <p className="mt-1 font-semibold">
+              Salida elegida: <b>{formatFriendlyTime(ruta.hora_salida_deseada)}</b> · Llegada elegida:{' '}
+              <b>{formatFriendlyTime(ruta.hora_llegada_deseada)}</b>
+              {ruta.hora_llegada_estimada
+                ? ` · Llegada estimada: ${formatFriendlyTime(ruta.hora_llegada_estimada)}`
+                : ''}
+            </p>
+            {ruta.mensaje_horario && (
+              <p className="mt-1 text-[11px] leading-snug">{ruta.mensaje_horario}</p>
+            )}
+            {ruta.tramos_elegidos && Object.keys(ruta.tramos_elegidos).length > 0 && (
+              <p className="mt-1 text-[11px]">
+                🛣️ Rutas personalizadas por tramo: {Object.keys(ruta.tramos_elegidos).length} tramo(s) con alternativa elegida.
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Driver + route info */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

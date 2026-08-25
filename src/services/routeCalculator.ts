@@ -11,6 +11,113 @@
 
 import { Alumno, Colegio, ModoOptimizacion, RouteAlternative, RouteOptimizationResult, RutaLeg, TipoTrayecto } from '../types';
 
+// ===========================================================================
+// VALIDACIÓN DE HORARIO ELEGIDO (H_salida + H_llegada) PARA EL TRAYECTO
+// ===========================================================================
+
+export interface ScheduleValidation {
+  valido: boolean;
+  mensaje: string;
+  minutosDisponibles: number;  // H_llegada_deseada - H_salida_deseada
+  tiempoTotalMin: number;      // T_total (manejo + abordaje de TODAS las paradas)
+  minutosFaltantes: number;    // cuántos minutos faltan (0 si es válido)
+  horaLlegadaEstimada: string; // H_salida_deseada + T_total
+  horaSalidaRecomendada: string; // H_llegada_deseada - T_total
+  numParadas: number;
+}
+
+/**
+ * Valida si un horario elegido por el usuario (hora de salida + hora de llegada)
+ * cubre el trayecto completo (TODAS las paradas):
+ *   H_llegada_deseada - H_salida_deseada >= T_total
+ *
+ * Devuelve un mensaje claro en español indicando si las horas coinciden o no
+ * ("Las horas no coinciden para el trayecto") con la sugerencia corregida.
+ */
+export function validateSchedule(
+  horaSalidaDeseada: string,
+  horaLlegadaDeseada: string,
+  tiempoTotalMin: number,
+  numParadas: number = 0
+): ScheduleValidation {
+  const salida = timeStringToMinutes(horaSalidaDeseada);
+  const llegada = timeStringToMinutes(horaLlegadaDeseada);
+
+  // Normalizar a "HH:MM:SS"
+  const norm = (t: string) => (t.length === 5 ? `${t}:00` : t);
+
+  let minutosDisponibles = llegada - salida;
+  // Si la llegada es al día siguiente (ej. salida 23:30, llegada 00:15)
+  if (minutosDisponibles < 0) minutosDisponibles += 24 * 60;
+
+  const minutosFaltantes = Math.max(0, Math.round((tiempoTotalMin - minutosDisponibles) * 10) / 10);
+  const valido = minutosDisponibles >= tiempoTotalMin;
+
+  const horaSalidaRecomendada = minutesToTimeString(llegada - tiempoTotalMin);
+  const horaLlegadaEstimada = minutesToTimeString(salida + tiempoTotalMin);
+
+  let mensaje: string;
+  if (valido) {
+    mensaje =
+      `Horario válido: saliendo a las ${norm(horaSalidaDeseada).substring(0, 5)} y llegando a las ` +
+      `${norm(horaLlegadaDeseada).substring(0, 5)}, hay ${minutosDisponibles} min disponibles y el trayecto ` +
+      `(${numParadas} paradas) necesita ${tiempoTotalMin} min.`;
+  } else {
+    mensaje =
+      `⚠️ Las horas NO coinciden para el trayecto: entre la salida (${norm(horaSalidaDeseada).substring(0, 5)}) ` +
+      `y la llegada (${norm(horaLlegadaDeseada).substring(0, 5)}) solo hay ${minutosDisponibles} min, pero la ruta ` +
+      `completa con ${numParadas} paradas necesita ${tiempoTotalMin} min (manejo + abordaje). Faltan ` +
+      `${minutosFaltantes} min. Sugerencia: sal a las ${horaSalidaRecomendada.substring(0, 5)} ` +
+      `(o llega a las ${horaLlegadaEstimada.substring(0, 5)}).`;
+  }
+
+  return {
+    valido,
+    mensaje,
+    minutosDisponibles,
+    tiempoTotalMin,
+    minutosFaltantes,
+    horaLlegadaEstimada,
+    horaSalidaRecomendada,
+    numParadas,
+  };
+}
+
+/**
+ * Reconstruye la polyline de la ruta concatenando la alternativa elegida de
+ * CADA tramo (leg). `choices` mapea legIndex -> índice de alternativa
+ * (0 = principal del tramo, 1..n = alternativa). Si no hay choices o legs,
+ * devuelve [].
+ */
+export function buildPolylineFromLegs(
+  legs: RutaLeg[],
+  choices?: Record<number, number>
+): [number, number][] {
+  if (!legs || legs.length === 0) return [];
+  const polyline: [number, number][] = [];
+  legs.forEach((leg, i) => {
+    const choice = (choices && choices[i] !== undefined ? choices[i] : 0) as number;
+    const alt = choice > 0 ? leg.alternatives[choice - 1] : undefined;
+    const chosen = alt || leg.main;
+    if (chosen && chosen.polyline && chosen.polyline.length > 0) {
+      // Evitar duplicar el punto de unión entre tramos consecutivos
+      const pts = chosen.polyline;
+      if (polyline.length > 0 && pts.length > 0) {
+        const last = polyline[polyline.length - 1];
+        const first = pts[0];
+        if (Math.abs(last[0] - first[0]) < 1e-9 && Math.abs(last[1] - first[1]) < 1e-9) {
+          polyline.push(...pts.slice(1));
+        } else {
+          polyline.push(...pts);
+        }
+      } else {
+        polyline.push(...pts);
+      }
+    }
+  });
+  return polyline;
+}
+
 /**
  * Calculates Haversine distance in kilometers between two geo coordinates
  */
@@ -700,6 +807,7 @@ export async function calculateOptimizedRoute(
     tipoTrayecto?: TipoTrayecto;
     tiempoAbordajeMin?: number;
     horaLlegadaLimite?: string;
+    horaSalidaFija?: string; // hora de salida elegida por el usuario (H_salida)
     ordenManual?: string[]; // student ids
   }
 ): Promise<RouteOptimizationResult> {
@@ -750,15 +858,22 @@ export async function calculateOptimizedRoute(
   let runningTimeMinutes: number;
 
   if (tipoTrayecto === 'ida') {
-    // Inverse Departure Time: H_salida = H_llegada - T_total
-    const horaLlegadaStr = options.horaLlegadaLimite || school.hora_llegada_limite || '08:00:00';
-    const horaLlegadaMinutos = timeStringToMinutes(horaLlegadaStr);
-    const horaSalidaMinutos = horaLlegadaMinutos - tiempoTotalMin;
-    horaSalidaEstimada = minutesToTimeString(horaSalidaMinutos);
-    runningTimeMinutes = horaSalidaMinutos;
+    if (options.horaSalidaFija) {
+      // El usuario ya eligió la hora de salida: las paradas se calculan desde ahí
+      horaSalidaEstimada =
+        options.horaSalidaFija.length === 5 ? `${options.horaSalidaFija}:00` : options.horaSalidaFija;
+      runningTimeMinutes = timeStringToMinutes(horaSalidaEstimada);
+    } else {
+      // Inverse Departure Time: H_salida = H_llegada - T_total
+      const horaLlegadaStr = options.horaLlegadaLimite || school.hora_llegada_limite || '08:00:00';
+      const horaLlegadaMinutos = timeStringToMinutes(horaLlegadaStr);
+      const horaSalidaMinutos = horaLlegadaMinutos - tiempoTotalMin;
+      horaSalidaEstimada = minutesToTimeString(horaSalidaMinutos);
+      runningTimeMinutes = horaSalidaMinutos;
+    }
   } else {
     // Forward Route from School Departure Time
-    const horaSalidaStr = options.horaLlegadaLimite || '14:00:00';
+    const horaSalidaStr = options.horaSalidaFija || options.horaLlegadaLimite || '14:00:00';
     horaSalidaEstimada = horaSalidaStr.length === 5 ? `${horaSalidaStr}:00` : horaSalidaStr;
     runningTimeMinutes = timeStringToMinutes(horaSalidaEstimada);
   }

@@ -175,6 +175,19 @@ function buildReviewEntryFromCloud(routeId: string, data: any): RouteHistoryEntr
     if (Array.isArray(parsed)) polyline = parsed;
   } catch {}
 
+  // Horario elegido + tramos (leídos desde la nube para el enlace de revisión)
+  let tramosElegidos: Record<number, number> | undefined;
+  try {
+    const parsedTramos = JSON.parse(rutaRow.tramos_elegidos_json || '{}');
+    if (parsedTramos && typeof parsedTramos === 'object' && !Array.isArray(parsedTramos)) {
+      const norm: Record<number, number> = {};
+      Object.entries(parsedTramos).forEach(([k, v]) => {
+        norm[Number(k)] = Number(v) || 0;
+      });
+      tramosElegidos = norm;
+    }
+  } catch {}
+
   const colegio: Colegio | undefined = colegioRow
     ? {
         id: ensureUUID(colegioRow.id),
@@ -212,6 +225,11 @@ function buildReviewEntryFromCloud(routeId: string, data: any): RouteHistoryEntr
     variante: rutaRow.variante || undefined,
     hora_llegada_objetivo: rutaRow.hora_llegada_objetivo || '',
     hora_salida_estimada: rutaRow.hora_salida_estimada || '',
+    hora_salida_deseada: rutaRow.hora_salida_deseada || undefined,
+    hora_llegada_deseada: rutaRow.hora_llegada_deseada || undefined,
+    horario_valido: rutaRow.horario_valido !== undefined ? rutaRow.horario_valido !== false : undefined,
+    hora_llegada_estimada: rutaRow.hora_llegada_estimada || undefined,
+    tramos_elegidos: tramosElegidos,
     hora_salida_real: rutaRow.hora_salida_real || undefined,
     hora_llegada_real: rutaRow.hora_llegada_real || undefined,
     tiempo_manejo_estimado_min: Number(rutaRow.tiempo_manejo_estimado_min || 0),
