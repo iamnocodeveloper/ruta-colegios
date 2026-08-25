@@ -226,6 +226,8 @@ export interface RouteOptimizationResult {
   }>;
   polyline_geometry: [number, number][];
   traffic_factor: number;
+  // Tiempo de manejo desde la base hasta la PRIMERA parada (para anclar el horario en la parada 1)
+  drive_time_base_to_primera_parada_min: number;
   // Rutas alternativas estilo Google Maps (misma secuencia de paradas, calles distintas)
   alternativas?: RouteAlternative[];
   // Desglose por tramo (para diagnóstico / futura selección por tramo)

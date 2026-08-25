@@ -18,56 +18,57 @@ import { Alumno, Colegio, ModoOptimizacion, RouteAlternative, RouteOptimizationR
 export interface ScheduleValidation {
   valido: boolean;
   mensaje: string;
-  minutosDisponibles: number;  // H_llegada_deseada - H_salida_deseada
-  tiempoTotalMin: number;      // T_total (manejo + abordaje de TODAS las paradas)
+  minutosDisponibles: number;  // H_llegada_deseada - H_ancla (primera parada o salida)
+  tiempoTotalMin: number;      // tiempo necesario DESDE el ancla hasta la llegada final (manejo + abordaje)
   minutosFaltantes: number;    // cuántos minutos faltan (0 si es válido)
-  horaLlegadaEstimada: string; // H_salida_deseada + T_total
-  horaSalidaRecomendada: string; // H_llegada_deseada - T_total
+  horaLlegadaEstimada: string; // H_ancla + tiempoDesdeAncla
+  horaAnclaRecomendada: string; // H_llegada - tiempoDesdeAncla
   numParadas: number;
 }
 
 /**
- * Valida si un horario elegido por el usuario (hora de salida + hora de llegada)
- * cubre el trayecto completo (TODAS las paradas):
- *   H_llegada_deseada - H_salida_deseada >= T_total
+ * Valida si un horario elegido por el usuario cubre el trayecto completo (TODAS las paradas):
+ *   H_llegada_deseada - H_ancla >= tiempoDesdeAncla
  *
- * Devuelve un mensaje claro en español indicando si las horas coinciden o no
- * ("Las horas no coinciden para el trayecto") con la sugerencia corregida.
+ * `horaAncla` es la hora que fija el usuario: la PRIMERA parada (recogida del alumno 1)
+ * o la salida, según cómo se use. Devuelve un mensaje claro en español indicando si las
+ * horas coinciden o no ("Las horas no coinciden para el trayecto").
  */
 export function validateSchedule(
-  horaSalidaDeseada: string,
+  horaAncla: string, // hora elegida por el usuario (PRIMERA parada / salida)
   horaLlegadaDeseada: string,
-  tiempoTotalMin: number,
-  numParadas: number = 0
+  tiempoDesdeAnclaMin: number, // tiempo necesario desde el ancla hasta la llegada final
+  numParadas: number = 0,
+  anclaLabel: string = 'la primera parada'
 ): ScheduleValidation {
-  const salida = timeStringToMinutes(horaSalidaDeseada);
+  const ancla = timeStringToMinutes(horaAncla);
   const llegada = timeStringToMinutes(horaLlegadaDeseada);
 
   // Normalizar a "HH:MM:SS"
   const norm = (t: string) => (t.length === 5 ? `${t}:00` : t);
 
-  let minutosDisponibles = llegada - salida;
-  // Si la llegada es al día siguiente (ej. salida 23:30, llegada 00:15)
+  let minutosDisponibles = llegada - ancla;
+  // Si la llegada es al día siguiente (ej. ancla 23:30, llegada 00:15)
   if (minutosDisponibles < 0) minutosDisponibles += 24 * 60;
 
-  const minutosFaltantes = Math.max(0, Math.round((tiempoTotalMin - minutosDisponibles) * 10) / 10);
-  const valido = minutosDisponibles >= tiempoTotalMin;
+  const minutosFaltantes = Math.max(0, Math.round((tiempoDesdeAnclaMin - minutosDisponibles) * 10) / 10);
+  const valido = minutosDisponibles >= tiempoDesdeAnclaMin;
 
-  const horaSalidaRecomendada = minutesToTimeString(llegada - tiempoTotalMin);
-  const horaLlegadaEstimada = minutesToTimeString(salida + tiempoTotalMin);
+  const horaAnclaRecomendada = minutesToTimeString(llegada - tiempoDesdeAnclaMin);
+  const horaLlegadaEstimada = minutesToTimeString(ancla + tiempoDesdeAnclaMin);
 
   let mensaje: string;
   if (valido) {
     mensaje =
-      `Horario válido: saliendo a las ${norm(horaSalidaDeseada).substring(0, 5)} y llegando a las ` +
+      `Horario válido: con ${anclaLabel} a las ${norm(horaAncla).substring(0, 5)} y llegando a las ` +
       `${norm(horaLlegadaDeseada).substring(0, 5)}, hay ${minutosDisponibles} min disponibles y el trayecto ` +
-      `(${numParadas} paradas) necesita ${tiempoTotalMin} min.`;
+      `(${numParadas} paradas) necesita ${tiempoDesdeAnclaMin} min.`;
   } else {
     mensaje =
-      `⚠️ Las horas NO coinciden para el trayecto: entre la salida (${norm(horaSalidaDeseada).substring(0, 5)}) ` +
-      `y la llegada (${norm(horaLlegadaDeseada).substring(0, 5)}) solo hay ${minutosDisponibles} min, pero la ruta ` +
-      `completa con ${numParadas} paradas necesita ${tiempoTotalMin} min (manejo + abordaje). Faltan ` +
-      `${minutosFaltantes} min. Sugerencia: sal a las ${horaSalidaRecomendada.substring(0, 5)} ` +
+      `⚠️ Las horas NO coinciden para el trayecto: entre ${anclaLabel} (${norm(horaAncla).substring(0, 5)}) ` +
+      `y la llegada (${norm(horaLlegadaDeseada).substring(0, 5)}) solo hay ${minutosDisponibles} min, pero el trayecto ` +
+      `completo con ${numParadas} paradas necesita ${tiempoDesdeAnclaMin} min (manejo + abordaje). Faltan ` +
+      `${minutosFaltantes} min. Sugerencia: fija ${anclaLabel} a las ${horaAnclaRecomendada.substring(0, 5)} ` +
       `(o llega a las ${horaLlegadaEstimada.substring(0, 5)}).`;
   }
 
@@ -75,10 +76,10 @@ export function validateSchedule(
     valido,
     mensaje,
     minutosDisponibles,
-    tiempoTotalMin,
+    tiempoTotalMin: tiempoDesdeAnclaMin,
     minutosFaltantes,
     horaLlegadaEstimada,
-    horaSalidaRecomendada,
+    horaAnclaRecomendada,
     numParadas,
   };
 }
@@ -807,7 +808,7 @@ export async function calculateOptimizedRoute(
     tipoTrayecto?: TipoTrayecto;
     tiempoAbordajeMin?: number;
     horaLlegadaLimite?: string;
-    horaSalidaFija?: string; // hora de salida elegida por el usuario (H_salida)
+    horaPrimeraParada?: string; // hora elegida por el usuario = hora de la PRIMERA parada (recogida/entrega del alumno 1)
     ordenManual?: string[]; // student ids
   }
 ): Promise<RouteOptimizationResult> {
@@ -854,15 +855,28 @@ export async function calculateOptimizedRoute(
   // 7. Total time: T_total = T_manejo + (N * T_abordaje)
   const tiempoTotalMin = Math.round((realDrivingMinutes + tiempoAbordajeTotal) * 10) / 10;
 
+  // Velocidad promedio para estimar tiempos de manejo por tramo
+  const speed = (totalDistanceKm / (realDrivingMinutes / 60)) || getEstimatedSpeedKmh(modo);
+
+  // Tiempo de manejo desde el punto de inicio (base en ida / colegio en vuelta)
+  // hasta la PRIMERA parada. Se usa para anclar el horario en la parada 1.
+  const distBaseToStop1 =
+    orderedStudents.length > 0
+      ? calculateHaversineDistance(startPoint.lat, startPoint.lng, orderedStudents[0].lat, orderedStudents[0].lng) * 1.2
+      : 0;
+  const driveBaseToStop1 = Math.max(1, (distBaseToStop1 / speed) * 60);
+
   let horaSalidaEstimada: string;
   let runningTimeMinutes: number;
 
   if (tipoTrayecto === 'ida') {
-    if (options.horaSalidaFija) {
-      // El usuario ya eligió la hora de salida: las paradas se calculan desde ahí
-      horaSalidaEstimada =
-        options.horaSalidaFija.length === 5 ? `${options.horaSalidaFija}:00` : options.horaSalidaFija;
-      runningTimeMinutes = timeStringToMinutes(horaSalidaEstimada);
+    if (options.horaPrimeraParada) {
+      // El usuario fija la hora de la PRIMERA parada (recogida del alumno 1):
+      //   salida de la base = H_parada1 - tiempo(base -> parada1)
+      const horaPrimeraParadaMin = timeStringToMinutes(options.horaPrimeraParada);
+      const horaSalidaMinutos = horaPrimeraParadaMin - driveBaseToStop1;
+      horaSalidaEstimada = minutesToTimeString(horaSalidaMinutos);
+      runningTimeMinutes = horaSalidaMinutos;
     } else {
       // Inverse Departure Time: H_salida = H_llegada - T_total
       const horaLlegadaStr = options.horaLlegadaLimite || school.hora_llegada_limite || '08:00:00';
@@ -872,15 +886,23 @@ export async function calculateOptimizedRoute(
       runningTimeMinutes = horaSalidaMinutos;
     }
   } else {
-    // Forward Route from School Departure Time
-    const horaSalidaStr = options.horaSalidaFija || options.horaLlegadaLimite || '14:00:00';
-    horaSalidaEstimada = horaSalidaStr.length === 5 ? `${horaSalidaStr}:00` : horaSalidaStr;
-    runningTimeMinutes = timeStringToMinutes(horaSalidaEstimada);
+    if (options.horaPrimeraParada) {
+      // Vuelta: el usuario fija la hora de la PRIMERA entrega (parada 1):
+      //   salida del colegio = H_parada1 - tiempo(colegio -> parada1)
+      const horaPrimeraParadaMin = timeStringToMinutes(options.horaPrimeraParada);
+      const horaSalidaMinutos = horaPrimeraParadaMin - driveBaseToStop1;
+      horaSalidaEstimada = minutesToTimeString(horaSalidaMinutos);
+      runningTimeMinutes = horaSalidaMinutos;
+    } else {
+      // Forward Route from School Departure Time
+      const horaSalidaStr = options.horaLlegadaLimite || '14:00:00';
+      horaSalidaEstimada = horaSalidaStr.length === 5 ? `${horaSalidaStr}:00` : horaSalidaStr;
+      runningTimeMinutes = timeStringToMinutes(horaSalidaEstimada);
+    }
   }
 
   // 8. Calculate individual stop ETAs
   let previousPoint = { lat: startPoint.lat, lng: startPoint.lng };
-  const speed = (totalDistanceKm / (realDrivingMinutes / 60)) || getEstimatedSpeedKmh(modo);
 
   const paradasOrdenadas = orderedStudents.map((student, index) => {
     const distFromPrev = calculateHaversineDistance(
@@ -917,6 +939,7 @@ export async function calculateOptimizedRoute(
     tiempo_total_min: tiempoTotalMin,
     distancia_total_km: totalDistanceKm,
     tipo_trayecto: tipoTrayecto,
+    drive_time_base_to_primera_parada_min: Math.round(driveBaseToStop1 * 10) / 10,
     paradas_ordenadas: paradasOrdenadas,
     polyline_geometry: polyline,
     traffic_factor: modo === 'trafico_real' ? 1.35 : 1.12,

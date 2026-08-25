@@ -327,17 +327,24 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
     tipoTrayecto === 'ida'
       ? horaLlegadaDeseada || horaLlegada
       : horaSalidaDeseada || horaLlegada;
-  const calcHoraSalidaFija = horaSalidaDeseada || undefined;
+  // La hora que fija el usuario es la de la PRIMERA parada (recogida/entrega del alumno 1)
+  const calcHoraPrimeraParada = horaSalidaDeseada || undefined;
 
   /** Aplica el resultado de la optimización y valida el horario elegido (si aplica). */
   const applyOptimizationResult = (res: RouteOptimizationResult) => {
     setOptimizationResult(res);
     if (horaSalidaDeseada && horaLlegadaDeseada) {
+      // El tiempo necesario DESDE la primera parada hasta la llegada final
+      // = T_total - tiempo(base -> parada 1)
+      const tiempoDesdePrimeraParada = Math.max(
+        0,
+        Math.round((res.tiempo_total_min - res.drive_time_base_to_primera_parada_min) * 10) / 10
+      );
       setHorarioValidacion(
         validateSchedule(
           horaSalidaDeseada,
           horaLlegadaDeseada,
-          res.tiempo_total_min,
+          tiempoDesdePrimeraParada,
           res.paradas_ordenadas.length
         )
       );
@@ -362,7 +369,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
           tipoTrayecto,
           tiempoAbordajeMin,
           horaLlegadaLimite: calcHoraLlegada,
-          horaSalidaFija: calcHoraSalidaFija,
+          horaPrimeraParada: calcHoraPrimeraParada,
           ordenManual: orderedStudentIds
         });
         applyOptimizationResult(result);
@@ -388,7 +395,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
         tipoTrayecto,
         tiempoAbordajeMin,
         horaLlegadaLimite: calcHoraLlegada,
-        horaSalidaFija: calcHoraSalidaFija,
+        horaPrimeraParada: calcHoraPrimeraParada,
         ordenManual: targetVariant.studentIds
       });
 
@@ -417,7 +424,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
       tipoTrayecto,
       tiempoAbordajeMin,
       horaLlegadaLimite: calcHoraLlegada,
-      horaSalidaFija: calcHoraSalidaFija,
+      horaPrimeraParada: calcHoraPrimeraParada,
       ordenManual: variant.studentIds
     }).then((res) => applyOptimizationResult(res));
   };
@@ -570,7 +577,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
       tipoTrayecto,
       tiempoAbordajeMin,
       horaLlegadaLimite: calcHoraLlegada,
-      horaSalidaFija: calcHoraSalidaFija,
+      horaPrimeraParada: calcHoraPrimeraParada,
       ordenManual: newOrder
     }).then((res) => applyOptimizationResult(res));
   };
@@ -889,14 +896,15 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
               Programación del Horario
             </label>
             <p className="text-[10px] text-muted mb-2">
-              Elige la hora de <b className="text-ink">SALIDA</b> y la hora de <b className="text-ink">LLEGADA</b> que quieres
-              tener. El sistema determina la ruta y avisa si las horas <b className="text-alert">NO coinciden</b> para el
-              trayecto completo (todas las paradas). Deja una vacía para calcularla automáticamente.
+              Coloca la hora a la que quieres <b className="text-ink">recoger al alumno de la PARADA 1</b> y la hora de{' '}
+              <b className="text-ink">LLEGADA</b> deseada. El sistema calcula la salida de la base y las horas de las demás
+              paradas, y avisa si las horas <b className="text-alert">NO coinciden</b> para el trayecto completo (todas las
+              paradas). Deja una vacía para calcularla automáticamente.
             </p>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-[11px] font-bold text-ink uppercase tracking-wider block mb-1">
-                  🚌 Hora de SALIDA deseada
+                  🕗 Hora de la PRIMERA PARADA (recogida)
                 </label>
                 <input
                   type="time"
@@ -907,7 +915,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
                   className="w-full rounded-lg bg-surface border border-line px-3 py-2 text-xs font-bold text-primary focus:border-primary/40 focus:outline-none"
                 />
                 <p className="text-[9px] text-muted mt-0.5">
-                  {tipoTrayecto === 'ida' ? 'Salida de la base del conductor' : 'Salida del colegio'}
+                  {tipoTrayecto === 'ida' ? 'Recogida del alumno de la parada 1 (la base sale antes)' : 'Primera entrega de la parada 1 (el colegio sale antes)'}
                 </p>
               </div>
               <div>
@@ -1413,7 +1421,8 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
                 <p className="text-xs text-muted mt-0.5">
                   {horarioValidacion ? (
                     <>
-                      Salida elegida: <b className="text-primary">{horaSalidaDeseada.substring(0, 5)}</b> · Llegada estimada:{' '}
+                      Salida de base: <b className="text-primary">{optimizationResult.hora_salida_estimada.substring(0, 5)}</b> · 1ª parada:{' '}
+                      <b className="text-primary">{horaSalidaDeseada.substring(0, 5)}</b> · Llegada estimada:{' '}
                       <b className={horarioValidacion.valido ? 'text-emerald-600' : 'text-alert'}>
                         {horarioValidacion.horaLlegadaEstimada.substring(0, 5)}
                       </b>{' '}
@@ -1463,10 +1472,10 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
               <div className="flex flex-wrap gap-1.5 pt-0.5">
                 <button
                   type="button"
-                  onClick={() => setHoraSalidaDeseada(horarioValidacion.horaSalidaRecomendada)}
+                  onClick={() => setHoraSalidaDeseada(horarioValidacion.horaAnclaRecomendada)}
                   className="rounded-md bg-alert text-white px-2.5 py-1 text-[10px] font-black hover:bg-rose-700 transition-colors cursor-pointer"
                 >
-                  Salir a las {horarioValidacion.horaSalidaRecomendada.substring(0, 5)}
+                  1ª parada a las {horarioValidacion.horaAnclaRecomendada.substring(0, 5)}
                 </button>
                 <button
                   type="button"
