@@ -491,15 +491,18 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
   const handleMarkerClick = (parada: ParadaRuta) => {
     if (!mapReorderMode) return;
     const studentId = parada.alumno_id;
-    if (mapReorderSequence.includes(studentId)) return;
-
-    const next = [...mapReorderSequence, studentId];
-    setMapReorderSequence(next);
-
-    // When all stops are tapped, apply the new order automatically
-    if (next.length >= totalStops && totalStops > 0) {
-      applyMapReorder(next);
-    }
+    setMapReorderSequence((prev) => {
+      // Re-tocar una parada ya marcada → desmarcarla (toggle), sin reiniciar
+      if (prev.includes(studentId)) {
+        return prev.filter((id) => id !== studentId);
+      }
+      const next = [...prev, studentId];
+      // Al completar todas las paradas, aplicar el nuevo orden automáticamente
+      if (next.length >= totalStops && totalStops > 0) {
+        setTimeout(() => applyMapReorder(next), 0);
+      }
+      return next;
+    });
   };
 
   // Toggle student selection

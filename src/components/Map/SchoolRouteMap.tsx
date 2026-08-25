@@ -369,7 +369,7 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
               <b class="text-slate-800">${parada.hora_estimada}</b>
             </div>
           </div>
-        `)
+        `, isReorderActive ? { autoPan: false } : {})
         .addTo(markersLayer);
 
       if (onMarkerClick) {
@@ -377,14 +377,14 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
       }
     });
 
-    // 5. Fit bounds if needed
+    // 5. Fit bounds if needed (pero NO durante el modo reorden para no cambiar el zoom)
     const allCoords: [number, number][] = [
       [origen.lat, origen.lng],
       [colegio.lat, colegio.lng],
       ...paradas.map((p) => [p.lat, p.lng] as [number, number])
     ];
 
-    if (allCoords.length > 0 && !vanLocation) {
+    if (allCoords.length > 0 && !vanLocation && !reorderProgress) {
       const bounds = L.latLngBounds(allCoords);
       map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
     }

@@ -35,7 +35,7 @@
 | `f289f47` | feat: actualización PWA visible — banner nueva versión, indicador v1.2.0, SW v4 con SKIP_WAITING | 24/08 |
 | `66dbdb2` | feat: multiusuarios (multi-tenant) — clientes, cliente_id, login por rol, filtrado, gestor de clientes + CSV, respaldo; v1.4.0 | 24/08 |
 | `0846d02` | fix: NO generar datos demo automáticamente — sin auto-seed, sin fallbacks INITIAL_*, botón "Limpiar datos demo", seed manual con confirmación | 24/08 |
-| `—` | fix: datos reales de la BD siempre — sin botones de seed en login/modal, mapeadores sin fallback localStorage | 24/08 |
+| `—` | fix: reorden en mapa — toggle marcar/desmarcar parada + mapa estable (sin fitBounds/autopan en modo reorden) | 24/08 |
 
 ---
 
@@ -225,6 +225,14 @@
 - **Estado inicial neutro**: `activeRuta` por defecto sin conductor ni datos demo; colegio por defecto neutro (sin `INITIAL_SCHOOL`).
 - **Limpieza de datos demo recreados**: función `cleanupDemoData()` (solo elimina filas con id **y** nombre original idénticos al demo) + botón **"Limpiar datos demo"** en *Clientes* (superadmin). Conserva usuario admin, colegio real y lo editado/creado por el usuario.
 - **Filtro multi-cliente protegido**: el `where: { cliente_id }` solo aplica si multi-cliente está activo Y la migración se completó (nunca oculta datos reales si el dashboard de InstantDB no está configurado).
+
+---
+
+## Fase 15 — Reorden en mapa: desmarcar + mapa estable
+
+### ✅ Lo que se logró
+- **Toggle marcar/desmarcar**: en "Editar Orden en Mapa", re-tocar una parada ya marcada la **desmarca** (verde → gris) sin reiniciar el proceso. La auto-aplicación solo ocurre al completar todas las paradas.
+- **Mapa estable**: durante el modo reorden se **desactiva el `fitBounds`** (no hace zoom out al tocar paradas) y los popups usan **`autoPan: false`** (no mueven la vista). El `fitBounds` inicial al cargar se conserva.
 
 ---
 
