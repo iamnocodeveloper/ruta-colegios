@@ -458,6 +458,8 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
     label: string;
     distanceKm?: number;
     durationMin?: number;
+    legIndex?: number;
+    altIndex?: number;
   }[] = [];
   if (legsRuta.length > 0) {
     legsRuta.forEach((leg, i) => {
@@ -471,6 +473,8 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
           label: `Tramo ${i + 1} · Alt ${ai + 1}${isChosen ? ' ✓' : ''}`,
           distanceKm: a.distanceKm,
           durationMin: a.durationMin,
+          legIndex: i,
+          altIndex: ai,
         });
       });
     });
@@ -546,6 +550,11 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
   useEffect(() => {
     setTramosElegidos({});
   }, [optimizationResult?.paradas_ordenadas.map((p) => p.alumno_id).join(',')]);
+
+  // Selecciona la alternativa de un tramo tocándola directamente en el mapa
+  const handleLegAlternativeClick = (legIndex: number, altIndex: number) => {
+    setTramosElegidos((prev) => ({ ...prev, [legIndex]: altIndex }));
+  };
 
   // Manual reordering handlers
   const applyManualOrder = (newOrder: string[]) => {
@@ -765,7 +774,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
   return (
     <div className="flex h-full flex-col lg:flex-row bg-canvas text-ink overflow-hidden">
       {/* Left Configuration Column */}
-      <div className="w-full lg:w-96 flex-shrink-0 border-r border-line bg-surface overflow-y-auto p-4 space-y-4">
+      <div className="w-full lg:w-96 flex-shrink-0 border-r border-line bg-surface overflow-y-auto p-4 space-y-4 max-h-[42vh] lg:max-h-none lg:h-full">
         <div>
           <h2 className="text-base font-black text-ink flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-primary" />
@@ -1386,7 +1395,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
       </div>
 
       {/* Right Content Area: Results Formula & Map Preview & Stop Reorder Table */}
-      <div className="flex-1 flex flex-col p-4 space-y-4 overflow-y-auto">
+      <div className="flex-1 min-h-0 flex flex-col p-4 space-y-4 overflow-y-auto">
         {/* INVERSE DEPARTURE / FORWARD COMPLETION TIME HERO CARD */}
         {optimizationResult && (
           <div className="rounded-2xl border-2 border-primary/40 bg-gradient-to-r from-slate-900 via-slate-900 to-amber-950/30 p-4 sm:p-5 shadow-2xl">
@@ -1616,7 +1625,89 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
           </div>
         )}
 
-        {/* Elige la ruta por TRAMO (entre paradas consecutivas) */}
+        {/* Map Preview Stage */}
+        <div className={`relative w-full rounded-xl overflow-hidden border border-line ${isItineraryOpen ? 'h-[300px] sm:h-[360px] lg:h-[340px]' : 'h-[300px] sm:h-[380px] lg:h-[calc(100vh-320px)] lg:min-h-[420px]'}`}>
+          <SchoolRouteMap
+            colegio={{
+              ...selectedColegio,
+              hora_llegada_limite: calcHoraLlegada || selectedColegio.hora_llegada_limite
+            }}
+            targetArrivalTime={calcHoraLlegada}
+            tipoTrayecto={tipoTrayecto}
+            origen={origen}
+            onOriginChange={onUpdateOrigen}
+            paradas={
+              optimizationResult
+                ? optimizationResult.paradas_ordenadas.map((p) => ({
+                    id: p.alumno_id,
+                    ruta_id: 'preview',
+                    alumno_id: p.alumno_id,
+                    orden: p.orden,
+                    hora_estimada: p.hora_estimada,
+                    estado: 'pendiente',
+                    lat: p.lat,
+                    lng: p.lng,
+                    alumno: alumnosMap.get(p.alumno_id)
+                  }))
+                : []
+            }
+            alumnosMap={alumnosMap}
+            polylineGeometry={mapPolyline}
+            polylineColor={mapPolylineColor}
+            polylineDash={mapPolylineDash}
+            alternativePolylines={mapAlternativePolylines}
+            onLegAlternativeClick={handleLegAlternativeClick}
+            onMarkerClick={handleMarkerClick}
+            reorderProgress={mapReorderMode ? { sequence: mapReorderSequence, total: totalStops } : null}
+          />
+
+          {/* Floating controls: reorder from map */}
+          {!mapReorderMode ? (
+            <button
+              type="button"
+              onClick={startMapReorder}
+              disabled={totalStops < 2}
+              title="Toca los marcadores en el orden deseado"
+              className="absolute top-3 left-3 z-[400] flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold shadow-lg backdrop-blur transition-all border cursor-pointer bg-surface/90 text-primary border-primary/40 hover:bg-line hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <ListOrdered className="h-3.5 w-3.5" />
+              <span>Editar Orden en Mapa</span>
+            </button>
+          ) : (
+            <div className="absolute top-3 left-3 right-3 z-[400] rounded-lg bg-sky-950/95 border border-sky-500/60 px-3 py-2 text-xs font-bold text-sky-100 shadow-xl flex flex-wrap items-center gap-2 sm:gap-3">
+              <span className="flex-1 min-w-[180px]">
+                ✏️ Toca los marcadores en el nuevo orden. Progreso:{' '}
+                <span className="text-white">{mapReorderSequence.length}/{totalStops}</span>
+              </span>
+              {mapReorderSequence.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => applyMapReorder(mapReorderSequence)}
+                  className="rounded-md bg-emerald-500 text-slate-950 px-2.5 py-1 text-[10px] font-black hover:bg-emerald-400 cursor-pointer"
+                >
+                  Aplicar ({mapReorderSequence.length})
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={cancelMapReorder}
+                className="rounded-md bg-white/10 border border-white/30 px-2.5 py-1 text-[10px] font-bold hover:bg-white/20 cursor-pointer"
+              >
+                Cancelar
+              </button>
+            </div>
+          )}
+
+          {/* Hint: tocar alternativas de tramo en el mapa */}
+          {legsRuta.length > 0 && !mapReorderMode && (
+            <div className="absolute bottom-3 right-3 z-[400] flex items-center gap-1.5 rounded-lg bg-surface/95 px-2.5 py-1.5 text-[10px] font-bold text-ink backdrop-blur border border-line shadow-lg">
+              <Route className="h-3 w-3 text-cyan-600" />
+              <span>Toca una línea punteada para elegir el tramo</span>
+            </div>
+          )}
+        </div>
+
+        {/* Elige la ruta por TRAMO (entre paradas consecutivas) — debajo del mapa */}
         {legsRuta.length > 0 && (
           <div className="rounded-xl border border-line bg-surface p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
@@ -1626,7 +1717,8 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
                   Elige la ruta por tramo (entre paradas)
                 </h4>
                 <p className="text-[11px] text-muted mt-0.5">
-                  Selecciona la alternativa de calles de cada tramo entre paradas. La ruta combinada se dibuja en el mapa.
+                  Toca directamente en el mapa la línea punteada de la alternativa que prefieras para cada tramo,
+                  o selecciónala aquí abajo. La ruta combinada se dibuja en el mapa.
                 </p>
               </div>
               {hasTramoChoices && (
@@ -1706,79 +1798,6 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
             )}
           </div>
         )}
-
-        {/* Map Preview Stage */}
-        <div className={`relative w-full rounded-xl overflow-hidden border border-line ${isItineraryOpen ? 'h-[340px] sm:h-[380px]' : 'h-[calc(100vh-320px)] min-h-[420px]'}`}>
-          <SchoolRouteMap
-            colegio={{
-              ...selectedColegio,
-              hora_llegada_limite: calcHoraLlegada || selectedColegio.hora_llegada_limite
-            }}
-            targetArrivalTime={calcHoraLlegada}
-            tipoTrayecto={tipoTrayecto}
-            origen={origen}
-            onOriginChange={onUpdateOrigen}
-            paradas={
-              optimizationResult
-                ? optimizationResult.paradas_ordenadas.map((p) => ({
-                    id: p.alumno_id,
-                    ruta_id: 'preview',
-                    alumno_id: p.alumno_id,
-                    orden: p.orden,
-                    hora_estimada: p.hora_estimada,
-                    estado: 'pendiente',
-                    lat: p.lat,
-                    lng: p.lng,
-                    alumno: alumnosMap.get(p.alumno_id)
-                  }))
-                : []
-            }
-            alumnosMap={alumnosMap}
-            polylineGeometry={mapPolyline}
-            polylineColor={mapPolylineColor}
-            polylineDash={mapPolylineDash}
-            alternativePolylines={mapAlternativePolylines}
-            onMarkerClick={handleMarkerClick}
-            reorderProgress={mapReorderMode ? { sequence: mapReorderSequence, total: totalStops } : null}
-          />
-
-          {/* Floating controls: reorder from map */}
-          {!mapReorderMode ? (
-            <button
-              type="button"
-              onClick={startMapReorder}
-              disabled={totalStops < 2}
-              title="Toca los marcadores en el orden deseado"
-              className="absolute top-3 left-3 z-[400] flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold shadow-lg backdrop-blur transition-all border cursor-pointer bg-surface/90 text-primary border-primary/40 hover:bg-line hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <ListOrdered className="h-3.5 w-3.5" />
-              <span>Editar Orden en Mapa</span>
-            </button>
-          ) : (
-            <div className="absolute top-3 left-3 right-3 z-[400] rounded-lg bg-sky-950/95 border border-sky-500/60 px-3 py-2 text-xs font-bold text-sky-100 shadow-xl flex flex-wrap items-center gap-2 sm:gap-3">
-              <span className="flex-1 min-w-[180px]">
-                ✏️ Toca los marcadores en el nuevo orden. Progreso:{' '}
-                <span className="text-white">{mapReorderSequence.length}/{totalStops}</span>
-              </span>
-              {mapReorderSequence.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => applyMapReorder(mapReorderSequence)}
-                  className="rounded-md bg-emerald-500 text-slate-950 px-2.5 py-1 text-[10px] font-black hover:bg-emerald-400 cursor-pointer"
-                >
-                  Aplicar ({mapReorderSequence.length})
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={cancelMapReorder}
-                className="rounded-md bg-white/10 border border-white/30 px-2.5 py-1 text-[10px] font-bold hover:bg-white/20 cursor-pointer"
-              >
-                Cancelar
-              </button>
-            </div>
-          )}
-        </div>
 
         {/* Reordering & Intermediate Stops Table */}
         <div className="rounded-xl border border-line bg-surface/70 overflow-hidden">

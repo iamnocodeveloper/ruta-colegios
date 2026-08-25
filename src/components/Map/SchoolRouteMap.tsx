@@ -36,7 +36,10 @@ interface SchoolRouteMapProps {
     label: string;
     distanceKm?: number;
     durationMin?: number;
+    legIndex?: number; // si viene: es la alternativa de UN tramo (clic selecciona el tramo)
+    altIndex?: number;
   }[];
+  onLegAlternativeClick?: (legIndex: number, altIndex: number) => void;
   className?: string;
 }
 
@@ -57,6 +60,7 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
   polylineDash = '8, 8',
   reorderProgress = null,
   alternativePolylines = [],
+  onLegAlternativeClick,
   className = 'h-full w-full'
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -159,6 +163,13 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
     // 0. Draw alternative routes (Google Maps style) UNDER the main one
     (alternativePolylines || []).forEach((alt) => {
       if (!alt.geometry || alt.geometry.length === 0) return;
+
+      const isLegAlt = alt.legIndex !== undefined && alt.altIndex !== undefined;
+      const onClick =
+        isLegAlt && onLegAlternativeClick
+          ? () => onLegAlternativeClick(alt.legIndex!, alt.altIndex!)
+          : undefined;
+
       L.polyline(alt.geometry, {
         color: alt.color,
         weight: 4,
@@ -175,6 +186,22 @@ export const SchoolRouteMap: React.FC<SchoolRouteMapProps> = ({
         lineCap: 'round',
         lineJoin: 'round'
       }).addTo(polylineLayer);
+
+      // Área de clic invisible y generosa para elegir la alternativa del tramo en el mapa
+      if (onClick) {
+        const hit = L.polyline(alt.geometry, {
+          color: alt.color,
+          weight: 16,
+          opacity: 0.01,
+          lineCap: 'round',
+          lineJoin: 'round'
+        }).addTo(polylineLayer);
+        hit.on('click', onClick);
+        hit.bindTooltip(
+          `🛣️ ${alt.label} · ${alt.distanceKm ?? '?'} km · ${alt.durationMin ?? '?'} min — toca para elegir`,
+          { sticky: true, direction: 'top' }
+        );
+      }
     });
 
     // 1. Draw Route Polyline
