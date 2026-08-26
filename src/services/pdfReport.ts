@@ -3,15 +3,19 @@
  * Produces a clean, text-only A4 report for a saved route:
  *   - Brand header (primary color) + school + route metadata
  *   - Summary block (driver, times, distance, counters)
- *   - Ordered stop table with state-colored rows (no maps / no images)
+ *   - ⚠️ Schedule alert (indicaciones iniciales) when the chosen hours don't
+ *     cover the full journey ("Las horas NO coinciden para el trayecto")
+ *   - Ordered stop table with pickup/delivery time AND arrival at the NEXT
+ *     point; the last stop is picked up and the arrival is at the META
+ *     (destination: school on IDA, base on VUELTA)
  */
 
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { RouteHistoryEntry } from './routeHistory';
-import { formatFriendlyTime } from './routeCalculator';
+import { formatFriendlyTime, minutesToTimeString, timeStringToMinutes } from './routeCalculator';
 import { getJourneys } from './routeJourneys';
-import { ParadaRuta } from '../types';
+import { ParadaRuta, RutaDiaria } from '../types';
 
 // Design-system colors (Soft UI)
 const PRIMARY: [number, number, number] = [0, 132, 255];   // #0084FF
@@ -22,9 +26,8 @@ const SOFT_GRAY: [number, number, number] = [247, 248, 250]; // #F7F8FA
 const GREEN: [number, number, number] = [5, 150, 105];      // #059669
 const RED: [number, number, number] = [255, 80, 80];        // #FF5050
 const AMBER: [number, number, number] = [217, 119, 6];      // #D97706
-const GREEN_FILL: [number, number, number] = [209, 250, 229]; // #D1FAE5
 const RED_FILL: [number, number, number] = [254, 226, 226];   // #FEE2E2
-const AMBER_FILL: [number, number, number] = [254, 243, 199]; // #FEF3C7
+const RED_DARK: [number, number, number] = [136, 19, 55];     // #881337
 
 const VARIANT_LABELS: Record<string, string> = {
   '2opt': 'Óptima (2-Opt)',
@@ -32,13 +35,6 @@ const VARIANT_LABELS: Record<string, string> = {
   farthest: 'Extremos Primero',
   random: 'Aleatoria',
   manual: 'Manual',
-};
-
-const ESTADO_RUTA_LABELS: Record<string, string> = {
-  planificada: 'Planificada',
-  en_curso: 'En curso',
-  completada: 'Completada',
-  cancelada: 'Cancelada',
 };
 
 function slugify(text: string): string {
@@ -62,20 +58,197 @@ function formatFecha(fecha: string): string {
   });
 }
 
-interface EstadoMeta {
-  label: string;
-  color: [number, number, number];
-  fill: [number, number, number];
+// ===========================================================================
+// Horario de llegada al siguiente punto (y a la META en la última parada)
+// ===========================================================================
+
+/**
+ * Fuente de horario: un trayecto (ida/vuelta) o la ruta legacy (campos top-level).
+ * Solo se usan los campos de horario; RutaTrayecto y RutaDiaria los satisfacen.
+ */
+type ScheduleSource = {
+  horario_valido?: boolean;
+  mensaje_horario?: string;
+  hora_salida_deseada?: string;
+  hora_llegada_deseada?: string;
+  hora_llegada_estimada?: string;
+  hora_llegada_objetivo?: string;
+  tiempo_total_estimado_min?: number;
+  tiempo_manejo_estimado_min?: number;
+  tiempo_abordaje_por_alumno_min?: number;
+  paradas?: ParadaRuta[];
+};
+
+/**
+ * Hora de llegada de cada parada:
+ *   - paradas intermedias → hora estimada del SIGUIENTE punto (parada siguiente)
+ *   - última parada      → llegada a la META (colegio en IDA / base en VUELTA)
+ */
+function stopArrivalNext(stops: ParadaRuta[], idx: number, src: ScheduleSource): string {
+  if (idx < stops.length - 1) {
+    // Llegada al siguiente punto = hora estimada de la próxima parada
+    return formatFriendlyTime(stops[idx + 1].hora_estimada);
+  }
+  // Última parada → llegada a la meta (destino final)
+  const calc = src.hora_llegada_estimada || src.hora_llegada_objetivo;
+  if (calc) return formatFriendlyTime(calc);
+  // Fallback: última parada + abordaje + tramo final (base → meta)
+  const last = stops[idx];
+  const tLast = timeStringToMinutes(last.hora_estimada);
+  const abordaje = src.tiempo_abordaje_por_alumno_min ?? 2.5;
+  const totalDrive = src.tiempo_manejo_estimado_min ?? 0;
+  const stopsDrive = stops.reduce((s, p) => s + (p.tiempo_desde_anterior_min ?? 0), 0);
+  const finalLeg = Math.max(0, totalDrive - stopsDrive);
+  return formatFriendlyTime(minutesToTimeString(tLast + abordaje + finalLeg));
 }
 
-function estadoParada(estado: string): EstadoMeta {
-  if (estado === 'recogido' || estado === 'completado') {
-    return { label: 'Recogido', color: GREEN, fill: GREEN_FILL };
+// ===========================================================================
+// Alerta de horario: "Las horas NO coinciden para el trayecto"
+// ===========================================================================
+
+interface ScheduleAlertInfo {
+  label: string; // 'Recorrido IDA (…)' / 'Recorrido VUELTA (…)' o ''
+  message: string;
+  count: number;
+  totalMin: number;
+  suggestedFirstStop?: string; // HH:MM:SS
+  suggestedArrival?: string;   // HH:MM:SS
+}
+
+/** Alerta de un trayecto (o de la ruta legacy) cuando las horas NO coinciden. */
+function journeyAlert(src: ScheduleSource): Omit<ScheduleAlertInfo, 'label'> | null {
+  if (src.horario_valido !== false) return null;
+  // jsPDF con fuentes estándar no dibuja emojis: se limpia el ⚠️ del mensaje.
+  const message =
+    (src.mensaje_horario || 'Las horas no coinciden para el trayecto.')
+      .replace(/⚠️/g, '')
+      .replace(/⚠/g, '')
+      .trim();
+  const count = src.paradas?.length || 0;
+  const totalMin = src.tiempo_total_estimado_min ?? 0;
+
+  let suggestedFirstStop: string | undefined;
+  let suggestedArrival: string | undefined;
+  if (src.hora_salida_deseada && src.hora_llegada_deseada && src.hora_llegada_estimada) {
+    // 1ª parada recomendada = H_llegada_deseada - duración real desde la 1ª parada
+    const ancla = timeStringToMinutes(src.hora_salida_deseada);
+    const llegadaDeseada = timeStringToMinutes(src.hora_llegada_deseada);
+    const llegadaEstimada = timeStringToMinutes(src.hora_llegada_estimada);
+    const tiempoDesdeAncla = Math.max(0, llegadaEstimada - ancla);
+    suggestedArrival = minutesToTimeString(llegadaEstimada);
+    suggestedFirstStop = minutesToTimeString(llegadaDeseada - tiempoDesdeAncla);
+  } else if (src.hora_llegada_estimada) {
+    suggestedArrival = src.hora_llegada_estimada;
   }
-  if (estado === 'ausente') {
-    return { label: 'Ausente', color: RED, fill: RED_FILL };
+
+  return { message, count, totalMin, suggestedFirstStop, suggestedArrival };
+}
+
+/** Recolecta todas las alertas de la ruta (ida / vuelta / legacy). */
+function collectAlerts(ruta: RutaDiaria): ScheduleAlertInfo[] {
+  const alerts: ScheduleAlertInfo[] = [];
+  const journeys = getJourneys(ruta);
+  if (journeys.length > 0) {
+    for (const j of journeys) {
+      const info = journeyAlert(j);
+      if (info) {
+        alerts.push({
+          label:
+            j.tipo_trayecto === 'ida'
+              ? 'Recorrido IDA (Hogares - Colegio)'
+              : 'Recorrido VUELTA (Colegio - Hogares)',
+          ...info,
+        });
+      }
+    }
+  } else {
+    const info = journeyAlert(ruta);
+    if (info) alerts.push({ label: '', ...info });
   }
-  return { label: 'Pendiente', color: AMBER, fill: AMBER_FILL };
+  return alerts;
+}
+
+/**
+ * Draw a red alert box (indicaciones iniciales) with the schedule mismatch.
+ */
+function drawScheduleAlert(
+  doc: jsPDF,
+  info: ScheduleAlertInfo,
+  y: number,
+  pageW: number,
+  margin: number
+): number {
+  const boxX = margin;
+  const boxW = pageW - margin * 2;
+  const pad = 5;
+  const lineH = 4.2;
+
+  const messageLines = doc.splitTextToSize(info.message, boxW - pad * 2) as string[];
+  const contextLines = doc.splitTextToSize(
+    `El trayecto completo con ${info.count} paradas necesita ${info.totalMin} min (manejo + abordaje). Ajusta el horario elegido para que las horas coincidan.`,
+    boxW - pad * 2
+  ) as string[];
+  const recLines = (info.suggestedFirstStop ? 1 : 0) + (info.suggestedArrival ? 1 : 0);
+  const labelH = info.label ? 4.5 : 0;
+
+  const contentH =
+    6 + labelH + messageLines.length * lineH + 2.5 + recLines * lineH + 2 + contextLines.length * lineH + 1;
+  const height = pad * 2 + contentH;
+
+  // Fondo + borde rojo
+  doc.setFillColor(...RED_FILL);
+  doc.setDrawColor(...RED);
+  doc.setLineWidth(0.5);
+  doc.roundedRect(boxX, y, boxW, height, 2, 2, 'FD');
+
+  let cy = y + pad + 4.5;
+
+  // Título
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(...RED);
+  doc.text('Las horas NO coinciden para el trayecto', boxX + pad, cy);
+  cy += 6;
+
+  // Etiqueta del trayecto (ida / vuelta) si aplica
+  if (info.label) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(...MUTED);
+    doc.text(info.label, boxX + pad, cy);
+    cy += labelH;
+  }
+
+  // Mensaje completo
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.8);
+  doc.setTextColor(...RED_DARK);
+  doc.text(messageLines, boxX + pad, cy);
+  cy += messageLines.length * lineH + 2.5;
+
+  // Recomendaciones
+  if (info.suggestedFirstStop || info.suggestedArrival) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(...INK);
+    if (info.suggestedFirstStop) {
+      doc.text(`1ª parada a las ${info.suggestedFirstStop.substring(0, 5)}`, boxX + pad, cy);
+      cy += lineH;
+    }
+    if (info.suggestedArrival) {
+      doc.text(`Llegar a las ${info.suggestedArrival.substring(0, 5)}`, boxX + pad, cy);
+      cy += lineH;
+    }
+    cy += 2;
+  }
+
+  // Contexto / acción
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(...MUTED);
+  doc.text(contextLines, boxX + pad, cy + 1);
+
+  return y + height + 6;
 }
 
 /**
@@ -159,16 +332,13 @@ export function generateRoutePdf(entry: RouteHistoryEntry): void {
   drawField(doc, 'Trayecto', trayectoLabel, margin, y);
   drawField(doc, 'Variante', VARIANT_LABELS[entry.variante || ''] || entry.variante || '—', colX2, y);
   y += 11;
-  drawField(doc, 'Estado', ESTADO_RUTA_LABELS[entry.estado] || entry.estado, margin, y);
   drawField(
     doc,
     'Modo de estimación',
     entry.modo_optimizacion === 'trafico_real' ? 'Tráfico real' : 'Estándar (fijo)',
-    colX2,
+    margin,
     y
   );
-  y += 11;
-  drawField(doc, 'Generado', generatedAt, margin, y);
   drawField(
     doc,
     'Hora de salida estimada',
@@ -240,8 +410,20 @@ export function generateRoutePdf(entry: RouteHistoryEntry): void {
 
   y += boxH + 8;
 
+  // ===== ⚠️ Indicaciones iniciales: alerta cuando las horas NO coinciden =====
+  const alerts = collectAlerts(ruta);
+  for (const alert of alerts) {
+    y = drawScheduleAlert(doc, alert, y, pageW, margin);
+  }
+
   // ===== Stops table(s): una por trayecto (ida / vuelta) =====
-  const drawStopsTable = (label: string, stops: ParadaRuta[], startY: number): number => {
+  const drawStopsTable = (
+    label: string,
+    stops: ParadaRuta[],
+    startY: number,
+    src: ScheduleSource,
+    horaHeader: string
+  ): number => {
     if (label) {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(11);
@@ -250,21 +432,18 @@ export function generateRoutePdf(entry: RouteHistoryEntry): void {
       startY += 5;
     }
 
-    const body = stops.map((p) => {
-      const meta = estadoParada(p.estado);
-      return [
-        String(p.orden),
-        p.alumno?.nombre || 'Alumno',
-        p.alumno?.direccion_recogida || 'Dirección no registrada',
-        formatFriendlyTime(p.hora_estimada),
-        `${p.distancia_desde_anterior_km ?? 0} km`,
-        meta,
-      ] as (string | EstadoMeta)[];
-    });
+    const body = stops.map((p, i) => [
+      String(p.orden),
+      p.alumno?.nombre || 'Alumno',
+      p.alumno?.direccion_recogida || 'Dirección no registrada',
+      formatFriendlyTime(p.hora_estimada),
+      stopArrivalNext(stops, i, src),
+      `${p.distancia_desde_anterior_km ?? 0} km`,
+    ]);
 
     autoTable(doc, {
       startY,
-      head: [['#', 'Alumno', 'Ubicación', 'Hora est.', 'Dist. ant.', 'Estado']],
+      head: [['#', 'Alumno', 'Ubicación', horaHeader, 'Llegada sig.', 'Dist. ant.']],
       body: body as any[],
       margin: { left: margin, right: margin, bottom: 18 },
       theme: 'grid',
@@ -280,27 +459,23 @@ export function generateRoutePdf(entry: RouteHistoryEntry): void {
         fillColor: PRIMARY,
         textColor: [255, 255, 255],
         fontStyle: 'bold',
-        fontSize: 9,
+        fontSize: 8.5,
         halign: 'center',
       },
       columnStyles: {
         0: { cellWidth: 10, halign: 'center' },
         1: { cellWidth: 46 },
-        2: { cellWidth: 62 },
+        2: { cellWidth: 60 },
         3: { cellWidth: 22, halign: 'center' },
-        4: { cellWidth: 20, halign: 'center' },
-        5: { cellWidth: 22, halign: 'center', fontStyle: 'bold' },
+        4: { cellWidth: 22, halign: 'center' },
+        5: { cellWidth: 22, halign: 'center' },
       },
       didParseCell: (data) => {
-        if (data.section !== 'body') return;
-        const raw = data.row.raw as (string | EstadoMeta)[];
-        const meta = raw?.[5] as EstadoMeta | undefined;
-        if (meta) {
-          data.cell.styles.fillColor = meta.fill;
-          if (data.column.index === 5) {
-            data.cell.styles.textColor = meta.color;
-            data.cell.styles.fontStyle = 'bold';
-          }
+        if (data.section !== 'body' || data.column.index !== 4) return;
+        // La llegada de la última parada es a la META (destino final): destacarla
+        if (data.row.index === stops.length - 1) {
+          data.cell.styles.fontStyle = 'bold';
+          data.cell.styles.textColor = PRIMARY;
         }
       },
       didDrawPage: () => {
@@ -319,11 +494,16 @@ export function generateRoutePdf(entry: RouteHistoryEntry): void {
   let finalY = y;
   if (journeys.length > 0) {
     for (const j of journeys) {
-      const label = j.tipo_trayecto === 'ida' ? 'Recorrido IDA (Hogares ➔ Colegio)' : 'Recorrido VUELTA (Colegio ➔ Hogares)';
-      finalY = drawStopsTable(label, j.paradas || [], finalY + 4);
+      const label =
+        j.tipo_trayecto === 'ida'
+          ? 'Recorrido IDA (Hogares - Colegio)'
+          : 'Recorrido VUELTA (Colegio - Hogares)';
+      const horaHeader = j.tipo_trayecto === 'vuelta' ? 'Entrega' : 'Recogida';
+      finalY = drawStopsTable(label, j.paradas || [], finalY + 4, j, horaHeader);
     }
   } else {
-    finalY = drawStopsTable('Itinerario de Paradas', paradas, y);
+    const horaHeader = entry.tipo_trayecto === 'vuelta' ? 'Entrega' : 'Recogida';
+    finalY = drawStopsTable('Itinerario de Paradas', paradas, y, ruta, horaHeader);
   }
 
   // ===== Footer totals =====
