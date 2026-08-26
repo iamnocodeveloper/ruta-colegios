@@ -449,6 +449,110 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
   const tramosPolyline = legsRuta.length > 0 ? buildPolylineFromLegs(legsRuta, tramosElegidos) : [];
   const hasTramoChoices = Object.keys(tramosElegidos).length > 0 && tramosPolyline.length > 0;
 
+  // ===== Tiempos ajustados automáticamente según la ruta/alternativa elegida =====
+  // Resuelve la alternativa efectiva de cada tramo EXACTAMENTE como se dibuja en el mapa:
+  //   - si hay tramos elegidos -> alternativa por tramo (los no elegidos usan la principal)
+  //   - si no, y hay ruta global elegida (rutaElegida > 0) -> alternativa de cada tramo
+  //   - si no -> ruta principal
+  const chosenLegs = useMemo(() => {
+    if (!optimizationResult?.legs || optimizationResult.legs.length === 0) return null;
+    const useTramos = Object.keys(tramosElegidos).length > 0;
+    return optimizationResult.legs.map((leg, i) => {
+      let choice: number;
+      if (useTramos) {
+        choice = tramosElegidos[i] ?? 0;
+      } else if (rutaElegida > 0 && leg.alternatives.length > 0) {
+        choice = 1;
+      } else {
+        choice = 0;
+      }
+      return choice === 0 ? leg.main : leg.alternatives[choice - 1] || leg.main;
+    });
+  }, [optimizationResult, tramosElegidos, rutaElegida]);
+
+  const hasRouteChoice = rutaElegida > 0 || Object.keys(tramosElegidos).length > 0;
+
+  /**
+   * Resultado con los tiempos recalculados para la ruta elegida:
+   *   - T_manejo y distancia = suma de los tramos elegidos
+   *   - T_total = T_manejo + abordaje
+   *   - Hora de salida según el ancla (ida: salida inversa H_llegada - T_total;
+   *     si se fijó la 1ª parada, se ancla en ella)
+   *   - ETAs por parada redistribuidas según los tramos elegidos
+   * Sin alternativas elegidas devuelve el resultado original (cero cambios).
+   */
+  const displayResult: RouteOptimizationResult | null = useMemo(() => {
+    if (!optimizationResult || !chosenLegs || !hasRouteChoice) return optimizationResult;
+
+    const N = optimizationResult.paradas_ordenadas.length;
+    const abordajeTotal = optimizationResult.tiempo_abordaje_total_min;
+    const manejoMin = Math.round(chosenLegs.reduce((s, a) => s + a.durationMin, 0) * 10) / 10;
+    const distanciaKm = Math.round(chosenLegs.reduce((s, a) => s + a.distanceKm, 0) * 10) / 10;
+    const totalMin = Math.round((manejoMin + abordajeTotal) * 10) / 10;
+
+    // Hora de salida según el ancla del horario (misma lógica que calculateOptimizedRoute)
+    let salidaMin: number;
+    if (horaSalidaDeseada) {
+      salidaMin = timeStringToMinutes(horaSalidaDeseada) - chosenLegs[0].durationMin;
+    } else if (tipoTrayecto === 'ida') {
+      const llegada = horaLlegadaDeseada || horaLlegada;
+      salidaMin = timeStringToMinutes(llegada) - totalMin;
+    } else {
+      salidaMin = timeStringToMinutes(optimizationResult.hora_salida_estimada);
+    }
+    const salida = minutesToTimeString(salidaMin);
+
+    // ETAs por parada: salida + tramos acumulados + abordaje por alumno
+    const perStopAbordaje = N > 0 ? abordajeTotal / N : 0;
+    let running = salidaMin;
+    const paradas = optimizationResult.paradas_ordenadas.map((p, k) => {
+      const leg = chosenLegs[k] || chosenLegs[chosenLegs.length - 1];
+      running += leg.durationMin;
+      const eta = minutesToTimeString(running);
+      running += perStopAbordaje;
+      return {
+        ...p,
+        hora_estimada: eta,
+        distancia_desde_anterior_km: Math.round(leg.distanceKm * 10) / 10,
+        tiempo_desde_anterior_min: Math.round(leg.durationMin * 10) / 10,
+      };
+    });
+
+    return {
+      ...optimizationResult,
+      hora_salida_estimada: salida,
+      tiempo_manejo_min: manejoMin,
+      tiempo_total_min: totalMin,
+      distancia_total_km: distanciaKm,
+      paradas_ordenadas: paradas,
+    };
+  }, [optimizationResult, chosenLegs, hasRouteChoice, horaSalidaDeseada, horaLlegadaDeseada, horaLlegada, tipoTrayecto]);
+
+  // Revalida el horario cuando cambian los tiempos por la ruta/alternativas elegidas
+  useEffect(() => {
+    if (!displayResult) return;
+    if (horaSalidaDeseada && horaLlegadaDeseada) {
+      const driveBaseToStop1 =
+        hasRouteChoice && chosenLegs
+          ? chosenLegs[0].durationMin
+          : displayResult.drive_time_base_to_primera_parada_min;
+      const tiempoDesdePrimeraParada = Math.max(
+        0,
+        Math.round((displayResult.tiempo_total_min - driveBaseToStop1) * 10) / 10
+      );
+      setHorarioValidacion(
+        validateSchedule(
+          horaSalidaDeseada,
+          horaLlegadaDeseada,
+          tiempoDesdePrimeraParada,
+          displayResult.paradas_ordenadas.length
+        )
+      );
+    } else {
+      setHorarioValidacion(null);
+    }
+  }, [displayResult, horaSalidaDeseada, horaLlegadaDeseada, chosenLegs, hasRouteChoice]);
+
   const mapPolyline = hasTramoChoices
     ? tramosPolyline
     : altElegida
@@ -653,7 +757,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
     if (!optimizationResult) return;
     const plan: JourneyPlan = {
       tipo_trayecto: tipo,
-      result: optimizationResult,
+      result: displayResult || optimizationResult,
       studentIds:
         orderedStudentIds.length > 0
           ? orderedStudentIds
@@ -1405,7 +1509,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
       {/* Right Content Area: Results Formula & Map Preview & Stop Reorder Table */}
       <div className="flex-1 min-h-0 flex flex-col p-4 space-y-4 overflow-y-auto">
         {/* INVERSE DEPARTURE / FORWARD COMPLETION TIME HERO CARD */}
-        {optimizationResult && (
+        {displayResult && (
           <div className="rounded-2xl border-2 border-primary/40 bg-gradient-to-r from-slate-900 via-slate-900 to-amber-950/30 p-4 sm:p-5 shadow-2xl">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -1415,27 +1519,27 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
                 <div className="mt-1 flex items-baseline gap-2">
                   <h3 className="text-2xl sm:text-3xl font-black text-ink">
                     {tipoTrayecto === 'ida' ? 'Hora de Salida de Base:' : 'Hora de Salida del Colegio:'}{' '}
-                    <span className="text-primary">{optimizationResult.hora_salida_estimada}</span>
+                    <span className="text-primary">{displayResult.hora_salida_estimada}</span>
                   </h3>
                 </div>
                 <p className="text-xs text-muted mt-0.5">
                   {horarioValidacion ? (
                     <>
-                      Salida de base: <b className="text-primary">{optimizationResult.hora_salida_estimada.substring(0, 5)}</b> · 1ª parada:{' '}
+                      Salida de base: <b className="text-primary">{displayResult.hora_salida_estimada.substring(0, 5)}</b> · 1ª parada:{' '}
                       <b className="text-primary">{horaSalidaDeseada.substring(0, 5)}</b> · Llegada estimada:{' '}
                       <b className={horarioValidacion.valido ? 'text-emerald-600' : 'text-alert'}>
                         {horarioValidacion.horaLlegadaEstimada.substring(0, 5)}
                       </b>{' '}
                       · Llegada deseada: <span className="text-ink font-semibold">{horaLlegadaDeseada.substring(0, 5)}</span> · T_total:{' '}
-                      {optimizationResult.tiempo_total_min} min · {selectedStudentIds.length} paradas.
+                      {displayResult.tiempo_total_min} min · {selectedStudentIds.length} paradas.
                     </>
                   ) : tipoTrayecto === 'ida' ? (
                     <>
-                      El conductor debe partir a las <b className="text-primary">{optimizationResult.hora_salida_estimada}</b> para arribar a <span className="text-ink font-semibold">{selectedColegio.nombre}</span> exactamente a las <span className="text-primary font-semibold">{horaLlegada.substring(0, 5)}</span>.
+                      El conductor debe partir a las <b className="text-primary">{displayResult.hora_salida_estimada}</b> para arribar a <span className="text-ink font-semibold">{selectedColegio.nombre}</span> exactamente a las <span className="text-primary font-semibold">{horaLlegada.substring(0, 5)}</span>.
                     </>
                   ) : (
                     <>
-                      Partiendo del colegio a las <b className="text-primary">{optimizationResult.hora_salida_estimada}</b>, la entrega del último alumno se completará en aprox. <b className="text-ink">{optimizationResult.tiempo_total_min} min</b>.
+                      Partiendo del colegio a las <b className="text-primary">{displayResult.hora_salida_estimada}</b>, la entrega del último alumno se completará en aprox. <b className="text-ink">{displayResult.tiempo_total_min} min</b>.
                     </>
                   )}
                 </p>
@@ -1445,15 +1549,15 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
               <div className="rounded-xl bg-surface/95 border border-line p-3 text-xs space-y-1">
                 <div className="flex justify-between gap-4 text-muted">
                   <span>T_manejo proyectado:</span>
-                  <b className="text-ink">{optimizationResult.tiempo_manejo_min} min</b>
+                  <b className="text-ink">{displayResult.tiempo_manejo_min} min</b>
                 </div>
                 <div className="flex justify-between gap-4 text-muted">
                   <span>{tipoTrayecto === 'ida' ? 'T_abordaje' : 'T_desembarque'} ({selectedStudentIds.length} × {tiempoAbordajeMin}):</span>
-                  <b className="text-ink">{optimizationResult.tiempo_abordaje_total_min} min</b>
+                  <b className="text-ink">{displayResult.tiempo_abordaje_total_min} min</b>
                 </div>
                 <div className="border-t border-line pt-1 flex justify-between gap-4 font-bold text-primary">
                   <span>T_total acumulado:</span>
-                  <span>{optimizationResult.tiempo_total_min} min ({optimizationResult.distancia_total_km} km)</span>
+                  <span>{displayResult.tiempo_total_min} min ({displayResult.distancia_total_km} km)</span>
                 </div>
               </div>
             </div>
@@ -1646,8 +1750,8 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
             origen={origen}
             onOriginChange={onUpdateOrigen}
             paradas={
-              optimizationResult
-                ? optimizationResult.paradas_ordenadas.map((p) => ({
+              displayResult
+                ? displayResult.paradas_ordenadas.map((p) => ({
                     id: p.alumno_id,
                     ruta_id: 'preview',
                     alumno_id: p.alumno_id,
@@ -1861,7 +1965,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
               >
                 {orderedStudentIds.map((studentId, idx) => {
                   const student = alumnosMap.get(studentId);
-                  const stopMeta = optimizationResult?.paradas_ordenadas.find((p) => p.alumno_id === studentId);
+                  const stopMeta = displayResult?.paradas_ordenadas.find((p) => p.alumno_id === studentId);
 
                   return (
                     <StopRow
