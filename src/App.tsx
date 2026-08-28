@@ -10,6 +10,7 @@ import {
   Cliente,
   Colegio,
   Conductor,
+  Pago,
   ParadaRuta,
   Representante,
   RutaDiaria
@@ -18,6 +19,7 @@ import {
   INITIAL_DRIVER_ORIGIN
 } from './services/mockData';
 import { calculateOptimizedRoute, normalizeDays } from './services/routeCalculator';
+import { normalizeSiblingIds } from './services/siblings';
 import { DriverPanelSimple } from './components/Driver/DriverPanelSimple';
 import { RouteHistory } from './components/Admin/RouteHistory';
 import { RouteReviewView } from './components/Admin/RouteReviewView';
@@ -42,6 +44,7 @@ import { SchoolManager } from './components/Admin/SchoolManager';
 import { DriverManager } from './components/Admin/DriverManager';
 import { SqlSchemaViewer } from './components/Admin/SqlSchemaViewer';
 import { ClientManager } from './components/Admin/ClientManager';
+import { BillingManager } from './components/Admin/BillingManager';
 import type { CsvAlumnoRow } from './services/clientCsvImport';
 import { PWAInstallBanner } from './components/PWA/PWAInstallBanner';
 import { PWAUpdateBanner } from './components/PWA/PWAUpdateBanner';
@@ -58,6 +61,8 @@ import {
   upsertConductorInstant,
   deleteConductorInstant,
   updateAlumnoActivoRutasInstant,
+  upsertPagoInstant,
+  deletePagoInstant,
   saveRutaInstant,
   updateParadaEstadoInstant,
   updateRutaEstadoInstant,
@@ -93,7 +98,7 @@ export type AuthSession =
   | { type: 'parent'; studentId: string }
   | null;
 
-const STAFF_VIEWS: StaffView[] = ['home', 'driver', 'parent', 'planner', 'students', 'schools', 'drivers', 'sql', 'history', 'review', 'clientes'];
+const STAFF_VIEWS: StaffView[] = ['home', 'driver', 'parent', 'planner', 'students', 'schools', 'drivers', 'sql', 'history', 'review', 'clientes', 'billing'];
 
 /** Normaliza el resultado de db.useQuery a un array (puede venir como objeto keyed por id). */
 function toList(raw: any): any[] {
@@ -364,6 +369,7 @@ export default function App() {
       conductores: ent(hasScope),
       rutas_diarias: ent(hasScope),
       paradas_ruta: ent(hasScope),
+      pagos: ent(hasScope),
       tracking_logs: ent(hasScope),
       usuarios: {}, // globales (resolución de login / superadmin)
     };
@@ -521,6 +527,8 @@ export default function App() {
           modalidad_servicio: override?.modalidad_servicio || alu.modalidad_servicio || 'ida_y_vuelta',
           activo_en_rutas: override?.activo_en_rutas ?? alu.activo_en_rutas !== false,
           dias_ruta: override?.dias_ruta || normalizeDays(alu.dias_ruta),
+          hermano_ids: normalizeSiblingIds(alu.hermano_ids),
+          cuota_mensual: Number(alu.cuota_mensual || 0),
           cliente_id: alu.cliente_id || undefined,
           created_at: alu.created_at,
           colegio: colegiosMap.get(colId) || selectedColegio,
@@ -621,6 +629,33 @@ export default function App() {
     alumnos.forEach((a) => map.set(a.id, a));
     return map;
   }, [alumnos]);
+
+  const pagos: Pago[] = useMemo(() => {
+    const raw = instantData?.pagos;
+    let list: any[] = [];
+    if (Array.isArray(raw)) {
+      list = raw;
+    } else if (raw && typeof raw === 'object') {
+      list = Object.entries(raw).map(([k, v]: [string, any]) => ({ id: v?.id || k, ...v }));
+    }
+
+    return list.map((p: any) => ({
+      id: String(p.id),
+      alumno_id: String(p.alumno_id),
+      representante_id: String(p.representante_id),
+      monto: Number(p.monto || 0),
+      fecha_pago: p.fecha_pago || '',
+      mes_cobrado: p.mes_cobrado || '',
+      concepto: p.concepto || '',
+      metodo_pago: (p.metodo_pago as any) || 'efectivo',
+      estado: (p.estado as any) || 'pagado',
+      notas: p.notas || '',
+      cliente_id: p.cliente_id || undefined,
+      created_at: p.created_at,
+      alumno: alumnosMap.get(String(p.alumno_id)),
+      representante: repsMap.get(String(p.representante_id)),
+    }));
+  }, [instantData?.pagos, alumnosMap, repsMap]);
 
   // Students belonging to current selected school (or all if not specified)
   const schoolAlumnos = useMemo(() => {
@@ -781,33 +816,76 @@ export default function App() {
   }, [instantLoading, instantData, reviewEntry]);
 
   // Handlers with InstantDB Real-Time Synchronization
-  const handleSaveSingleAlumno = async (newAlumno: Alumno, newRep: Representante) => {
+  const handleSaveAlumnoWithSiblings = async (
+    newAlumno: Alumno,
+    newRep: Representante,
+    siblings: Alumno[]
+  ) => {
     try {
       await upsertAlumnoInstant(newAlumno, newRep);
     } catch (e) {
       console.warn('InstantDB sync fallback to localStorage:', e);
     }
+    for (const sib of siblings) {
+      try {
+        await upsertAlumnoInstant(sib, newRep);
+      } catch (e) {
+        console.warn('InstantDB sibling sync fallback:', e);
+      }
+    }
+
     // Also update localStorage for resilience
     const updatedReps = representantes.some((r) => r.id === newRep.id)
       ? representantes.map((r) => (r.id === newRep.id ? newRep : r))
       : [...representantes, newRep];
-    const updatedAlumnos = alumnos.some((a) => a.id === newAlumno.id)
-      ? alumnos.map((a) => (a.id === newAlumno.id ? newAlumno : a))
-      : [...alumnos, newAlumno];
+    const allSaved = [newAlumno, ...siblings];
+    let updatedAlumnos = alumnos;
+    for (const saved of allSaved) {
+      updatedAlumnos = updatedAlumnos.some((a) => a.id === saved.id)
+        ? updatedAlumnos.map((a) => (a.id === saved.id ? saved : a))
+        : [...updatedAlumnos, saved];
+    }
     localStorage.setItem('rutaescolar_alumnos', JSON.stringify(updatedAlumnos));
     localStorage.setItem('rutaescolar_representantes', JSON.stringify(updatedReps));
 
-    // Force React refresh: store full snapshot so modalidad/dias/activo reflect instantly
-    setAlumnosOverride((prev) => ({
-      ...(prev || {}),
-      [newAlumno.id]: {
-        nombre: newAlumno.nombre,
-        modalidad_servicio: newAlumno.modalidad_servicio,
-        activo_en_rutas: newAlumno.activo_en_rutas !== false,
-        dias_ruta: newAlumno.dias_ruta,
-        direccion_recogida: newAlumno.direccion_recogida,
-      },
-    }));
+    // Force React refresh: store full snapshot so modalidad/dias/activo/hermanos reflect instantly
+    setAlumnosOverride((prev) => {
+      const next = { ...(prev || {}) };
+      for (const saved of allSaved) {
+        next[saved.id] = {
+          nombre: saved.nombre,
+          modalidad_servicio: saved.modalidad_servicio,
+          activo_en_rutas: saved.activo_en_rutas !== false,
+          dias_ruta: saved.dias_ruta,
+          direccion_recogida: saved.direccion_recogida,
+          hermano_ids: saved.hermano_ids,
+          cuota_mensual: saved.cuota_mensual,
+        };
+      }
+      return next;
+    });
+  };
+
+  const handleSavePago = async (pago: Pago) => {
+    try {
+      await upsertPagoInstant(pago);
+    } catch (e) {
+      console.warn('InstantDB pago sync fallback:', e);
+    }
+    const updated = pagos.some((p) => p.id === pago.id)
+      ? pagos.map((p) => (p.id === pago.id ? pago : p))
+      : [...pagos, pago];
+    localStorage.setItem('rutaescolar_pagos', JSON.stringify(updated));
+  };
+
+  const handleDeletePago = async (id: string) => {
+    try {
+      await deletePagoInstant(id);
+    } catch (e) {
+      console.warn('InstantDB pago delete fallback:', e);
+    }
+    const updated = pagos.filter((p) => p.id !== id);
+    localStorage.setItem('rutaescolar_pagos', JSON.stringify(updated));
   };
 
   const handleDeleteAlumno = async (id: string) => {
@@ -1454,13 +1532,23 @@ export default function App() {
               alumnos={alumnos}
               representantes={representantes}
               colegios={colegios}
-              onSaveAlumno={handleSaveSingleAlumno}
+              onSaveAlumnoWithSiblings={handleSaveAlumnoWithSiblings}
               onDeleteAlumno={handleDeleteAlumno}
               onToggleActivoRutas={handleToggleActivoRutas}
               onOpenParentPortal={(id) => {
                 setSelectedParentStudentId(id);
                 setCurrentView('parent');
               }}
+            />
+          )}
+
+          {currentView === 'billing' && (
+            <BillingManager
+              alumnos={alumnos}
+              representantes={representantes}
+              pagos={pagos}
+              onSavePago={handleSavePago}
+              onDeletePago={handleDeletePago}
             />
           )}
 

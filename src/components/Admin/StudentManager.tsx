@@ -25,13 +25,18 @@ import {
 import { Alumno, Colegio, ModalidadTransporte, Representante } from '../../types';
 import { ensureUUID } from '../../services/instantDb';
 import { normalizeDays } from '../../services/routeCalculator';
+import { normalizeSiblingIds } from '../../services/siblings';
 import { LocationPicker } from '../Map/LocationPicker';
 
 interface StudentManagerProps {
   alumnos: Alumno[];
   representantes: Representante[];
   colegios: Colegio[];
-  onSaveAlumno: (alumno: Alumno, representante: Representante) => void;
+  onSaveAlumnoWithSiblings: (
+    alumno: Alumno,
+    representante: Representante,
+    siblings: Alumno[]
+  ) => void;
   onDeleteAlumno: (alumnoId: string) => void;
   onOpenParentPortal: (studentId: string) => void;
   onToggleActivoRutas?: (alumnoId: string, activo: boolean) => void;
@@ -41,7 +46,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
   alumnos,
   representantes,
   colegios,
-  onSaveAlumno,
+  onSaveAlumnoWithSiblings,
   onDeleteAlumno,
   onOpenParentPortal,
   onToggleActivoRutas
@@ -66,6 +71,8 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
   const [nombreRep, setNombreRep] = useState<string>('');
   const [telefonoWhatsApp, setTelefonoWhatsApp] = useState<string>('+593990000000');
   const [emailRep, setEmailRep] = useState<string>('');
+  const [hermanoIds, setHermanosIds] = useState<string[]>([]);
+  const [cuotaMensual, setCuotaMensual] = useState<number>(0);
 
   const handleOpenAdd = () => {
     setEditingAlumnoId(null);
@@ -82,6 +89,8 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     setNombreRep('');
     setTelefonoWhatsApp('+593991234567');
     setEmailRep('');
+    setHermanosIds([]);
+    setCuotaMensual(0);
     setIsModalOpen(true);
   };
 
@@ -102,12 +111,35 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     setNombreRep(rep?.nombre || '');
     setTelefonoWhatsApp(rep?.telefono_whatsapp || '+59399');
     setEmailRep(rep?.email || '');
+    setHermanosIds(normalizeSiblingIds(alumno.hermano_ids));
+    setCuotaMensual(alumno.cuota_mensual || 0);
     setIsModalOpen(true);
+  };
+
+  const toggleHermano = (id: string) => {
+    const isAdding = !hermanoIds.includes(id);
+    setHermanosIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+
+    if (isAdding) {
+      const sib = alumnos.find((a) => a.id === id);
+      if (sib) {
+        setLat(sib.lat);
+        setLng(sib.lng);
+        setDireccion(sib.direccion_recogida);
+        setNombreRep(sib.representante?.nombre || nombreRep);
+        setTelefonoWhatsApp(sib.representante?.telefono_whatsapp || telefonoWhatsApp);
+        setEmailRep(sib.representante?.email || emailRep);
+      }
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!nombreAlumno.trim() || !nombreRep.trim()) return;
+
+    const aluId = ensureUUID(editingAlumnoId || undefined);
 
     const rawRepId = editingAlumnoId
       ? alumnos.find((a) => a.id === editingAlumnoId)?.representante_id
@@ -117,35 +149,61 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
     const existingRep = representantes.find((r) => r.id === repId);
     const magicToken = existingRep?.magic_token || 'tok-' + Math.random().toString(36).substring(2, 10);
 
+    // Los hermanos comparten la MISMA ubicación y el MISMO representante.
+    // Se canoniza tomando los datos del primer hermano seleccionado, de modo que
+    // todos los miembros del grupo queden idénticos aunque el formulario difiera.
+    const selectedSiblings = alumnos.filter((a) => hermanoIds.includes(a.id));
+    const canonical = selectedSiblings[0];
+    const canonicalRepId = canonical?.representante_id || repId;
+    const canonicalRep = representantes.find((r) => r.id === canonicalRepId);
+
     const newRep: Representante = {
-      id: repId,
-      nombre: nombreRep.trim(),
-      telefono_whatsapp: telefonoWhatsApp.trim(),
-      magic_token: magicToken,
-      email: emailRep.trim()
+      id: canonicalRepId,
+      nombre: canonicalRep?.nombre || nombreRep.trim(),
+      telefono_whatsapp: canonicalRep?.telefono_whatsapp || telefonoWhatsApp.trim(),
+      magic_token: canonicalRep?.magic_token || magicToken,
+      email: canonicalRep?.email || emailRep.trim()
     };
 
+    const finalLat = canonical ? canonical.lat : Number(lat);
+    const finalLng = canonical ? canonical.lng : Number(lng);
+    const finalDireccion = canonical ? canonical.direccion_recogida : direccion.trim();
+
+    const group = Array.from(new Set([aluId, ...hermanoIds]));
+
     const targetColegio = colegios.find((c) => c.id === colegioId) || colegios[0];
-    const aluId = ensureUUID(editingAlumnoId || undefined);
 
     const newAlumno: Alumno = {
       id: aluId,
       nombre: nombreAlumno.trim(),
       colegio_id: targetColegio ? targetColegio.id : (colegioId ? ensureUUID(colegioId) : colegios[0]?.id || ensureUUID()),
-      representante_id: repId,
-      direccion_recogida: direccion.trim(),
-      lat: Number(lat),
-      lng: Number(lng),
+      representante_id: canonicalRepId,
+      direccion_recogida: finalDireccion,
+      lat: finalLat,
+      lng: finalLng,
       grado: grado.trim(),
       notas_medicas: notas.trim(),
       tiempo_abordaje_estimado_min: Number(tiempoAbordaje) || 2.5,
       modalidad_servicio: modalidadServicio,
       dias_ruta: diasRuta.length > 0 ? diasRuta : ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'],
+      hermano_ids: group.filter((id) => id !== aluId),
+      cuota_mensual: Number(cuotaMensual) || 0,
       representante: newRep,
       colegio: targetColegio
     };
 
-    onSaveAlumno(newAlumno, newRep);
+    const siblings: Alumno[] = selectedSiblings.map((sib) => ({
+      ...sib,
+      representante_id: canonicalRepId,
+      direccion_recogida: finalDireccion,
+      lat: finalLat,
+      lng: finalLng,
+      hermano_ids: group.filter((id) => id !== sib.id),
+      representante: newRep,
+      colegio: colegios.find((c) => c.id === sib.colegio_id) || sib.colegio || targetColegio
+    }));
+
+    onSaveAlumnoWithSiblings(newAlumno, newRep, siblings);
     setIsModalOpen(false);
   };
 
@@ -303,6 +361,12 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                     <School className="h-3 w-3 shrink-0" />
                     <span className="truncate max-w-[150px]">{targetSchool?.nombre || 'Colegio'}</span>
                   </div>
+
+                  {normalizeSiblingIds(alumno.hermano_ids).length > 0 && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                      👨‍👩‍👧 {normalizeSiblingIds(alumno.hermano_ids).length + 1} hermanos
+                    </span>
+                  )}
                 </div>
 
                 {/* Days of week chips */}
@@ -718,6 +782,19 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                 </div>
               </div>
 
+              <div>
+                <label className="font-bold text-ink block mb-1">Mensualidad ($)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={cuotaMensual}
+                  onChange={(e) => setCuotaMensual(parseFloat(e.target.value) || 0)}
+                  placeholder="Ej. 45.00"
+                  className="w-full rounded-lg bg-canvas border border-line p-2 text-ink"
+                />
+              </div>
+
               {/* Representative Information */}
               <div className="border-t border-line pt-2 space-y-2">
                 <span className="font-bold text-primary block">Datos del Representante (Para WhatsApp & Magic Link)</span>
@@ -755,6 +832,36 @@ export const StudentManager: React.FC<StudentManagerProps> = ({
                     placeholder="representante@gmail.com"
                     className="w-full rounded-lg bg-canvas border border-line p-2 text-ink"
                   />
+                </div>
+              </div>
+
+              {/* Sibling selection */}
+              <div className="border-t border-line pt-2 space-y-2">
+                <span className="font-bold text-primary block">Hermanos (misma parada y mismo representante)</span>
+                <p className="text-[10px] text-muted">
+                  Al marcar un hermano, este alumno copiará su ubicación exacta y datos del representante.
+                </p>
+                <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1">
+                  {alumnos
+                    .filter((a) => a.id !== editingAlumnoId)
+                    .map((a) => (
+                      <label
+                        key={a.id}
+                        className={`flex items-center gap-2 rounded-lg border p-2 text-xs cursor-pointer transition-all ${
+                          hermanoIds.includes(a.id)
+                            ? 'bg-amber-50 border-amber-300 text-ink'
+                            : 'bg-surface border-line text-muted hover:border-line'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={hermanoIds.includes(a.id)}
+                          onChange={() => toggleHermano(a.id)}
+                          className="accent-amber-500 h-4 w-4 rounded cursor-pointer"
+                        />
+                        <span className="truncate">{a.nombre}</span>
+                      </label>
+                    ))}
                 </div>
               </div>
 

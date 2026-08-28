@@ -82,10 +82,33 @@ export interface Alumno {
   modalidad_servicio?: ModalidadTransporte; // 'ida_y_vuelta' | 'solo_ida' | 'solo_vuelta'
   activo_en_rutas?: boolean; // false = excluido de las rutas (no se le asigna parada)
   dias_ruta?: string[]; // días de la semana en que usa la ruta: ['Lun','Mar','Mié','Jue','Vie']
+  hermano_ids?: string[]; // ids de hermanos (lista simétrica entre el grupo)
+  cuota_mensual?: number; // mensualidad del servicio para este alumno
   cliente_id?: string;
   created_at?: string;
   // Joined fields for UI convenience
   colegio?: Colegio;
+  representante?: Representante;
+}
+
+export type MetodoPago = 'efectivo' | 'transferencia' | 'tarjeta' | 'otro';
+export type EstadoPago = 'pagado' | 'pendiente' | 'parcial';
+
+export interface Pago {
+  id: string;
+  alumno_id: string;
+  representante_id: string;
+  monto: number; // monto abonado
+  fecha_pago: string; // YYYY-MM-DD
+  mes_cobrado: string; // YYYY-MM (mensualidad que cubre)
+  concepto: string;
+  metodo_pago: MetodoPago;
+  estado: EstadoPago;
+  notas?: string;
+  cliente_id?: string;
+  created_at?: string;
+  // Joined fields for UI convenience
+  alumno?: Alumno;
   representante?: Representante;
 }
 

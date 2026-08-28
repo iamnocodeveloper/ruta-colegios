@@ -1,5 +1,5 @@
 import React from 'react';
-import { Menu, X, Search, Bell, Settings, LogOut, Home, Compass, Sparkles, Users, School, Truck, History } from 'lucide-react';
+import { Menu, X, Search, Bell, Settings, LogOut, Home, Compass, Sparkles, Users, School, Truck, History, Wallet } from 'lucide-react';
 import { InstantSyncBadge } from '../Auth/InstantSyncBadge';
 import { APP_VERSION } from '../../services/appUpdate';
 import type { StaffView } from './AppSidebar';
@@ -26,6 +26,7 @@ const VIEW_TITLES: Record<StaffView, string> = {
   history: 'Historial de Rutas',
   review: 'Revisión de Ruta',
   clientes: 'Clientes',
+  billing: 'Cobranza',
 };
 
 const MOBILE_ITEMS: { id: string; view: StaffView; label: string; icon: React.ElementType }[] = [
@@ -35,6 +36,7 @@ const MOBILE_ITEMS: { id: string; view: StaffView; label: string; icon: React.El
   { id: 'nav-students', view: 'students', label: 'Alumnos', icon: Users },
   { id: 'nav-schools', view: 'schools', label: 'Colegios', icon: School },
   { id: 'nav-drivers', view: 'drivers', label: 'Conductores', icon: Truck },
+  { id: 'nav-billing', view: 'billing', label: 'Cobranza', icon: Wallet },
   { id: 'nav-history', view: 'history', label: 'Historial', icon: History },
 ];
 

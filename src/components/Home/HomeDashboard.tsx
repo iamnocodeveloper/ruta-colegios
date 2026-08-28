@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import type { Alumno, Colegio, Conductor, RutaDiaria } from '../../types';
 import { formatFriendlyTime } from '../../services/routeCalculator';
+import { countSiblingsInStop } from '../../services/siblings';
 import type { StaffView } from '../Layout/AppSidebar';
 
 interface HomeDashboardProps {
@@ -82,6 +83,11 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ ruta, colegio, alu
   const [filter, setFilter] = useState<'todos' | 'ruta' | 'alumnos' | 'sistema'>('todos');
 
   const paradas = ruta.paradas || [];
+  const alumnosMap = useMemo(() => {
+    const map = new Map<string, Alumno>();
+    alumnos.forEach((a) => map.set(a.id, a));
+    return map;
+  }, [alumnos]);
   const totalStops = paradas.length;
   const completedStops = paradas.filter((p) => p.estado === 'recogido' || p.estado === 'completado').length;
   const absentStops = paradas.filter((p) => p.estado === 'ausente').length;
@@ -359,6 +365,7 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ ruta, colegio, alu
               const status = getStopStatusLabel(p.estado);
               const StatusIcon = status.icon;
               const isLast = idx === paradas.length - 1;
+              const siblingCount = countSiblingsInStop(p, paradas, alumnosMap);
               return (
                 <div key={p.id} className="relative flex gap-3 pb-4">
                   {!isLast && <span className="absolute left-[13px] top-7 bottom-0 w-px border-l border-dashed border-line" />}
@@ -367,7 +374,14 @@ export const HomeDashboard: React.FC<HomeDashboardProps> = ({ ruta, colegio, alu
                   </div>
                   <div className="flex-1 min-w-0 rounded-2xl bg-soft-gray px-3 py-2.5">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="truncate text-sm font-extrabold text-ink">{p.alumno?.nombre || 'Alumno'}</p>
+                      <p className="truncate text-sm font-extrabold text-ink">
+                        {p.alumno?.nombre || 'Alumno'}
+                        {siblingCount >= 2 && (
+                          <span className="ml-1.5 text-[9px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 rounded">
+                            👨‍👩‍👧 {siblingCount} hermanos
+                          </span>
+                        )}
+                      </p>
                       <span className="shrink-0 text-[11px] font-extrabold text-primary">{formatFriendlyTime(p.hora_estimada)}</span>
                     </div>
                     <p className="mt-0.5 truncate text-[11px] font-semibold text-muted">

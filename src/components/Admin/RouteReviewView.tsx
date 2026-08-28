@@ -26,6 +26,7 @@ import { SchoolRouteMap } from '../Map/SchoolRouteMap';
 import { formatFriendlyTime } from '../../services/routeCalculator';
 import { generateRoutePdf } from '../../services/pdfReport';
 import { getJourneys } from '../../services/routeJourneys';
+import { countSiblingsInStop } from '../../services/siblings';
 import { ParadaRuta } from '../../types';
 
 interface RouteReviewViewProps {
@@ -99,6 +100,7 @@ const JourneyBlock: React.FC<JourneyBlockProps> = ({
             const repPhoneDigits = repPhone.replace(/[^0-9]/g, '');
             const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${p.lat},${p.lng}`)}`;
             const wazeUrl = `https://waze.com/ul?ll=${p.lat},${p.lng}&navigate=yes`;
+            const siblingCount = countSiblingsInStop(p, paradas, alumnosMap);
             return (
               <div key={p.id || idx} className="rounded-xl bg-soft-gray px-3 py-2.5 text-xs">
                 <div className="flex items-center gap-3">
@@ -106,7 +108,14 @@ const JourneyBlock: React.FC<JourneyBlockProps> = ({
                     {p.orden}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="font-bold text-ink truncate">{alumno?.nombre || 'Alumno'}</p>
+                    <p className="font-bold text-ink truncate">
+                      {alumno?.nombre || 'Alumno'}
+                      {siblingCount >= 2 && (
+                        <span className="ml-1.5 text-[9px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 rounded">
+                          👨‍👩‍👧 {siblingCount} hermanos
+                        </span>
+                      )}
+                    </p>
                     <p className="text-[10px] text-muted truncate">{alumno?.direccion_recogida || 'Dirección no registrada'}</p>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">

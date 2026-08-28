@@ -12,6 +12,7 @@ import {
   Cliente,
   Colegio,
   Conductor,
+  Pago,
   ParadaRuta,
   Representante,
   RutaDiaria,
@@ -68,6 +69,8 @@ const _schema = i.schema({
       modalidad_servicio: i.string().optional(),
       activo_en_rutas: i.boolean().optional(),
       dias_ruta: i.json().optional(),
+      hermano_ids: i.json().optional(),
+      cuota_mensual: i.number().optional(),
       cliente_id: i.string().optional(),
       created_at: i.string().optional(),
     }),
@@ -125,6 +128,19 @@ const _schema = i.schema({
       tiempo_desde_anterior_min: i.number().optional(),
       lat: i.number(),
       lng: i.number(),
+      cliente_id: i.string().optional(),
+      created_at: i.string().optional(),
+    }),
+    pagos: i.entity({
+      alumno_id: i.string(),
+      representante_id: i.string(),
+      monto: i.number(),
+      fecha_pago: i.string(),
+      mes_cobrado: i.string(),
+      concepto: i.string(),
+      metodo_pago: i.string(),
+      estado: i.string(),
+      notas: i.string().optional(),
       cliente_id: i.string().optional(),
       created_at: i.string().optional(),
     }),
@@ -437,6 +453,8 @@ export async function upsertAlumnoInstant(alumno: Alumno, rep?: Representante) {
       modalidad_servicio: alumno.modalidad_servicio || 'ida_y_vuelta',
       activo_en_rutas: alumno.activo_en_rutas !== false,
       dias_ruta: alumno.dias_ruta || ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'],
+      hermano_ids: alumno.hermano_ids || [],
+      cuota_mensual: Number(alumno.cuota_mensual || 0),
       ...(multitenantEnabled() ? { cliente_id: alumno.cliente_id || '' } : {}),
       created_at: alumno.created_at || new Date().toISOString(),
     })
@@ -452,6 +470,37 @@ export async function upsertAlumnoInstant(alumno: Alumno, rep?: Representante) {
 export async function deleteAlumnoInstant(alumnoId: string) {
   const safeId = ensureUUID(alumnoId);
   await db.transact([tx.alumnos[safeId].delete()]);
+}
+
+/**
+ * Upsert a payment record in InstantDB
+ */
+export async function upsertPagoInstant(pago: Pago) {
+  const pagoId = ensureUUID(pago.id);
+  await db.transact([
+    tx.pagos[pagoId].update({
+      alumno_id: ensureUUID(pago.alumno_id),
+      representante_id: ensureUUID(pago.representante_id),
+      monto: Number(pago.monto),
+      fecha_pago: pago.fecha_pago,
+      mes_cobrado: pago.mes_cobrado,
+      concepto: pago.concepto || '',
+      metodo_pago: pago.metodo_pago,
+      estado: pago.estado,
+      notas: pago.notas || '',
+      ...(multitenantEnabled() ? { cliente_id: pago.cliente_id || '' } : {}),
+      created_at: pago.created_at || new Date().toISOString(),
+    }),
+  ]);
+  return pagoId;
+}
+
+/**
+ * Delete a payment record from InstantDB
+ */
+export async function deletePagoInstant(pagoId: string) {
+  const safeId = ensureUUID(pagoId);
+  await db.transact([tx.pagos[safeId].delete()]);
 }
 
 /**
@@ -674,6 +723,7 @@ export async function migrateToClientes(data: any): Promise<boolean> {
       'conductores',
       'rutas_diarias',
       'paradas_ruta',
+      'pagos',
       'tracking_logs',
       'usuarios',
       'eventos_ruta',

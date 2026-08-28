@@ -43,6 +43,7 @@ import {
   updateParadaEstadoInstant,
   updateRutaEstadoInstant
 } from '../../services/instantDb';
+import { countSiblingsInStop } from '../../services/siblings';
 
 interface DriverPanelProps {
   ruta: RutaDiaria;
@@ -635,6 +636,7 @@ export const DriverPanel: React.FC<DriverPanelProps> = ({
                     {/* Stops items */}
                     {paradas.map((p, idx) => {
                       const student = alumnosMap.get(p.alumno_id) || p.alumno;
+                      const siblingCount = countSiblingsInStop(p, paradas, alumnosMap);
                       return (
                         <div
                           key={p.id}
@@ -646,6 +648,11 @@ export const DriverPanel: React.FC<DriverPanelProps> = ({
                           <div className="flex-1 min-w-0">
                             <span className="font-bold text-ink block truncate">
                               {student?.nombre || `Estudiante #${p.orden}`}
+                              {siblingCount >= 2 && (
+                                <span className="ml-1.5 text-[9px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 rounded">
+                                  👨‍👩‍👧 {siblingCount} hermanos
+                                </span>
+                              )}
                             </span>
                             <span className="text-[10px] text-muted block truncate">
                               {student?.direccion_recogida || 'Dirección guardada'}
@@ -730,6 +737,11 @@ export const DriverPanel: React.FC<DriverPanelProps> = ({
                           </span>
                           <h3 className="text-lg sm:text-xl font-black text-ink">
                             {currentStudent.nombre}
+                            {countSiblingsInStop(currentStop, paradas, alumnosMap) >= 2 && (
+                              <span className="ml-1.5 align-middle text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                                👨‍👩‍👧 {countSiblingsInStop(currentStop, paradas, alumnosMap)} hermanos
+                              </span>
+                            )}
                           </h3>
                           <p className="text-xs text-muted">{currentStudent.grado || 'Estudiante'}</p>
                         </div>

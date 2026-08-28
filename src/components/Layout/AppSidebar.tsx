@@ -1,7 +1,7 @@
 import React from 'react';
-import { Home, Compass, Sparkles, Users, School, Truck, History, Building2, ArrowRight } from 'lucide-react';
+import { Home, Compass, Sparkles, Users, School, Truck, History, Building2, Wallet, ArrowRight } from 'lucide-react';
 
-export type StaffView = 'home' | 'driver' | 'parent' | 'planner' | 'students' | 'schools' | 'drivers' | 'sql' | 'history' | 'review' | 'clientes';
+export type StaffView = 'home' | 'driver' | 'parent' | 'planner' | 'students' | 'schools' | 'drivers' | 'sql' | 'history' | 'review' | 'clientes' | 'billing';
 
 interface AppSidebarProps {
   currentView: StaffView;
@@ -23,6 +23,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'nav-students', view: 'students', label: 'Alumnos', icon: Users },
   { id: 'nav-schools', view: 'schools', label: 'Colegios', icon: School },
   { id: 'nav-drivers', view: 'drivers', label: 'Conductores', icon: Truck },
+  { id: 'nav-billing', view: 'billing', label: 'Cobranza', icon: Wallet },
   { id: 'nav-history', view: 'history', label: 'Historial', icon: History },
 ];
 

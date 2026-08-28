@@ -47,6 +47,8 @@ const _schema = i.schema({
       grado: i.string().optional(),
       notas_medicas: i.string().optional(),
       tiempo_abordaje_estimado_min: i.number().optional(), // Default: 2.5 min
+      hermano_ids: i.json().optional(), // ids de hermanos (misma parada)
+      cuota_mensual: i.number().optional(), // mensualidad por alumno
       created_at: i.string().optional(),
     }),
 
@@ -89,6 +91,20 @@ const _schema = i.schema({
       tiempo_desde_anterior_min: i.number().optional(),
       lat: i.number(),
       lng: i.number(),
+      created_at: i.string().optional(),
+    }),
+
+    // 5.1 Pagos (cobranza por alumno)
+    pagos: i.entity({
+      alumno_id: i.string(),
+      representante_id: i.string(),
+      monto: i.number(),
+      fecha_pago: i.string(),
+      mes_cobrado: i.string(), // 'YYYY-MM'
+      concepto: i.string(),
+      metodo_pago: i.string(), // efectivo | transferencia | tarjeta | otro
+      estado: i.string(), // pagado | pendiente | parcial
+      notas: i.string().optional(),
       created_at: i.string().optional(),
     }),
 
@@ -166,6 +182,8 @@ CREATE TABLE IF NOT EXISTS alumnos (
     grado VARCHAR(50),
     notas_medicas TEXT,
     tiempo_abordaje_estimado_min NUMERIC(4, 2) DEFAULT 2.50,
+    hermano_ids JSONB DEFAULT '[]'::jsonb,
+    cuota_mensual NUMERIC(10, 2) DEFAULT 0.00,
     geom GEOMETRY(Point, 4326) GENERATED ALWAYS AS (ST_SetSRID(ST_MakePoint(lng, lat), 4326)) STORED,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -231,6 +249,26 @@ CREATE TABLE IF NOT EXISTS paradas_ruta (
 CREATE INDEX IF NOT EXISTS idx_paradas_ruta_ruta_id ON paradas_ruta(ruta_id);
 CREATE INDEX IF NOT EXISTS idx_paradas_ruta_alumno_id ON paradas_ruta(alumno_id);
 CREATE INDEX IF NOT EXISTS idx_paradas_ruta_estado ON paradas_ruta(estado);
+
+-- 5.1 TABLA: pagos (cobranza)
+CREATE TABLE IF NOT EXISTS pagos (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    alumno_id UUID NOT NULL REFERENCES alumnos(id) ON DELETE CASCADE,
+    representante_id UUID NOT NULL REFERENCES representantes(id) ON DELETE CASCADE,
+    monto NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
+    fecha_pago DATE NOT NULL DEFAULT CURRENT_DATE,
+    mes_cobrado VARCHAR(7) NOT NULL,
+    concepto VARCHAR(150),
+    metodo_pago VARCHAR(20) NOT NULL DEFAULT 'efectivo' CHECK (metodo_pago IN ('efectivo', 'transferencia', 'tarjeta', 'otro')),
+    estado VARCHAR(20) NOT NULL DEFAULT 'pagado' CHECK (estado IN ('pagado', 'pendiente', 'parcial')),
+    notas TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_pagos_alumno ON pagos(alumno_id);
+CREATE INDEX IF NOT EXISTS idx_pagos_representante ON pagos(representante_id);
+CREATE INDEX IF NOT EXISTS idx_pagos_mes_cobrado ON pagos(mes_cobrado);
 
 -- 6. TABLA: tracking_log
 CREATE TABLE IF NOT EXISTS tracking_log (

@@ -27,6 +27,7 @@ import { RouteHistoryEntry, buildRouteReviewLink, deleteRouteHistory } from '../
 import { formatFriendlyTime } from '../../services/routeCalculator';
 import { generateRoutePdf } from '../../services/pdfReport';
 import { getJourneys } from '../../services/routeJourneys';
+import { countSiblingsInStop } from '../../services/siblings';
 
 interface RouteHistoryProps {
   history: RouteHistoryEntry[];
@@ -281,13 +282,26 @@ export const RouteHistory: React.FC<RouteHistoryProps> = ({
                                   </p>
                                 )}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                                  {g.stops.map((p, idx) => (
+                                  {g.stops.map((p, idx) => {
+                                    const map = new Map<string, any>();
+                                    g.stops.forEach((s) => {
+                                      if (s.alumno) map.set(s.alumno_id, s.alumno);
+                                    });
+                                    const siblingCount = countSiblingsInStop(p, g.stops, map);
+                                    return (
                                     <div key={p.id || idx} className="rounded-lg bg-soft-gray px-2.5 py-1.5 text-[11px]">
                                       <div className="flex items-center gap-2">
                                         <span className="flex h-5 w-5 items-center justify-center rounded-full bg-surface border border-line text-[9px] font-black text-primary shrink-0">
                                           {p.orden}
                                         </span>
-                                        <span className="truncate font-bold text-ink flex-1">{p.alumno?.nombre || 'Alumno'}</span>
+                                        <span className="truncate font-bold text-ink flex-1">
+                                          {p.alumno?.nombre || 'Alumno'}
+                                          {siblingCount >= 2 && (
+                                            <span className="ml-1.5 text-[8px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-1 rounded">
+                                              👨‍👩‍👧 {siblingCount} hermanos
+                                            </span>
+                                          )}
+                                        </span>
                                         <span className="text-muted font-mono">{formatFriendlyTime(p.hora_estimada)}</span>
                                         {stopStateIcon(p.estado)}
                                       </div>
@@ -312,7 +326,8 @@ export const RouteHistory: React.FC<RouteHistoryProps> = ({
                                         </a>
                                       </div>
                                     </div>
-                                  ))}
+                                    );
+                                  })}
                                 </div>
                               </div>
                             ))}

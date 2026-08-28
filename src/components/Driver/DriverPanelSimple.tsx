@@ -28,6 +28,7 @@ import { RouteHistoryEntry } from '../../services/routeHistory';
 import { formatFriendlyTime } from '../../services/routeCalculator';
 import { SchoolRouteMap } from '../Map/SchoolRouteMap';
 import { getJourneys, isCombinedRuta, JourneyKey } from '../../services/routeJourneys';
+import { countSiblingsInStop } from '../../services/siblings';
 
 export type ParadaEstado = 'pendiente' | 'recogido' | 'ausente';
 
@@ -372,6 +373,7 @@ export const DriverPanelSimple: React.FC<DriverPanelSimpleProps> = ({
             {paradas.map((parada, idx) => {
               const alumno = alumnosMap.get(parada.alumno_id);
               const isDone = parada.estado === 'recogido' || parada.estado === 'ausente';
+              const siblingCount = countSiblingsInStop(parada, paradas, alumnosMap);
               return (
                 <div key={parada.id} className={`rounded-card border p-4 shadow-soft flex flex-wrap items-center gap-3 transition-all ${
                   parada.estado === 'recogido' ? 'bg-emerald-50 border-emerald-200' :
@@ -385,6 +387,11 @@ export const DriverPanelSimple: React.FC<DriverPanelSimpleProps> = ({
                   <div className="min-w-0 flex-1">
                     <p className={`font-extrabold text-sm ${isDone ? 'text-muted line-through' : 'text-ink'}`}>
                       {alumno?.nombre || 'Alumno'}
+                      {siblingCount >= 2 && (
+                        <span className="ml-1.5 text-[9px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 rounded">
+                          👨‍👩‍👧 {siblingCount} hermanos
+                        </span>
+                      )}
                     </p>
                     <p className="text-[11px] text-muted flex items-center gap-1 mt-0.5">
                       <MapPin className="h-3 w-3 shrink-0" />

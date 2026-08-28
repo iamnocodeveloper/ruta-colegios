@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 import { Reorder, useDragControls } from 'motion/react';
 import { Alumno, Colegio, Conductor, ModoOptimizacion, ParadaRuta, RouteOptimizationResult, RutaDiaria, RutaTrayecto, TipoTrayecto } from '../../types';
+import { countSiblingsInStop } from '../../services/siblings';
 import {
   calculateOptimizedRoute,
   formatFriendlyTime,
@@ -78,6 +79,7 @@ interface StopRowProps {
   total: number;
   student?: Alumno;
   stopMeta?: ParadaRuta;
+  siblingCount?: number;
   onMoveUp: () => void;
   onMoveDown: () => void;
 }
@@ -107,6 +109,7 @@ const StopRow: React.FC<StopRowProps> = ({
   total,
   student,
   stopMeta,
+  siblingCount,
   onMoveUp,
   onMoveDown
 }) => {
@@ -131,6 +134,11 @@ const StopRow: React.FC<StopRowProps> = ({
             )}
             {student?.modalidad_servicio === 'solo_vuelta' && (
               <span className="text-[9px] text-purple-400 font-bold bg-purple-950/80 px-1.5 rounded">Solo Vuelta</span>
+            )}
+            {(siblingCount || 0) >= 2 && (
+              <span className="text-[9px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 rounded">
+                👨‍👩‍👧 {siblingCount} hermanos
+              </span>
             )}
           </div>
           <p className="text-[11px] text-muted truncate max-w-[280px]">
@@ -1966,6 +1974,14 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
                 {orderedStudentIds.map((studentId, idx) => {
                   const student = alumnosMap.get(studentId);
                   const stopMeta = displayResult?.paradas_ordenadas.find((p) => p.alumno_id === studentId);
+                  const allStopLike = (displayResult?.paradas_ordenadas || []).map((p) => ({
+                    alumno_id: p.alumno_id,
+                    lat: p.lat,
+                    lng: p.lng,
+                  }));
+                  const siblingCount = stopMeta
+                    ? countSiblingsInStop(stopMeta, allStopLike, alumnosMap)
+                    : 1;
 
                   return (
                     <StopRow
@@ -1975,6 +1991,7 @@ export const RoutePlanner: React.FC<RoutePlannerProps> = ({
                       total={orderedStudentIds.length}
                       student={student}
                       stopMeta={stopMeta}
+                      siblingCount={siblingCount}
                       onMoveUp={() => moveStudent(idx, 'up')}
                       onMoveDown={() => moveStudent(idx, 'down')}
                     />
