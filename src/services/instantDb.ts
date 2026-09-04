@@ -810,6 +810,11 @@ export async function saveRutaInstant(ruta: RutaDiaria) {
       ...(multitenantEnabled() ? { cliente_id: ruta.cliente_id || '' } : {}),
       created_at: ruta.created_at || new Date().toISOString(),
       polyline_json: JSON.stringify(ruta.polyline_geometry || []),
+      // Ruta combinada (ida + vuelta en un mismo registro): snapshot completo de cada
+      // jornada (estado, horas reales, paradas) para que TODOS los dispositivos/sesiones
+      // puedan reconstruir el progreso exacto en tiempo real, no solo el que lo generó.
+      ida_json: ruta.ida ? JSON.stringify(ruta.ida) : '',
+      vuelta_json: ruta.vuelta ? JSON.stringify(ruta.vuelta) : '',
     })
   );
 
@@ -838,6 +843,24 @@ export async function saveRutaInstant(ruta: RutaDiaria) {
 
   await db.transact(transactions);
   return rutaId;
+}
+
+/**
+ * Delete a daily route and all of its stops from InstantDB (cloud-wide — reflected on
+ * every session/device, since the route history is read live from this same data).
+ * `data` is the already-fetched live query result (e.g. from App.tsx's useQuery), used
+ * to find the route's `paradas_ruta` rows to delete along with it.
+ */
+export async function deleteRutaInstant(rutaId: string, data?: any) {
+  const safeId = ensureUUID(rutaId);
+  const toList = (raw: any): any[] => (!raw ? [] : Array.isArray(raw) ? raw : Object.values(raw));
+  const paradas = toList(data?.paradas_ruta).filter((p) => p && ensureUUID(p.ruta_id) === safeId);
+
+  const transactions: any[] = [tx.rutas_diarias[safeId].delete()];
+  for (const p of paradas) {
+    transactions.push(tx.paradas_ruta[ensureUUID(p.id)].delete());
+  }
+  await db.transact(transactions);
 }
 
 /**

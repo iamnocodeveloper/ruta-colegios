@@ -5,7 +5,7 @@
  * views (Home, Parent) keep working.
  */
 
-import { RutaDiaria, RutaTrayecto, EstadoRuta } from '../types';
+import { RutaDiaria, RutaTrayecto, EstadoRuta, Alumno } from '../types';
 
 export type JourneyKey = 'ida' | 'vuelta';
 
@@ -107,4 +107,64 @@ export function updateJourney(
   next.paradas = getAllParadas(next);
   next.estado = computeRutaEstado(next);
   return next;
+}
+
+/**
+ * Reconstruye ida/vuelta a partir de un registro `rutas_diarias` de InstantDB
+ * (que trae `ida_json` / `vuelta_json`, snapshot guardado por el último dispositivo
+ * que hizo `saveRutaInstant`) y superpone el estado MÁS RECIENTE de cada parada leído
+ * en vivo de `paradas_ruta` (que se actualiza granularmente en cada toque de
+ * "recogido"/"ausente" vía `updateParadaEstadoInstant`, sin re-guardar el snapshot).
+ * Así cualquier sesión/dispositivo que abra la ruta ve el progreso real, sin importar
+ * quién marcó qué ni en qué equipo.
+ */
+export function hydrateJourneysFromCloud(
+  base: RutaDiaria,
+  rutaRow: any,
+  paradasRows: any[],
+  alumnosMap?: Map<string, Alumno>
+): RutaDiaria {
+  if (!rutaRow) return base;
+
+  const parseJourney = (json: any, fallback?: RutaTrayecto): RutaTrayecto | undefined => {
+    if (!json) return fallback;
+    try {
+      const parsed = JSON.parse(json);
+      return parsed && typeof parsed === 'object' ? parsed : fallback;
+    } catch {
+      return fallback;
+    }
+  };
+
+  let ida = parseJourney(rutaRow.ida_json, base.ida);
+  let vuelta = parseJourney(rutaRow.vuelta_json, base.vuelta);
+  if (!ida && !vuelta) return base;
+
+  const paradaRowById = new Map(paradasRows.map((p) => [String(p.id), p]));
+
+  const overlayLiveState = (j?: RutaTrayecto): RutaTrayecto | undefined => {
+    if (!j) return j;
+    return {
+      ...j,
+      paradas: (j.paradas || []).map((p) => {
+        const row = paradaRowById.get(String(p.id));
+        return {
+          ...p,
+          estado: (row?.estado as any) || p.estado,
+          hora_real: row?.hora_real || p.hora_real,
+          alumno: (alumnosMap && alumnosMap.get(p.alumno_id)) || p.alumno,
+        };
+      }),
+    };
+  };
+
+  ida = overlayLiveState(ida);
+  vuelta = overlayLiveState(vuelta);
+
+  const merged: RutaDiaria = { ...base, ida, vuelta };
+  merged.paradas = getAllParadas(merged);
+  merged.estado = computeRutaEstado(merged);
+  merged.hora_salida_real = rutaRow.hora_salida_real || merged.hora_salida_real;
+  merged.hora_llegada_real = rutaRow.hora_llegada_real || merged.hora_llegada_real;
+  return merged;
 }

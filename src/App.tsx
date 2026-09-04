@@ -34,6 +34,7 @@ import {
   getJourney,
   getJourneyByParadaId,
   hasJourney,
+  hydrateJourneysFromCloud,
   journeyView,
   updateJourney
 } from './services/routeJourneys';
@@ -64,8 +65,8 @@ import {
   upsertPagoInstant,
   deletePagoInstant,
   saveRutaInstant,
+  deleteRutaInstant,
   updateParadaEstadoInstant,
-  updateRutaEstadoInstant,
   ensureUUID,
   ROOT_CLIENT_ID,
   multitenantEnabled,
@@ -105,6 +106,31 @@ function toList(raw: any): any[] {
   if (!raw) return [];
   if (Array.isArray(raw)) return raw;
   return Object.values(raw);
+}
+
+/** Ruta en blanco (sin paradas) para empezar a planificar un recorrido nuevo desde cero. */
+function buildBlankRuta(colegio: Colegio, origen: { lat: number; lng: number; direccion?: string }): RutaDiaria {
+  return {
+    id: ensureUUID(),
+    fecha: new Date().toISOString().substring(0, 10),
+    colegio_id: colegio.id,
+    colegio,
+    conductor_id: undefined,
+    conductor: undefined,
+    origen_lat: origen.lat,
+    origen_lng: origen.lng,
+    origen_direccion: origen.direccion,
+    modo_optimizacion: 'fijo',
+    hora_llegada_objetivo: colegio.hora_llegada_limite || '07:45:00',
+    hora_salida_estimada: '',
+    tiempo_manejo_estimado_min: 0,
+    tiempo_abordaje_total_min: 0,
+    tiempo_total_estimado_min: 0,
+    distancia_total_km: 0,
+    tiempo_abordaje_por_alumno_min: 2.5,
+    estado: 'planificada',
+    paradas: []
+  };
 }
 
 /** Colegio placeholder NEUTRO (sin datos de ejemplo). */
@@ -251,26 +277,44 @@ function buildReviewEntryFromCloud(routeId: string, data: any): RouteHistoryEntr
     polyline_geometry: polyline,
   };
 
+  // Ruta combinada (ida + vuelta): reconstruye cada jornada desde su snapshot en la
+  // nube (ida_json/vuelta_json) y superpone el estado más reciente de cada parada, para
+  // que el enlace de revisión y el historial vean el MISMO progreso sin importar el
+  // dispositivo que lo generó.
+  const finalRuta: RutaDiaria =
+    rutaRow.ida_json || rutaRow.vuelta_json
+      ? hydrateJourneysFromCloud(
+          ruta,
+          rutaRow,
+          toList(data?.paradas_ruta).filter((p) => ensureUUID(p.ruta_id) === rutaId)
+        )
+      : ruta;
+  const finalParadas = finalRuta.paradas.length > 0 ? finalRuta.paradas : paradas;
+
   return {
-    id: ruta.id,
-    fecha: ruta.fecha,
+    id: finalRuta.id,
+    fecha: finalRuta.fecha,
     colegio_nombre: colegio?.nombre || 'Colegio',
     conductor_nombre: conductor?.nombre || 'Sin conductor',
     conductor_id: conductor?.id,
-    estado: ruta.estado,
-    hora_salida_estimada: ruta.hora_salida_estimada,
-    hora_llegada_objetivo: ruta.hora_llegada_objetivo,
-    distancia_total_km: ruta.distancia_total_km,
-    tiempo_total_estimado_min: ruta.tiempo_total_estimado_min,
-    total_paradas: paradas.length,
-    recogidos: paradas.filter((p) => p.estado === 'recogido' || p.estado === 'completado').length,
-    ausentes: paradas.filter((p) => p.estado === 'ausente').length,
-    modo_optimizacion: ruta.modo_optimizacion,
-    tipo_trayecto: ruta.tipo_trayecto || 'ida',
-    dia_semana: ruta.dia_semana,
-    variante: ruta.variante,
-    created_at: ruta.created_at || new Date().toISOString(),
-    ruta,
+    estado: finalRuta.estado,
+    hora_salida_estimada: finalRuta.hora_salida_estimada,
+    hora_llegada_objetivo: finalRuta.hora_llegada_objetivo,
+    distancia_total_km: finalRuta.distancia_total_km,
+    tiempo_total_estimado_min: finalRuta.tiempo_total_estimado_min,
+    total_paradas: finalParadas.length,
+    recogidos: finalParadas.filter((p) => p.estado === 'recogido' || p.estado === 'completado').length,
+    ausentes: finalParadas.filter((p) => p.estado === 'ausente').length,
+    modo_optimizacion: finalRuta.modo_optimizacion,
+    tipo_trayecto: finalRuta.tipo_trayecto || 'ida',
+    dia_semana: finalRuta.dia_semana,
+    variante: finalRuta.variante,
+    tiene_ida: !!finalRuta.ida,
+    tiene_vuelta: !!finalRuta.vuelta,
+    paradas_ida: finalRuta.ida?.paradas?.length || undefined,
+    paradas_vuelta: finalRuta.vuelta?.paradas?.length || undefined,
+    created_at: finalRuta.created_at || new Date().toISOString(),
+    ruta: finalRuta,
   };
 }
 
@@ -288,8 +332,10 @@ export default function App() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [currentDriverId, setCurrentDriverId] = useState<string>('d1000000-0000-4000-8000-000000000001');
 
-  // Route History State (el enlace de revisión carga desde historial local o nube)
-  const [routeHistory, setRouteHistory] = useState<RouteHistoryEntry[]>(() => getRouteHistory());
+  // Route History State: localHistory es solo un respaldo local (offline / resiliencia);
+  // la lista real que se muestra (`routeHistory`, más abajo) se reconstruye en vivo desde
+  // InstantDB para que sea IDÉNTICA en todas las sesiones y equipos (web, móvil, PWA).
+  const [localHistory, setLocalHistory] = useState<RouteHistoryEntry[]>(() => getRouteHistory());
   const [reviewEntry, setReviewEntry] = useState<RouteHistoryEntry | null>(() => {
     try {
       const u = new URLSearchParams(window.location.search);
@@ -378,6 +424,33 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scopeClienteId, mtActive]);
   const { data: instantData, isLoading: instantLoading } = (db as any).useQuery(query);
+
+  // Historial de rutas: reconstruido EN VIVO desde InstantDB (misma lista en cualquier
+  // sesión/equipo — web, móvil o PWA instalada). `localHistory` solo aporta entradas que
+  // todavía no llegaron a la nube (creadas sin conexión) para no perderlas de vista.
+  const routeHistory: RouteHistoryEntry[] = useMemo(() => {
+    const cloudIds = new Set<string>();
+    const cloudEntries: RouteHistoryEntry[] = toList(instantData?.rutas_diarias)
+      .map((row) => {
+        const entry = buildReviewEntryFromCloud(row.id, instantData);
+        if (entry) cloudIds.add(entry.id);
+        return entry;
+      })
+      .filter((e): e is RouteHistoryEntry => !!e);
+
+    const localOnly = localHistory.filter((e) => !cloudIds.has(ensureUUID(e.id)));
+    return [...cloudEntries, ...localOnly].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+  }, [
+    instantData?.rutas_diarias,
+    instantData?.paradas_ruta,
+    instantData?.colegios,
+    instantData?.conductores,
+    instantData?.alumnos,
+    instantData?.representantes,
+    localHistory
+  ]);
 
   // Migración a multi-tenant (solo escribe cliente_id; idempotente)
   useEffect(() => {
@@ -600,27 +673,7 @@ export default function App() {
       }
     } catch {}
     // Estado por defecto NEUTRO (sin datos de ejemplo)
-    return {
-      id: ensureUUID(),
-      fecha: new Date().toISOString().substring(0, 10),
-      colegio_id: selectedColegio.id,
-      colegio: selectedColegio,
-      conductor_id: undefined,
-      conductor: undefined,
-      origen_lat: origen.lat,
-      origen_lng: origen.lng,
-      origen_direccion: origen.direccion,
-      modo_optimizacion: 'fijo',
-      hora_llegada_objetivo: selectedColegio.hora_llegada_limite || '07:45:00',
-      hora_salida_estimada: '',
-      tiempo_manejo_estimado_min: 0,
-      tiempo_abordaje_total_min: 0,
-      tiempo_total_estimado_min: 0,
-      distancia_total_km: 0,
-      tiempo_abordaje_por_alumno_min: 2.5,
-      estado: 'planificada',
-      paradas: []
-    };
+    return buildBlankRuta(selectedColegio, origen);
   });
 
   // Map for fast O(1) student lookup
@@ -721,15 +774,40 @@ export default function App() {
     }
   };
 
-  // Sync InstantDB Paradas / Rutas into activeRuta state in real time
+  // Sync InstantDB Rutas / Paradas into activeRuta state in real time.
+  // Funciona para CUALQUIER dispositivo/sesión (web, móvil, PWA instalada): sin este
+  // efecto cada equipo se queda con su propia copia local (localStorage) y nunca se
+  // entera de lo que otro dispositivo marcó (ej. la ida completada desde la web no
+  // llegaba al celular). Cubre tanto rutas simples como combinadas (ida + vuelta).
   useEffect(() => {
-    // Rutas combinadas conservan sus jornadas localmente (integridad de ida/vuelta)
-    if (hasJourney(activeRuta)) return;
-    if (instantData?.paradas_ruta && Object.keys(instantData.paradas_ruta).length > 0) {
-      const matchingParadas = Object.entries(instantData.paradas_ruta)
-        .filter(([_, p]: [string, any]) => p && p.ruta_id === activeRuta.id)
-        .map(([id, p]: [string, any]) => ({
-          id: ensureUUID(id),
+    const rutaRow = toList(instantData?.rutas_diarias).find((r) => ensureUUID(r.id) === activeRuta.id);
+    const paradasForRuta = toList(instantData?.paradas_ruta).filter(
+      (p) => p && ensureUUID(p.ruta_id) === activeRuta.id
+    );
+
+    const isCombinedInCloud = !!(rutaRow && (rutaRow.ida_json || rutaRow.vuelta_json));
+
+    if (hasJourney(activeRuta) || isCombinedInCloud) {
+      if (!rutaRow) return;
+      setActiveRuta((prev) => {
+        const merged = hydrateJourneysFromCloud(prev, rutaRow, paradasForRuta, alumnosMap);
+        const sameShape =
+          JSON.stringify({ ida: merged.ida, vuelta: merged.vuelta, estado: merged.estado }) ===
+          JSON.stringify({ ida: prev.ida, vuelta: prev.vuelta, estado: prev.estado });
+        if (sameShape) return prev;
+        try {
+          localStorage.setItem('rutaescolar_active_ruta', JSON.stringify(merged));
+        } catch {}
+        return merged;
+      });
+      return;
+    }
+
+    // ---- Ruta simple (legacy, sin jornadas ida/vuelta) ----
+    if (paradasForRuta.length > 0) {
+      const matchingParadas = paradasForRuta
+        .map((p) => ({
+          id: ensureUUID(p.id),
           ruta_id: ensureUUID(p.ruta_id),
           alumno_id: ensureUUID(p.alumno_id),
           orden: Number(p.orden) || 1,
@@ -756,7 +834,7 @@ export default function App() {
         });
       }
     }
-  }, [instantData?.paradas_ruta, activeRuta.id, alumnosMap]);
+  }, [instantData?.rutas_diarias, instantData?.paradas_ruta, activeRuta.id, alumnosMap]);
 
   // Initial Route Calculation & Auto-Sync with Real Students
   useEffect(() => {
@@ -981,14 +1059,15 @@ export default function App() {
     } catch {}
     try {
       await saveRutaInstant(updatedRuta);
-      // Persist to route history (full snapshot)
+      // Persist to local route history backup (the visible list comes from the live
+      // InstantDB query above, which already reflects this save on every device).
       await saveRouteToHistory(updatedRuta);
-      setRouteHistory(getRouteHistory());
+      setLocalHistory(getRouteHistory());
     } catch (e) {
       console.warn('InstantDB route save fallback:', e);
       try {
         await saveRouteToHistory(updatedRuta);
-        setRouteHistory(getRouteHistory());
+        setLocalHistory(getRouteHistory());
       } catch (e2) {
         console.warn('Route history save fallback:', e2);
       }
@@ -1126,7 +1205,11 @@ export default function App() {
     }
 
     handleSaveRoute(updated);
-    updateRutaEstadoInstant(activeRuta.id, 'completada', { hora_llegada_real: horaLlegada }).catch(() => {});
+    // Nota: no llamamos updateRutaEstadoInstant aquí — handleSaveRoute ya persiste
+    // (via saveRutaInstant) el `estado` REAL calculado por computeRutaEstado, que en
+    // una ruta combinada puede seguir siendo 'en_curso' si solo terminó una jornada
+    // (ida) y falta la otra (vuelta). Forzar 'completada' aquí marcaba la ruta entera
+    // como terminada en la nube aunque quedara la vuelta pendiente.
     // Webhook n8n: ruta_completada
     notifyRutaCompletada(journeyView(updated, journey));
   };
@@ -1164,10 +1247,28 @@ export default function App() {
     setCurrentView('driver');
   };
 
-  // Delete a route from history
-  const handleDeleteHistoryEntry = (entry: RouteHistoryEntry) => {
+  // Empezar una ruta NUEVA desde cero (id nuevo → no pisa ninguna ruta existente)
+  const handleCreateNewRoute = () => {
+    setActiveRuta(buildBlankRuta(selectedColegio, origen));
+    setCurrentView('planner');
+  };
+
+  // Cargar una ruta existente del historial tal cual (con sus paradas/horario/conductor)
+  // en el Planificador para editarla y volver a guardarla (mismo id → actualiza esa ruta).
+  const handleEditRouteInPlanner = (entry: RouteHistoryEntry) => {
+    setActiveRuta(entry.ruta);
+    setCurrentView('planner');
+  };
+
+  // Delete a route from history (nube + respaldo local, para que desaparezca en todos los equipos)
+  const handleDeleteHistoryEntry = async (entry: RouteHistoryEntry) => {
     const remaining = deleteRouteHistory(entry.id);
-    setRouteHistory(remaining);
+    setLocalHistory(remaining);
+    try {
+      await deleteRutaInstant(entry.id, instantData);
+    } catch (e) {
+      console.warn('InstantDB route delete warning:', e);
+    }
   };
 
   const activeParentStudent = selectedParentStudentId
@@ -1486,6 +1587,8 @@ export default function App() {
                 setCurrentView('review');
               }}
               onUseToday={handleUseRouteToday}
+              onEdit={handleEditRouteInPlanner}
+              onCreateNew={handleCreateNewRoute}
               onDelete={handleDeleteHistoryEntry}
               onBack={() => setCurrentView('home')}
             />

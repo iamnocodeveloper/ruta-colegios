@@ -123,6 +123,7 @@ const _schema = i.schema({
       hora_salida_estimada: i.any().optional(),
       hora_salida_real: i.any().optional(),
       horario_valido: i.any().optional(),
+      ida_json: i.any().optional(),
       modo_optimizacion: i.any().optional(),
       origen_direccion: i.any().optional(),
       origen_lat: i.any().optional(),
@@ -135,6 +136,7 @@ const _schema = i.schema({
       tipo_trayecto: i.any().optional(),
       tramos_elegidos_json: i.any().optional(),
       variante: i.any().optional(),
+      vuelta_json: i.any().optional(),
     }),
     tracking_logs: i.entity({
       lat: i.any().optional(),
